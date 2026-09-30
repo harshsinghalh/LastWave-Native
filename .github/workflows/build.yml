@@ -38,6 +38,28 @@ jobs:
       - name: Grant Gradle execute permission
         run: chmod +x gradlew
 
+      - name: Create CI debug keystore
+        run: |
+          # AGP's debug signing path on GitHub-hosted runners can resolve under
+          # XDG_CONFIG_HOME (for example ~/.config/.android) instead of ~/.android.
+          # Create both standard locations so release_config's debug fallback is
+          # always valid when no custom SIGNING_KEY secret is configured.
+          for DIR in "$HOME/.android" "$HOME/.config/.android"; do
+            mkdir -p "$DIR"
+            KEYSTORE="$DIR/debug.keystore"
+            if [ ! -f "$KEYSTORE" ]; then
+              keytool -genkeypair -v \
+                -keystore "$KEYSTORE" \
+                -storepass android \
+                -alias androiddebugkey \
+                -keypass android \
+                -dname "CN=Android Debug,O=Android,C=US" \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000
+            fi
+          done
+
       - name: Run unit tests (audio pipeline + regression)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
