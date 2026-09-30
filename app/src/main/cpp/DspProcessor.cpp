@@ -30,6 +30,9 @@ constexpr float kEqualizerPreLimiterBoostDb = 1.0F;
 constexpr float kClarityMakeupGain = 1.04F;
 constexpr float kClarityStereoWidth = 1.22F;
 constexpr float kAirExciterAmount = 0.18F;
+constexpr std::int32_t kDjControlIntervalFrames = 256;
+constexpr float kDjMaxBoostDb = 3.2F;
+constexpr float kDjMaxVocalDuckDb = 0.9F;
 // Studio Master Clarity design gains (dB). Single source for configure()
 // and trim rebuilds; per-stage trims add to these values.
 constexpr double kClarityBassGainDb = 3.2;
@@ -147,6 +150,16 @@ void DspProcessor::configure(double sampleRate) noexcept {
         -static_cast<double>(kEqCoefficientIntervalFrames) / (sampleRate_ * 0.010)));
     limiterRelease_ = static_cast<float>(
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.150)));
+    djBassAlpha_ = static_cast<float>(
+        1.0 - std::exp(-2.0 * kPi * 180.0 / sampleRate_));
+    djVocalLowAlpha_ = static_cast<float>(
+        1.0 - std::exp(-2.0 * kPi * 4000.0 / sampleRate_));
+    djEnvelopeAlpha_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.020)));
+    djAttack_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.080)));
+    djRelease_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.350)));
     dcBlockerR_ = static_cast<float>(
         std::exp(-2.0 * kPi * 10.0 / sampleRate_));
     microFadeFrameCount_ = std::max(
@@ -210,6 +223,14 @@ void DspProcessor::reset() noexcept {
     crossfeed_.clear();
     for (auto& band : equalizerBands_) band.clear();
     limiterGain_ = 1.0F;
+    djBassState_ = 0.0F;
+    djVocalLowState_ = 0.0F;
+    djFullEnergy_ = 0.0F;
+    djVocalEnergy_ = 0.0F;
+    djSideEnergy_ = 0.0F;
+    djGain_ = 1.0F;
+    djTargetGain_ = 1.0F;
+    djControlCountdown_ = 0;
     microFadePosition_ = 0;
     dcXPrev_.fill(0.0);
     dcYPrev_.fill(0.0);
@@ -283,6 +304,10 @@ void DspProcessor::setClarityAtmosBypass(bool bypass) noexcept {
     atmosBypassEnabled_.store(bypass, std::memory_order_release);
 }
 
+void DspProcessor::setDjEnergyEnabled(bool enabled) noexcept {
+    targetDjEnergyEnabled_.store(enabled, std::memory_order_release);
+}
+
 void DspProcessor::broadcastClarityWet(float wet) {
     std::lock_guard<std::mutex> registryLock(clarityRegistryMutex());
     for (auto* instance : clarityRegistry()) {
@@ -308,6 +333,13 @@ void DspProcessor::broadcastClarityAtmosBypass(bool bypass) {
     std::lock_guard<std::mutex> registryLock(clarityRegistryMutex());
     for (auto* instance : clarityRegistry()) {
         if (instance != nullptr) instance->setClarityAtmosBypass(bypass);
+    }
+}
+
+void DspProcessor::broadcastDjEnergyEnabled(bool enabled) {
+    std::lock_guard<std::mutex> registryLock(clarityRegistryMutex());
+    for (auto* instance : clarityRegistry()) {
+        if (instance != nullptr) instance->setDjEnergyEnabled(enabled);
     }
 }
 
@@ -359,6 +391,7 @@ void DspProcessor::process(
         ? 1.0F
         : 0.0F;
     const bool peakProtectionEnabled = peakProtectionEnabled_.load(std::memory_order_acquire);
+    const bool djEnabled = targetDjEnergyEnabled_.load(std::memory_order_acquire);
     const auto equalizerRevision = targetEqualizerRevision_.load(std::memory_order_acquire);
     if (equalizerRevision != appliedEqualizerRevision_) {
         appliedEqualizerRevision_ = equalizerRevision;
@@ -378,10 +411,11 @@ void DspProcessor::process(
         }
     }
     const bool enhancementTargeted = target > 0.0F ||
-        targetEqualizerHasGain;
+        targetEqualizerHasGain || djEnabled;
     const bool enhancementStateActive = currentWet_ > 0.0F ||
         activeEqualizerBands_ != 0U ||
         std::abs(currentPreampGain_ - 1.0F) >= 0.00001F ||
+        std::abs(djGain_ - 1.0F) >= 0.00001F ||
         std::abs(limiterGain_ - 1.0F) >= 0.00001F;
     // Peak protection is needed while an enhancement is active or releasing,
     // not on untouched program material. This restores a sample-transparent
@@ -392,6 +426,7 @@ void DspProcessor::process(
     const bool stateBypassed = currentWet_ == 0.0F &&
         activeEqualizerBands_ == 0U &&
         std::abs(currentPreampGain_ - 1.0F) < 0.00001F &&
+        std::abs(djGain_ - 1.0F) < 0.00001F &&
         std::abs(limiterGain_ - 1.0F) < 0.00001F;
     // With every enhancement disabled, decoded PCM stays transparent. This
     // avoids the old unconditional -1 dB attenuation and limiter/clamp pass.
@@ -545,6 +580,50 @@ void DspProcessor::process(
         const float dryLeft = equalizedLeft;
         const float dryRight = equalizedRight;
 
+        if (djEnabled) {
+            const float mid = channelCount == 2 ? (dryLeft + dryRight) * 0.5F : dryLeft;
+            const float side = channelCount == 2 ? (dryLeft - dryRight) * 0.5F : 0.0F;
+            djBassState_ += djBassAlpha_ * (mid - djBassState_);
+            djVocalLowState_ += djVocalLowAlpha_ * (mid - djVocalLowState_);
+            const float vocalBand = djVocalLowState_ - djBassState_;
+            const float fullPower = channelCount == 2
+                ? 0.5F * (dryLeft * dryLeft + dryRight * dryRight)
+                : dryLeft * dryLeft;
+            const float vocalPower = vocalBand * vocalBand;
+            const float sidePower = side * side;
+            djFullEnergy_ += djEnvelopeAlpha_ * (fullPower - djFullEnergy_);
+            djVocalEnergy_ += djEnvelopeAlpha_ * (vocalPower - djVocalEnergy_);
+            djSideEnergy_ += djEnvelopeAlpha_ * (sidePower - djSideEnergy_);
+
+            if (--djControlCountdown_ <= 0) {
+                constexpr float epsilon = 1.0e-10F;
+                const float total = std::max(djFullEnergy_, epsilon);
+                const float vocalRatio = std::clamp(djVocalEnergy_ / total, 0.0F, 1.5F);
+                const float centerRatio = djVocalEnergy_ /
+                    std::max(djVocalEnergy_ + 0.85F * djSideEnergy_, epsilon);
+                const float bandScore = std::clamp((vocalRatio - 0.08F) / 0.42F, 0.0F, 1.0F);
+                const float centerScore = std::clamp((centerRatio - 0.52F) / 0.38F, 0.0F, 1.0F);
+                const float vocalProbability = std::clamp(
+                    bandScore * (0.30F + 0.70F * centerScore), 0.0F, 1.0F);
+                const float rmsDb = 10.0F * std::log10(total);
+                const float energy = std::clamp((rmsDb + 42.0F) / 24.0F, 0.0F, 1.0F);
+                const float instrumental = 1.0F - vocalProbability;
+                float targetDb = instrumental * (0.60F + 2.60F * energy) -
+                    vocalProbability * kDjMaxVocalDuckDb;
+                if (rmsDb < -52.0F) targetDb = 0.0F;
+                targetDb = std::clamp(targetDb, -1.0F, kDjMaxBoostDb);
+                djTargetGain_ = std::pow(10.0F, targetDb / 20.0F);
+                djControlCountdown_ = kDjControlIntervalFrames;
+            }
+        } else {
+            djTargetGain_ = 1.0F;
+            djControlCountdown_ = 0;
+        }
+
+        const float djSmoothing = djTargetGain_ < djGain_ ? djAttack_ : djRelease_;
+        djGain_ += (djTargetGain_ - djGain_) * djSmoothing;
+        if (std::abs(djTargetGain_ - djGain_) < 0.00001F) djGain_ = djTargetGain_;
+
         float outputLeft = dryLeft;
         float outputRight = dryRight;
         if (clarityChainActive_) {
@@ -603,6 +682,9 @@ void DspProcessor::process(
             outputLeft += (wetLeft - dryLeft) * clarityMix;
             outputRight += (wetRight - dryRight) * clarityMix;
         }
+
+        outputLeft *= djGain_;
+        outputRight *= djGain_;
 
         // Analog soft-knee saturation: provides clean headroom without squashing the track
         auto softSaturate = [](float x) noexcept -> float {
