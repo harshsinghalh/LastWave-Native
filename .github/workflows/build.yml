@@ -15,6 +15,9 @@ on:
       - '**.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Release APKs
@@ -189,3 +192,25 @@ jobs:
           name: LastWave-v${{ steps.prep_apk.outputs.version }}-APKs
           path: final_apk/*
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.prep_apk.outputs.version }}"
+          TAG="v${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "LastWave v${VERSION} - DJ Energy 7 dB" \
+              --notes "DJ Energy now operates from -2 dB to +5 dB (7 dB total window). Includes adaptive vocal ducking, instrumental-energy lift, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+          else
+            gh release create "$TAG" \
+              --title "LastWave v${VERSION} - DJ Energy 7 dB" \
+              --notes "DJ Energy now operates from -2 dB to +5 dB (7 dB total window). Includes adaptive vocal ducking, instrumental-energy lift, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+          fi
+          gh release upload "$TAG" final_apk/* --clobber
