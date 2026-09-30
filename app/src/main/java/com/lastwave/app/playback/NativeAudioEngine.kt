@@ -74,6 +74,12 @@ class NativeAudioEngine @Inject constructor(
                     .collect { if (!systemFlattened) setClarityAtmosBypass(it) }
             }
             applicationScope.launch(Dispatchers.Default) {
+                settingsPreferences.settings
+                    .map { it.djEnergyEnabled }
+                    .distinctUntilChanged()
+                    .collect { if (!systemFlattened) setDjEnergyEnabled(it) }
+            }
+            applicationScope.launch(Dispatchers.Default) {
                 equalizerPreferences.settings.collect { settings ->
                     if (!systemFlattened) setEqualizer(settings.enabled, settings.gainsDb.toFloatArray())
                 }
@@ -176,6 +182,13 @@ class NativeAudioEngine @Inject constructor(
     fun setClarityAtmosBypass(bypass: Boolean) {
         if (systemFlattened) return
         withHandle(Unit) { nativeSetClarityAtmosBypass(it, bypass) }
+    }
+
+    /** Adaptive DJ-style gain rider. Completely bypassed by Bit-Perfect and
+     *  suppressed while external/system audio effects own the signal path. */
+    fun setDjEnergyEnabled(enabled: Boolean) {
+        if (systemFlattened) return
+        withHandle(Unit) { nativeSetDjEnergyEnabled(it, enabled) }
     }
 
     internal fun configureMediaProcessor(
@@ -381,6 +394,7 @@ class NativeAudioEngine @Inject constructor(
     private external fun nativeSetClarityTrims(handle: Long, trimsDb: FloatArray)
     private external fun nativeSetClarityPreset(handle: Long, preset: Int)
     private external fun nativeSetClarityAtmosBypass(handle: Long, bypass: Boolean)
+    private external fun nativeSetDjEnergyEnabled(handle: Long, enabled: Boolean)
     private external fun nativeConfigureMediaProcessor(
         handle: Long,
         inputSampleRate: Int,
