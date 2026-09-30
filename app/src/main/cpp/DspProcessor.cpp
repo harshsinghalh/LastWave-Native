@@ -31,8 +31,8 @@ constexpr float kClarityMakeupGain = 1.04F;
 constexpr float kClarityStereoWidth = 1.22F;
 constexpr float kAirExciterAmount = 0.18F;
 constexpr std::int32_t kDjControlIntervalFrames = 256;
-constexpr float kDjMaxBoostDb = 3.2F;
-constexpr float kDjMaxVocalDuckDb = 0.9F;
+constexpr float kDjMaxBoostDb = 5.0F;
+constexpr float kDjMaxVocalDuckDb = 2.0F;
 // Studio Master Clarity design gains (dB). Single source for configure()
 // and trim rebuilds; per-stage trims add to these values.
 constexpr double kClarityBassGainDb = 3.2;
@@ -608,10 +608,10 @@ void DspProcessor::process(
                 const float rmsDb = 10.0F * std::log10(total);
                 const float energy = std::clamp((rmsDb + 42.0F) / 24.0F, 0.0F, 1.0F);
                 const float instrumental = 1.0F - vocalProbability;
-                float targetDb = instrumental * (0.60F + 2.60F * energy) -
+                float targetDb = instrumental * (0.75F + 4.25F * energy) -
                     vocalProbability * kDjMaxVocalDuckDb;
                 if (rmsDb < -52.0F) targetDb = 0.0F;
-                targetDb = std::clamp(targetDb, -1.0F, kDjMaxBoostDb);
+                targetDb = std::clamp(targetDb, -2.0F, kDjMaxBoostDb);
                 djTargetGain_ = std::pow(10.0F, targetDb / 20.0F);
                 djControlCountdown_ = kDjControlIntervalFrames;
             }
