@@ -171,6 +171,16 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetClarityAtmosBypass(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjEnergyEnabled(
+    JNIEnv*,
+    jobject,
+    jlong handle,
+    jboolean enabled) {
+    if (fromHandle(handle) == nullptr) return;
+    lastwave::audio::DspProcessor::broadcastDjEnergyEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetBitPerfect(
     JNIEnv*,
     jobject,
