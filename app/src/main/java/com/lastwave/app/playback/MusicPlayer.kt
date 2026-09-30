@@ -2394,6 +2394,7 @@ class MusicPlayer @Inject constructor(
             engines.forEach { engine ->
                 runCatching { engine.setEqualizer(false, zeros) }
                 runCatching { engine.setStudioMasterClarity(false) }
+                runCatching { engine.setDjEnergyEnabled(false) }
                 engine.systemFlattened = true
             }
         } else {
@@ -2411,6 +2412,7 @@ class MusicPlayer @Inject constructor(
                         runCatching { engine.setStudioMasterClarity(misc.isStudioMasterClarityEnabled) }
                         runCatching { engine.setClarityPreset(ClarityPresets.fromIndex(misc.clarityPreset)) }
                         runCatching { engine.setClarityAtmosBypass(misc.clarityAtmosBypass) }
+                        runCatching { engine.setDjEnergyEnabled(misc.djEnergyEnabled) }
                     }
                 }
             }

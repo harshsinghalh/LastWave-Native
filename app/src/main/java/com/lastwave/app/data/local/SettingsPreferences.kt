@@ -109,6 +109,9 @@ data class MiscSettings(
     val clarityPreset: Int = 0,
     /** When true, the clarity chain bypasses on multichannel/spatial sources. */
     val clarityAtmosBypass: Boolean = false,
+    /** Adaptive gain-riding mode: boosts energetic instrumental passages and
+     *  gently settles the level when a centered vocal becomes dominant. */
+    val djEnergyEnabled: Boolean = false,
     /** When true, completely bypasses DSP, EQ, tone effects, and software volume ducking for bit-exact audio. */
     val isBitPerfectEnabled: Boolean = false,
     /** System audio-effects mode (Settings -> Experimental). Off by default:
@@ -247,6 +250,7 @@ class SettingsPreferences @Inject constructor(
         val MUSIC_ENHANCER = booleanPreferencesKey("lw_music_enhancer")
         val CLARITY_PRESET = intPreferencesKey("lw_clarity_preset")
         val CLARITY_ATMOS_BYPASS = booleanPreferencesKey("lw_clarity_atmos_bypass")
+        val DJ_ENERGY_ENABLED = booleanPreferencesKey("lw_dj_energy_enabled")
         val BIT_PERFECT_ENABLED = booleanPreferencesKey("lw_bit_perfect_enabled")
         val LYRICS_UI_VERSION = stringPreferencesKey("lw_lyrics_ui_version")
         val WORD_BY_WORD_LYRICS = booleanPreferencesKey("lw_word_by_word_lyrics")
@@ -291,6 +295,7 @@ class SettingsPreferences @Inject constructor(
                 isStudioMasterClarityEnabled = p.readSafely(Keys.MUSIC_ENHANCER) ?: true,
                 clarityPreset = p.readSafely(Keys.CLARITY_PRESET)?.takeIf { it in 0..3 } ?: 0,
                 clarityAtmosBypass = p.readSafely(Keys.CLARITY_ATMOS_BYPASS) ?: false,
+                djEnergyEnabled = p.readSafely(Keys.DJ_ENERGY_ENABLED) ?: false,
                 isBitPerfectEnabled = p.readSafely(Keys.BIT_PERFECT_ENABLED) ?: false,
                 lyricsUiVersion = LyricsUiVersion.fromId(p.readSafely(Keys.LYRICS_UI_VERSION)),
                 wordByWordLyrics = p.readSafely(Keys.WORD_BY_WORD_LYRICS) ?: true,
@@ -402,6 +407,10 @@ class SettingsPreferences @Inject constructor(
 
     suspend fun setClarityAtmosBypass(enabled: Boolean) {
         dataStore.edit { it[Keys.CLARITY_ATMOS_BYPASS] = enabled }
+    }
+
+    suspend fun setDjEnergyEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.DJ_ENERGY_ENABLED] = enabled }
     }
 
     suspend fun setLyricsUiVersion(version: LyricsUiVersion) {

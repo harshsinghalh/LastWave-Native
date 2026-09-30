@@ -447,6 +447,20 @@ class SettingsViewModel @Inject constructor(
                 // When Bit-Perfect is turned on, automatically turn off Studio Master Clarity
                 settingsPreferences.setStudioMasterClarity(false)
                 applyNativeAudio { it.setStudioMasterClarity(false) }
+                settingsPreferences.setDjEnergyEnabled(false)
+                applyNativeAudio { it.setDjEnergyEnabled(false) }
+            }
+        }
+    }
+
+    fun setDjEnergyEnabled(enabled: Boolean) {
+        launchSettingsAction("update DJ Energy mode") {
+            applyNativeAudio { it.setDjEnergyEnabled(enabled) }
+            settingsPreferences.setDjEnergyEnabled(enabled)
+            if (enabled) {
+                settingsPreferences.setBitPerfectEnabled(false)
+                applyNativeAudio { it.setBitPerfect(false) }
+                com.lastwave.app.playback.usb.UsbExclusivePrefs.setEnabled(context, false)
             }
         }
     }
@@ -477,6 +491,8 @@ class SettingsViewModel @Inject constructor(
             settingsPreferences.setBitPerfectEnabled(true)
             settingsPreferences.setStudioMasterClarity(false)
             applyNativeAudio { it.setStudioMasterClarity(false) }
+            settingsPreferences.setDjEnergyEnabled(false)
+            applyNativeAudio { it.setDjEnergyEnabled(false) }
             _uiState.update { it.copy(toastMessage = "USB exclusive on — Bit-Perfect will use usbdevfs when a DAC is granted") }
         }
     }

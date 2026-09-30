@@ -935,7 +935,7 @@ fun SettingsScreen(
                         LoudnessMode.ALBUM -> "Album \u2022 Keep intentional album dynamics"
                         else -> "Off \u2022 Play tagged tracks at original level"
                     }
-                    SettingsGroup(rowCount = 6) { index, position ->
+                    SettingsGroup(rowCount = 7) { index, position ->
                         when (index) {
                             0 -> SettingsToggleCard(
                                 icon = Icons.Filled.Usb,
@@ -981,6 +981,21 @@ fun SettingsScreen(
                                 isHighlighted = (highlightedSettingId == "audio.equalizer"),
                             )
                             3 -> SettingsToggleCard(
+                                icon = Icons.Filled.Bolt,
+                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                title = "DJ Energy",
+                                subtitle = when {
+                                    misc.isBitPerfectEnabled -> "Paused by Bit-Perfect mode"
+                                    misc.djEnergyEnabled -> "Rides the mix • lifts instrumental energy • settles around vocals"
+                                    else -> "Automatically ride volume with the musical energy"
+                                },
+                                checked = misc.djEnergyEnabled,
+                                onCheckedChange = viewModel::setDjEnergyEnabled,
+                                position = position,
+                                isHighlighted = (highlightedSettingId == "audio.dj_energy"),
+                            )
+                            4 -> SettingsToggleCard(
                                 icon = Icons.Filled.Waves,
                                 iconContainer = MaterialTheme.colorScheme.secondaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -995,7 +1010,7 @@ fun SettingsScreen(
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "audio.studio_clarity"),
                             )
-                            4 -> SettingsActionCard(
+                            5 -> SettingsActionCard(
                                 icon = Icons.Filled.Tune,
                                 iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -1005,7 +1020,7 @@ fun SettingsScreen(
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "audio.clarity_preset"),
                             )
-                            5 -> SettingsToggleCard(
+                            6 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
                                 iconContainer = MaterialTheme.colorScheme.secondaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,

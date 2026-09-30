@@ -47,6 +47,7 @@ public:
     // independent of the on/off toggle. The toggle state itself is kept,
     // so clearing the flag restores the previous mix without clicks.
     void setClarityAtmosBypass(bool bypass) noexcept;
+    void setDjEnergyEnabled(bool enabled) noexcept;
     // Process-wide broadcast helpers for the JNI layer, which owns the
     // engine handle but not the individual DSP instances. Each call
     // forwards to every live instance (playback and media paths). Control
@@ -55,6 +56,7 @@ public:
     static void broadcastClarityTrims(const float* trimsDb, std::size_t trimCount);
     static void broadcastClarityPreset(int preset);
     static void broadcastClarityAtmosBypass(bool bypass);
+    static void broadcastDjEnergyEnabled(bool enabled);
     void process(
         float* interleaved,
         std::int32_t frameCount,
@@ -203,6 +205,23 @@ private:
     // while the exciter trim is neutral, so the default path is exact.
     float clarityExciterAmount_{0.18F};
     std::atomic<bool> atmosBypassEnabled_{false};
+    std::atomic<bool> targetDjEnergyEnabled_{false};
+    // Ultra-light vocal/energy detector. It deliberately avoids FFT/ML on the
+    // renderer thread: a mid/side detector plus a 180 Hz..4 kHz vocal-band
+    // envelope gives a stable vocal-confidence signal at negligible cost.
+    float djBassState_{0.0F};
+    float djVocalLowState_{0.0F};
+    float djFullEnergy_{0.0F};
+    float djVocalEnergy_{0.0F};
+    float djSideEnergy_{0.0F};
+    float djBassAlpha_{0.02F};
+    float djVocalLowAlpha_{0.3F};
+    float djEnvelopeAlpha_{0.001F};
+    float djAttack_{0.001F};
+    float djRelease_{0.0001F};
+    float djGain_{1.0F};
+    float djTargetGain_{1.0F};
+    std::int32_t djControlCountdown_{0};
     Biquad subBassHighPass_{};
     Biquad bassFoundation_{};
     Biquad lowMidSeparation_{};
