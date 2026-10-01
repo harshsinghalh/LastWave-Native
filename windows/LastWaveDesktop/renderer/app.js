@@ -189,6 +189,13 @@
       case 'generator': return renderGenerator();
       case 'friends': return renderFriends();
       case 'downloads': return renderDownloads();
+      case 'new-releases': return renderNewReleases();
+      case 'provider-modules': return renderProviderModules();
+      case 'home-sections': return renderHomeSections();
+      case 'excluded-songs': return renderExcludedSongs();
+      case 'youtube-login': return renderYouTubeLoginPage();
+      case 'youtube-import': return renderImportPage('youtube');
+      case 'external-import': return renderImportPage('external');
       case 'settings': return renderSettings();
       case 'entity': return renderEntity(S.routeParams.kind, S.routeParams.id, S.routeParams.title);
       case 'playlist-detail': return renderLocalPlaylist(S.routeParams.id);
@@ -210,7 +217,7 @@
         '<button class="android-quick-tile" data-route="generator"><span class="android-quick-icon">✧</span><strong>Create mix</strong></button>' +
         '<button class="android-quick-tile" data-route="friends"><span class="android-quick-icon">♧</span><strong>Friends</strong></button>' +
         '<button class="android-quick-tile" data-route="downloads"><span class="android-quick-icon">⇩</span><strong>Downloads</strong></button>' +
-        '<button class="android-quick-tile" data-route="search" data-query="new music releases"><span class="android-quick-icon">◌</span><strong>New releases</strong></button>' +
+        '<button class="android-quick-tile" data-route="new-releases"><span class="android-quick-icon">◌</span><strong>New releases</strong></button>' +
         '<button class="android-quick-tile" data-route="settings"><span class="android-quick-icon">⚙</span><strong>Settings</strong></button>' +
       '</div>';
 
@@ -218,7 +225,12 @@
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections = (S.home || []).filter(function(x){ return x && x.tracks && x.tracks.length; });
+      const hiddenSections = new Set((S.local?.settings?.homeHiddenSections || []).map(function(x){return String(x).toLowerCase();}));
+      const excludedIds = new Set((S.local?.excluded || []).map(function(x){return x.videoId;}));
+      const sections = (S.home || [])
+        .filter(function(x){ return x && x.tracks && x.tracks.length && !hiddenSections.has(String(x.title||'').toLowerCase()); })
+        .map(function(x){ return { ...x, tracks: x.tracks.filter(function(t){return !excludedIds.has(t.videoId);}) }; })
+        .filter(function(x){ return x.tracks.length; });
       let html = pageHead('Home','',actions) + quickTiles;
 
       if (sections.length) {
@@ -440,6 +452,100 @@
     qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
   }
 
+
+  async function renderNewReleases() {
+    page.innerHTML = pageHead('New releases','Fresh music from YouTube Music.') + loading('Loading new releases');
+    try {
+      const result = await api.youtube.search('new music releases 2026','album');
+      let html = pageHead('New releases','Fresh music from YouTube Music.');
+      if(result.entities?.length) html += '<section class="section"><div class="card-row">' + result.entities.slice(0,30).map(entityCard).join('') + '</div></section>';
+      if(result.tracks?.length) html += '<section class="section"><div class="section-head"><h2>New tracks</h2></div><div class="track-list">' + result.tracks.slice(0,50).map(trackRow).join('') + '</div></section>';
+      page.innerHTML = html || empty('No releases found');
+    } catch(e) {
+      page.innerHTML = pageHead('New releases') + empty('Could not load new releases',e.message||'');
+    }
+  }
+
+  async function renderProviderModules() {
+    page.innerHTML = pageHead('Modules & Addons','Streaming and metadata providers available on Windows.') +
+      '<div class="setting-group"><h2>Installed providers</h2><div class="setting-card">' +
+        '<div class="setting-row"><div class="setting-copy"><strong>YouTube Music</strong><span>Catalog, search, playback, albums, artists and playlists</span></div><span class="chip active">Built in</span></div>' +
+        '<div class="setting-row"><div class="setting-copy"><strong>LRCLIB</strong><span>Synced and plain lyrics provider</span></div><span class="chip active">Built in</span></div>' +
+        '<div class="setting-row"><div class="setting-copy"><strong>Last.fm</strong><span>Scrobbling, statistics and friends</span></div><span class="chip active">Built in</span></div>' +
+      '</div></div>' +
+      '<div class="setting-group"><h2>Windows note</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>Remote lossless modules</strong><span>The Android provider-module ABI depends on Android services. The Windows app exposes equivalent desktop providers here rather than loading Android binaries.</span></div></div></div></div>';
+  }
+
+  async function renderHomeSections() {
+    if(!S.home) {
+      try { S.home = await api.youtube.home(); } catch {}
+    }
+    const titles = (S.home || []).map(function(x){return x.title||'Untitled section';}).filter(Boolean);
+    const unique = [...new Set(titles)];
+    const hidden = new Set(S.local?.settings?.homeHiddenSections || []);
+    page.innerHTML = pageHead('Home sections','Choose what appears on the Home feed.') +
+      '<div class="setting-group"><div class="setting-card">' +
+      (unique.length ? unique.map(function(title){
+        return '<div class="setting-row"><div class="setting-copy"><strong>' + escapeHtml(title) + '</strong><span>Show this section on Home</span></div><button class="toggle ' + (!hidden.has(title)?'on':'') + '" data-home-section="' + escapeHtml(title) + '"></button></div>';
+      }).join('') : '<div class="setting-row"><div class="setting-copy"><strong>No sections loaded</strong><span>Open Home once, then return here.</span></div></div>') +
+      '</div></div>';
+    qa('[data-home-section]').forEach(function(btn){
+      btn.addEventListener('click',async function(){
+        const title=btn.dataset.homeSection;
+        const next=new Set(S.local?.settings?.homeHiddenSections || []);
+        if(next.has(title))next.delete(title);else next.add(title);
+        S.local.settings=await api.settings.update({homeHiddenSections:[...next]});
+        renderHomeSections();
+      });
+    });
+  }
+
+  async function renderExcludedSongs() {
+    await refreshLocal();
+    const rows=S.local.excluded||[];
+    page.innerHTML=pageHead('Excluded songs','Tracks removed from Home recommendations.') +
+      (rows.length ? '<div class="track-list">' + rows.map(function(track){
+        cacheTrack(track);
+        return '<div class="track-row">' + img(track.artworkUrl,track.title) +
+          '<div class="track-main"><strong>' + escapeHtml(track.title||'Untitled') + '</strong><span>' + escapeHtml(track.artist||'Unknown artist') + '</span></div><div class="track-album"></div><div class="track-duration"></div>' +
+          '<div class="track-actions"><button class="secondary header-wide" data-restore-excluded="' + escapeHtml(track.videoId) + '">Restore</button></div></div>';
+      }).join('') + '</div>' : empty('No excluded songs','Use a track menu and choose Exclude from recommendations.'));
+    qa('[data-restore-excluded]').forEach(function(btn){
+      btn.addEventListener('click',async function(){await api.library.restoreExcluded(btn.dataset.restoreExcluded);await refreshLocal();renderExcludedSongs();});
+    });
+  }
+
+  async function renderYouTubeLoginPage() {
+    const connected=Boolean(S.local?.settings?.youtubeCookie);
+    page.innerHTML=pageHead('YouTube Music','Connect your account to personalize library surfaces.') +
+      '<div class="setting-group"><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>' + (connected?'Connected':'Not connected') + '</strong><span>' + (connected?'Authenticated session is saved on this PC.':'Guest catalog mode is active.') + '</span></div>' +
+      '<div class="page-actions"><button class="primary" id="routeYoutubeLogin">Sign in</button><button class="secondary" id="routeYoutubeLogout">Sign out</button></div></div></div></div>';
+    q('#routeYoutubeLogin')?.addEventListener('click',async function(){
+      toast('Complete sign-in in the YouTube Music window, then close it.',5000);
+      const result=await api.youtube.login();await refreshLocal();S.home=null;S.explore=null;
+      toast(result?.connected?'YouTube Music connected':'No authenticated session detected');renderYouTubeLoginPage();
+    });
+    q('#routeYoutubeLogout')?.addEventListener('click',async function(){await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;renderYouTubeLoginPage();});
+  }
+
+  async function renderImportPage(kind) {
+    const youtube = kind==='youtube';
+    const title = youtube ? 'YouTube playlist import' : 'External playlist import';
+    const subtitle = youtube ? 'Import a YouTube or YouTube Music playlist.' : 'Import a public Spotify or Apple Music playlist.';
+    const placeholderText = youtube ? 'https://music.youtube.com/playlist?list=…' : 'Spotify or Apple Music playlist URL';
+    page.innerHTML=pageHead(title,subtitle) +
+      '<div class="setting-group"><div class="setting-card" style="padding:16px"><div class="field"><label>Playlist URL</label><input id="routeImportUrl" placeholder="' + placeholderText + '"></div>' +
+      '<div class="page-actions" style="margin-top:14px"><button class="primary" id="routeImportGo">Import</button><button class="secondary" id="routeImportFile">Choose file</button></div></div></div>';
+    q('#routeImportGo')?.addEventListener('click',async function(){
+      const value=q('#routeImportUrl').value.trim();if(!value)return;
+      toast('Reading and matching playlist…',7000);
+      try{const p=await api.imports.externalUrl(value);await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message||'Import failed',6000);}
+    });
+    q('#routeImportFile')?.addEventListener('click',async function(){
+      toast('Matching imported tracks…',6000);const p=await api.imports.file();if(p){await refreshLocal();navigate('playlist-detail',{id:p.id});}
+    });
+  }
+
   async function renderSettings() {
     await refreshLocal();
     const s=S.local.settings, lf=s.lastfm||{};
@@ -454,11 +560,17 @@
         <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Choose dark, light or system</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
         <div class="setting-row"><div class="setting-copy"><strong>Accent</strong><span>LastWave highlight color</span></div><input type="color" id="accentSetting" value="${escapeHtml(s.accent||'#c6f100')}"></div>
       </div></div>
-      <div class="setting-group"><h2>Downloads & Library</h2><div class="setting-card">
+      <div class="setting-group"><h2>Library & Content</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Home sections</strong><span>Choose which recommendation rows appear on Home</span></div><button class="secondary" data-route="home-sections">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Excluded songs</strong><span>Restore songs hidden from recommendations</span></div><button class="secondary" data-route="excluded-songs">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Modules & Addons</strong><span>Streaming and metadata provider modules</span></div><button class="secondary" data-route="provider-modules">Open</button></div>
         <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(s.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Import playlist</strong><span>YouTube playlist URL or local CSV/JSON/M3U</span></div><button class="secondary" id="settingsImportBtn">Import</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>YouTube playlist import</strong><span>Import YouTube and YouTube Music playlists</span></div><button class="secondary" data-route="youtube-import">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>External playlist import</strong><span>Spotify, Apple Music, CSV, JSON and M3U</span></div><button class="secondary" data-route="external-import">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Downloads</strong><span>Open the downloaded-music manager</span></div><button class="secondary" data-route="downloads">Open</button></div>
       </div></div>
-      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
+      <div class="setting-group"><h2>YouTube & Sync</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>YouTube Music account</strong><span>Dedicated Android-parity connection screen</span></div><button class="secondary" data-route="youtube-login">Open</button></div>
         <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${s.youtubeCookie ? 'Authenticated session saved' : 'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
         <div class="field"><label>Advanced: authenticated cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string if browser sign-in is unavailable.">${escapeHtml(s.youtubeCookie||'')}</textarea></div>
         <div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save manual connection</button></div>
@@ -486,7 +598,7 @@
     q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});
     q('#accentSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
     q('#chooseDownloadFolder').addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
-    q('#settingsImportBtn').addEventListener('click',importDialog);
+    q('#settingsImportBtn')?.addEventListener('click',importDialog);
     q('#youtubeLoginBtn').addEventListener('click',async()=>{
       toast('A YouTube Music sign-in window has opened. Close it after your account is visible.',5000);
       const result=await api.youtube.login();
@@ -706,9 +818,9 @@
   function contextMenu(track,x,y){
     if(!track)return;
     const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);
-    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button>`;
+    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button><button data-cm="exclude">Exclude from recommendations</button>`;
     menu.style.left=Math.min(x,innerWidth-240)+'px';menu.style.top=Math.min(y,innerHeight-280)+'px';menu.classList.remove('hidden');
-    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;}}));
+    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;case'exclude':await api.library.excludeTrack(track);await refreshLocal();toast('Excluded from recommendations');if(S.route==='feed')renderFeed();break;}}));
   }
 
   async function toggleLike(track){const liked=await api.library.toggleLike(track);await refreshLocal();toast(liked?'Added to liked songs':'Removed from liked songs');updatePlayerLike();}
