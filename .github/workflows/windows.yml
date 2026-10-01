@@ -35,8 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: windows/LastWaveDesktop/package.json
 
       - name: Setup Python for Laya
         uses: actions/setup-python@v5
@@ -72,6 +70,11 @@ jobs:
 
       - name: Run full desktop smoke tests
         run: npm run test:smoke
+
+      - name: Run live YouTube Music service smoke test
+        env:
+          LASTWAVE_NETWORK_SMOKE: '1'
+        run: node tests/network-smoke.mjs
 
       - name: Build Windows installer
         env:
