@@ -8,100 +8,127 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div id="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">LW</div>
-        <div><strong>LastWave</strong><span>Windows</span></div>
-      </div>
-      <nav id="nav">
-        <button data-route="feed" class="nav-item active"><span>⌂</span> Feed</button>
-        <button data-route="stats" class="nav-item"><span>◫</span> Stats</button>
-        <button data-route="playlists" class="nav-item"><span>☷</span> Playlists</button>
-        <div class="nav-separator"></div>
-        <button data-route="discover" class="nav-item"><span>✦</span> Discover</button>
-        <button data-route="genres" class="nav-item"><span>◉</span> Genres</button>
-        <button data-route="search" class="nav-item"><span>⌕</span> Search</button>
-        <button data-route="generator" class="nav-item"><span>✧</span> Generator</button>
-        <button data-route="friends" class="nav-item"><span>♧</span> Friends</button>
-        <button data-route="downloads" class="nav-item"><span>⇩</span> Downloads</button>
-      </nav>
-      <div class="sidebar-bottom">
-        <button data-route="settings" class="nav-item"><span>⚙</span> Settings</button>
-        <div id="connectionBadge" class="connection-badge">Starting…</div>
-      </div>
-    </aside>
-
-    <main class="workspace">
-      <header class="topbar">
-        <div class="history-controls">
-          <button id="backBtn" class="icon-btn" title="Back">‹</button>
-          <button id="forwardBtn" class="icon-btn" title="Forward">›</button>
-        </div>
-        <div class="global-search">
-          <span>⌕</span>
-          <input id="globalSearchInput" placeholder="Search songs, artists, albums, playlists" autocomplete="off" />
-          <div id="suggestions" class="suggestions hidden"></div>
-        </div>
-        <button id="djQuickToggle" class="pill active">DJ Energy</button>
-        <button id="openSettingsBtn" class="avatar-btn" title="Settings">⚙</button>
-      </header>
-
+  <div id="app" class="android-parity-shell">
+    <main class="app-stage">
       <section id="page" class="page"></section>
     </main>
 
-    <aside id="rightPanel" class="right-panel hidden">
-      <div class="panel-header">
-        <div>
-          <strong id="rightPanelTitle">Queue</strong>
-          <small id="rightPanelSubtitle"></small>
+    <div id="miniPlayer" class="mini-player hidden" role="button" tabindex="0" aria-label="Open player">
+      <div class="mini-player-surface">
+        <div class="mini-progress"><i id="miniProgressFill"></i></div>
+        <div class="mini-content">
+          <img id="playerArt" class="mini-art" alt="" />
+          <div class="mini-meta">
+            <strong id="playerTitle">Nothing playing</strong>
+            <span id="playerArtist">Choose a song to start</span>
+          </div>
+          <button id="likeBtn" class="round-icon mini-like" title="Like">♡</button>
+          <button id="playBtn" class="round-icon mini-play" title="Play">▶</button>
+          <button id="nextBtn" class="round-icon mini-next" title="Next">▶▶</button>
         </div>
-        <button id="closeRightPanel" class="icon-btn">×</button>
+      </div>
+    </div>
+
+    <nav id="nav" class="floating-nav" aria-label="Main navigation">
+      <div class="nav-dock glass-surface">
+        <button data-route="feed" class="nav-item active" aria-label="Feed">
+          <span class="nav-icon">⌂</span><span class="nav-label">Feed</span>
+        </button>
+        <button data-route="stats" class="nav-item" aria-label="Stats">
+          <span class="nav-icon">▥</span><span class="nav-label">Stats</span>
+        </button>
+        <button data-route="playlists" class="nav-item" aria-label="Playlists">
+          <span class="nav-icon">≡</span><span class="nav-label">Playlists</span>
+        </button>
+      </div>
+      <button id="generatorFab" class="generator-fab glass-surface hidden" data-route="generator" title="Create playlist">✦</button>
+    </nav>
+
+    <div id="fullPlayer" class="full-player hidden" aria-hidden="true">
+      <div id="fullPlayerBackdrop" class="full-player-backdrop"></div>
+      <div class="full-player-scrim"></div>
+      <div class="full-player-shell">
+        <div class="full-player-top">
+          <button id="collapsePlayerBtn" class="glass-icon" title="Collapse">⌄</button>
+          <div class="full-player-tabs" role="tablist">
+            <button data-player-tab="now" class="player-tab active">Now Playing</button>
+            <button data-player-tab="lyrics" class="player-tab">Lyrics</button>
+            <button data-player-tab="queue" class="player-tab">Queue</button>
+          </div>
+          <button id="fullMoreBtn" class="glass-icon" title="More">•••</button>
+        </div>
+
+        <div id="fullNowPlaying" class="full-tab-panel active">
+          <div class="player-hero">
+            <img id="fullPlayerArt" class="full-art" alt="" />
+          </div>
+          <div class="full-meta">
+            <div>
+              <h1 id="fullPlayerTitle">Nothing playing</h1>
+              <button id="fullPlayerArtist" class="artist-link">Choose a song to start</button>
+            </div>
+            <button id="fullLikeBtn" class="glass-icon heart" title="Like">♡</button>
+          </div>
+
+          <div class="full-seek">
+            <input id="seek" type="range" min="0" max="1000" value="0" />
+            <div class="full-times"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
+          </div>
+
+          <div class="full-transport">
+            <button id="prevBtn" class="transport-side">◀◀</button>
+            <button id="fullPlayBtn" class="transport-main">▶</button>
+            <button id="fullNextBtn" class="transport-side">▶▶</button>
+          </div>
+
+          <div class="full-tools">
+            <button id="shuffleBtn" class="tool-button">↝<span>Shuffle</span></button>
+            <button id="lyricsBtn" class="tool-button">≋<span>Lyrics</span></button>
+            <button id="queueBtn" class="tool-button">≡<span>Queue</span></button>
+            <button id="repeatBtn" class="tool-button">↻<span>Repeat</span></button>
+            <button id="djQuickToggle" class="tool-button active">✦<span>DJ Energy</span></button>
+          </div>
+
+          <div class="full-volume">
+            <span>◖</span><input id="volume" type="range" min="0" max="100" value="85" />
+            <span id="djMeter" class="dj-meter"><i></i><b>0.0 dB</b></span>
+            <span id="qualityBadge" class="quality-badge">AUTO</span>
+          </div>
+        </div>
+
+        <div id="fullLyrics" class="full-tab-panel">
+          <div class="full-panel-heading"><div><h2>Lyrics</h2><p id="lyricsSubtitle"></p></div></div>
+          <div id="lyricsBody" class="full-panel-scroll"></div>
+        </div>
+
+        <div id="fullQueue" class="full-tab-panel">
+          <div class="full-panel-heading"><div><h2>Queue</h2><p id="queueSubtitle"></p></div></div>
+          <div id="queueBody" class="full-panel-scroll"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="rightPanel" class="android-sheet hidden">
+      <div class="sheet-handle"></div>
+      <div class="panel-header">
+        <div><strong id="rightPanelTitle">Details</strong><small id="rightPanelSubtitle"></small></div>
+        <button id="closeRightPanel" class="round-icon">×</button>
       </div>
       <div id="rightPanelBody" class="panel-body"></div>
     </aside>
 
-    <footer class="player">
-      <div class="now-playing" id="nowPlayingCard">
-        <img id="playerArt" alt="" />
-        <div class="track-meta">
-          <strong id="playerTitle">Nothing playing</strong>
-          <span id="playerArtist">Choose a song to start</span>
-        </div>
-        <button id="likeBtn" class="icon-btn" title="Like">♡</button>
-      </div>
+    <div id="connectionBadge" class="connection-badge">Starting…</div>
+    <button id="backBtn" class="hidden"></button>
+    <button id="forwardBtn" class="hidden"></button>
+    <input id="globalSearchInput" class="hidden" />
+    <div id="suggestions" class="hidden"></div>
+    <button id="openSettingsBtn" class="hidden"></button>
 
-      <div class="transport">
-        <div class="transport-buttons">
-          <button id="shuffleBtn" class="icon-btn" title="Shuffle">⤨</button>
-          <button id="prevBtn" class="icon-btn">⏮</button>
-          <button id="playBtn" class="play-btn">▶</button>
-          <button id="nextBtn" class="icon-btn">⏭</button>
-          <button id="repeatBtn" class="icon-btn" title="Repeat">↻</button>
-        </div>
-        <div class="progress-row">
-          <span id="currentTime">0:00</span>
-          <input id="seek" type="range" min="0" max="1000" value="0" />
-          <span id="duration">0:00</span>
-        </div>
-      </div>
-
-      <div class="player-actions">
-        <button id="lyricsBtn" class="icon-btn" title="Lyrics">≋</button>
-        <button id="queueBtn" class="icon-btn" title="Queue">☷</button>
-        <span id="qualityBadge" class="quality-badge">AUTO</span>
-        <span id="djMeter" class="dj-meter" title="Personal DJ gain"><i></i><b>0.0 dB</b></span>
-        <span class="volume-icon">◖</span>
-        <input id="volume" type="range" min="0" max="100" value="85" />
-      </div>
-    </footer>
+    <audio id="audio" crossorigin="anonymous"></audio>
+    <div id="contextMenu" class="context-menu hidden"></div>
+    <div id="toastHost" class="toast-host"></div>
+    <div id="modalHost"></div>
   </div>
-
-  <audio id="audio" crossorigin="anonymous"></audio>
-  <div id="contextMenu" class="context-menu hidden"></div>
-  <div id="toastHost" class="toast-host"></div>
-  <div id="modalHost"></div>
-
   <script src="./app.js"></script>
 </body>
 </html>
