@@ -1130,7 +1130,8 @@
       '<button class="android-player-heart" id="androidFullLike">' + (liked?'♥':'♡') + '</button></div>' +
       '<div class="android-player-progress"><input id="androidFullSeek" type="range" min="0" max="1000" value="0"><div class="android-player-times"><span id="androidFullCurrent">0:00</span><span id="androidFullDuration">0:00</span></div></div>' +
       '<div class="android-player-controls"><button class="side" id="androidFullPrev">⏮</button><button class="main" id="androidFullPlay">' + (audio.paused?'▶':'❚❚') + '</button><button class="side" id="androidFullNext">⏭</button></div>' +
-      '<div class="android-player-extras"><button id="androidFullShuffle">Shuffle</button><button id="androidFullDj">' + (S.local?.settings?.djEnergy?'DJ Energy on':'DJ Energy off') + '</button><button id="androidFullRepeat">Repeat</button></div>' +
+      '<div class="android-player-extras"><button class="android-player-mode" id="androidFullShuffle" title="Shuffle">⤨</button><button class="android-player-quality" id="androidFullQuality"><span>♫</span><b>' + escapeHtml(q('#qualityBadge')?.textContent || 'AUTO') + '</b></button><button class="android-player-mode" id="androidFullRepeat" title="Repeat">↻</button></div>' +
+      '<button class="android-player-dj-chip" id="androidFullDj">⚡ ' + (S.local?.settings?.djEnergy?'DJ Energy on':'DJ Energy off') + '</button>' +
     '</div>';
   }
 
@@ -1168,8 +1169,19 @@
     q('#androidFullNext')?.addEventListener('click',next);
     q('#androidFullPlay')?.addEventListener('click',async function(){ if(audio.paused) await audio.play(); else audio.pause(); refreshFullPlayer(); });
     q('#androidFullLike')?.addEventListener('click',async function(){ if(S.current) await toggleLike(S.current); refreshFullPlayer(); });
-    q('#androidFullShuffle')?.addEventListener('click',function(){S.shuffle=!S.shuffle;toast(S.shuffle?'Shuffle on':'Shuffle off');});
-    q('#androidFullRepeat')?.addEventListener('click',function(){S.repeat=!S.repeat;toast(S.repeat?'Repeat on':'Repeat off');});
+    q('#androidFullShuffle')?.addEventListener('click',function(){
+      S.shuffle=!S.shuffle;
+      q('#androidFullShuffle')?.classList.toggle('active',S.shuffle);
+      toast(S.shuffle?'Shuffle on':'Shuffle off');
+    });
+    q('#androidFullRepeat')?.addEventListener('click',function(){
+      S.repeat=!S.repeat;
+      q('#androidFullRepeat')?.classList.toggle('active',S.repeat);
+      toast(S.repeat?'Repeat on':'Repeat off');
+    });
+    q('#androidFullQuality')?.addEventListener('click',function(){
+      toast('Playback quality: ' + (q('#qualityBadge')?.textContent || 'AUTO'));
+    });
     q('#androidFullDj')?.addEventListener('click',async function(){
       const value=!S.local.settings.djEnergy;
       S.local.settings=await api.settings.update({djEnergy:value});
@@ -1179,6 +1191,74 @@
     qa('[data-full-queue-index]').forEach(function(el){el.addEventListener('click',function(){playIndex(Number(el.dataset.fullQueueIndex));});});
     qa('[data-full-lyric-index]').forEach(function(el){el.addEventListener('click',function(){const row=S.parsedLyrics[Number(el.dataset.fullLyricIndex)];if(row)audio.currentTime=row.time+(djLookahead()/1000);});});
     qa('[data-full-tab]').forEach(function(btn){btn.addEventListener('click',function(){showFullPlayer(btn.dataset.fullTab);});});
+
+    const root=fullPlayerRoot();
+    const art=q('#androidFullPlayer .android-player-art');
+    if(art){
+      let dragStart=null;
+      art.addEventListener('pointerdown',function(e){
+        if(e.button!==0)return;
+        dragStart={x:e.clientX,y:e.clientY};
+        art.setPointerCapture?.(e.pointerId);
+        art.classList.add('dragging');
+      });
+      art.addEventListener('pointermove',function(e){
+        if(!dragStart)return;
+        const dx=e.clientX-dragStart.x;
+        const dy=e.clientY-dragStart.y;
+        if(Math.abs(dx)>Math.abs(dy)) art.style.transform='translateX('+clamp(dx,-140,140)+'px) rotate('+(dx/45)+'deg)';
+      });
+      art.addEventListener('pointerup',function(e){
+        if(!dragStart)return;
+        const dx=e.clientX-dragStart.x;
+        const dy=e.clientY-dragStart.y;
+        dragStart=null;
+        art.classList.remove('dragging');
+        art.style.transform='';
+        if(Math.abs(dx)>88&&Math.abs(dx)>Math.abs(dy)){
+          if(dx<0) next(); else prev();
+        }
+      });
+      art.addEventListener('pointercancel',function(){dragStart=null;art.classList.remove('dragging');art.style.transform='';});
+      art.addEventListener('dblclick',async function(e){
+        const box=art.getBoundingClientRect();
+        const ratio=(e.clientX-box.left)/Math.max(box.width,1);
+        if(ratio<.34){
+          audio.currentTime=Math.max(0,audio.currentTime-5);
+          toast('Rewind 5 seconds');
+        }else if(ratio>.66){
+          audio.currentTime=Math.min(Number.isFinite(audio.duration)?audio.duration:audio.currentTime+5,audio.currentTime+5);
+          toast('Forward 5 seconds');
+        }else if(S.current){
+          await toggleLike(S.current);
+          refreshFullPlayer();
+        }
+      });
+    }
+
+    if(root){
+      let gesture=null;
+      root.addEventListener('pointerdown',function(e){
+        if(e.target.closest('button,input,.android-player-art,.lyric-line,.queue-row'))return;
+        gesture={x:e.clientX,y:e.clientY};
+      });
+      root.addEventListener('pointerup',function(e){
+        if(!gesture)return;
+        const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+        gesture=null;
+        if(Math.abs(dy)<88||Math.abs(dy)<Math.abs(dx))return;
+        const active=root.querySelector('[data-full-tab].active')?.dataset.fullTab||'now';
+        if(dy>0){
+          if(active==='now') closeFullPlayer();
+          else showFullPlayer('now');
+        }else if(active==='now'){
+          showFullPlayer('queue');
+        }
+      });
+    }
+
+    q('#androidFullShuffle')?.classList.toggle('active',S.shuffle);
+    q('#androidFullRepeat')?.classList.toggle('active',S.repeat);
   }
 
   async function showFullPlayer(tab){
