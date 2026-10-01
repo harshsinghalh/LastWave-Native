@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('lastwave', {
   },
 
   youtube: {
+    login: () => invoke('yt:login'),
+    logout: () => invoke('yt:logout'),
     home: () => invoke('yt:home'),
     explore: () => invoke('yt:explore'),
     search: (query, type) => invoke('yt:search', query, type),
@@ -50,6 +52,7 @@ contextBridge.exposeInMainWorld('lastwave', {
 
   imports: {
     youtubePlaylist: input => invoke('import:youtube-playlist', input),
+    externalUrl: input => invoke('import:external-url', input),
     file: () => invoke('import:file')
   },
 
