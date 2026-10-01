@@ -345,83 +345,95 @@
     q('#deletePlaylistBtn')?.addEventListener('click',async()=>{if(confirm(`Delete "${p.title}"?`)){await api.library.deletePlaylist(p.id);navigate('playlists');}});
   }
   async function renderDiscover() {
-    page.innerHTML = pageHead('Discover','Explore new music, releases, artists and albums.') + loading('Exploring YouTube Music');
-    try {
-      if (!S.explore) S.explore = await api.youtube.explore();
-      let html = pageHead('Discover','Explore new music, releases, artists and albums.',
-        `<button class="secondary" id="newReleasesBtn">New releases</button>`);
-      if (S.explore.entities?.length) html += `<section class="section"><div class="section-head"><h2>Explore</h2></div><div class="card-row">${S.explore.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
-      for (const sec of S.explore.sections || []) {
-        if (sec.tracks?.length) html += `<section class="section"><div class="section-head"><h2>${escapeHtml(sec.title)}</h2></div><div class="card-row">${sec.tracks.map(card).join('')}</div></section>`;
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Discover','Explore new music, releases, artists and albums.',headerAction('↻','Refresh','', 'refreshDiscoverBtn'))}${loading('Exploring YouTube Music')}</div>`;
+    try{
+      if(!S.explore)S.explore=await api.youtube.explore();
+      let html=`<div class="android-content pushed">${pageHead('Discover','Explore new music, releases, artists and albums.',headerAction('↻','Refresh','', 'refreshDiscoverBtn'))}<div class="screen-body flush">`;
+      if(S.explore.entities?.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore</h2><p>Artists, albums and playlists</p></div></div><div class="card-row">${S.explore.entities.slice(0,18).map(entityCard).join('')}</div></section>`;
+      for(const sec of S.explore.sections||[]){
+        const tracks=(sec.tracks||[]).slice(0,18);tracks.forEach(cacheTrack);
+        if(tracks.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${escapeHtml(sec.title||'Music')}</h2></div></div><div class="card-row">${tracks.map(card).join('')}</div></section>`;
       }
-      if (S.explore.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Tracks</h2></div><div class="track-list">${S.explore.tracks.slice(0,35).map(trackRow).join('')}</div></section>`;
-      page.innerHTML = html;
-      q('#newReleasesBtn')?.addEventListener('click', () => navigate('search',{query:'new music releases 2026'}));
-    } catch(e) {
-      page.innerHTML = pageHead('Discover') + empty('Discovery is unavailable',e.message);
-    }
+      if(S.explore.tracks?.length){S.explore.tracks.forEach(cacheTrack);html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>Fresh picks</p></div></div><div class="track-list">${S.explore.tracks.slice(0,35).map(trackRow).join('')}</div></section>`;}
+      html+='</div></div>';page.innerHTML=html;
+      q('#refreshDiscoverBtn')?.addEventListener('click',()=>{S.explore=null;renderDiscover();});
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead('Discover')}${empty('Discovery is unavailable',e.message)}</div>`;}
   }
-
-  const GENRES = ['Pop','Hip-Hop','Rock','R&B','Electronic','Indie','Classical','Jazz','Bollywood','Punjabi','Lo-fi','Metal','Folk','Country','K-Pop','Latin','Afrobeats','Devotional','Ambient','Workout','Chill','Focus','Party','Sleep'];
-
   async function renderGenres() {
-    page.innerHTML = pageHead('Genre DNA','Jump into a genre, mood or activity.') +
-      `<section class="section"><div class="chips">${GENRES.map(g => `<button class="chip" data-genre="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>
-       <section id="genreResults" class="section">${empty('Choose a genre','LastWave will build an instant music shelf.')}</section>`;
-    qa('[data-genre]').forEach(btn => btn.addEventListener('click', async () => {
-      qa('[data-genre]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
-      const container = q('#genreResults');
-      container.innerHTML = loading(`Finding ${btn.dataset.genre}`);
-      const result = await api.youtube.search(btn.dataset.genre + ' music', 'song').catch(() => ({tracks:[]}));
-      container.innerHTML = `<div class="section-head"><h2>${escapeHtml(btn.dataset.genre)}</h2><small>${result.tracks.length} results</small></div>` +
-        (result.tracks.length ? `<div class="track-list">${result.tracks.slice(0,40).map(trackRow).join('')}</div>` : empty('Nothing found'));
+    const stats=await api.library.stats().catch(()=>({topArtists:[]}));
+    const base=GENRES.map((name,i)=>({name,percent:Math.max(.08,1-i/(GENRES.length+4))}));
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Your Genres','Based on your listening history','<button class="section-action">Overall</button>')}
+      <div class="screen-body">
+        <div id="genreBars">${base.slice(0,14).map(g=>`<div class="genre-bar-row" data-genre="${escapeHtml(g.name)}"><div class="genre-bar-label"><strong>${escapeHtml(g.name)}</strong><span>${Math.round(g.percent*100)}%</span></div><div class="genre-bar"><i style="width:${Math.round(g.percent*100)}%"></i></div></div>`).join('')}</div>
+        <section id="genreResults" class="section">${empty('Choose a genre','Open any genre to see matching tracks.')}</section>
+      </div></div>`;
+    qa('[data-genre]').forEach(btn=>btn.addEventListener('click',async()=>{
+      qa('[data-genre]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+      const host=q('#genreResults');host.innerHTML=loading(`Finding ${btn.dataset.genre}`);
+      const result=await api.youtube.search(btn.dataset.genre+' music','song').catch(()=>({tracks:[]}));
+      result.tracks?.forEach(cacheTrack);
+      host.innerHTML=`<div class="section-head" style="padding:0"><div class="section-copy"><h2>${escapeHtml(btn.dataset.genre)}</h2><p>Your Tracks · discoveries</p></div><button class="primary" id="genreStartMix">Start Mix</button></div>`+
+        (result.tracks?.length?`<div class="track-list" style="margin:0">${result.tracks.slice(0,35).map(trackRow).join('')}</div>`:empty('No tracks found'));
+      q('#genreStartMix')?.addEventListener('click',()=>result.tracks?.[0]&&playTrack(result.tracks[0],result.tracks));
     }));
   }
-
   async function renderSearch(query='') {
-    S.activeSearchType = S.routeParams.type || 'all';
-    page.innerHTML = pageHead('Search', query ? `Results for “${query}”` : 'Find songs, artists, albums and playlists.') +
-      `<div class="search-tabs">${['all','song','album','artist','playlist'].map(t => `<button class="chip ${S.activeSearchType===t?'active':''}" data-search-type="${t}">${t==='song'?'Songs':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
-       <div id="searchBody">${query ? loading('Searching') : empty('Start typing above','Use the search box in the top bar.')}</div>`;
-    qa('[data-search-type]').forEach(btn => btn.addEventListener('click', () => {
-      navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
-    }));
-    if (!query) return;
-    const body = q('#searchBody');
-    try {
-      const result = await api.youtube.search(query, S.activeSearchType);
-      let html = '';
-      if (result.entities?.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
-        html += `<section class="section"><div class="section-head"><h2>Artists, albums & playlists</h2></div><div class="card-row">${result.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
-      }
-      if (result.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Songs</h2><small>${result.tracks.length} results</small></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
-      body.innerHTML = html || empty('No results found','Try a different title, artist or album.');
-    } catch(e) {
-      body.innerHTML = empty('Search failed',e.message);
-    }
+    S.activeSearchType=S.routeParams.type||'all';
+    const tabs=[['all','All'],['song','Tracks'],['album','Albums'],['artist','Artists'],['playlist','Playlists']];
+    const header=`<div class="search-header"><div class="search-input-row"><button class="header-icon header-back" data-history-back>←</button><div class="search-pill"><span>⌕</span><input id="screenSearchInput" value="${escapeHtml(query)}" placeholder="${S.activeSearchType==='users'?'Search Last.fm users…':'Search YouTube Music…'}" autocomplete="off"><button id="screenSearchClear" class="round-icon ${query?'':'hidden'}">×</button></div></div><div class="search-filters">${tabs.map(([v,l])=>`<button class="chip ${S.activeSearchType===v?'active':''}" data-search-type="${v}">${l}</button>`).join('')}</div></div>`;
+    page.innerHTML=`<div class="android-content pushed">${header}<div id="searchBody" class="screen-body flush">${query?loading('Searching'):`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>${(S.local?.searchHistory||[]).length?`<section class="section"><div class="section-head"><div class="section-copy"><h2>Recent searches</h2></div></div><div class="track-list">${S.local.searchHistory.slice(0,8).map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">↺</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div></section>`:''}`}</div></div>`;
+    const input=q('#screenSearchInput');
+    let suggestTimer;
+    input?.focus();
+    input?.addEventListener('input',()=>{
+      clearTimeout(suggestTimer);const v=input.value.trim();q('#screenSearchClear')?.classList.toggle('hidden',!v);
+      if(!v){q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>`;return;}
+      suggestTimer=setTimeout(async()=>{
+        const suggestions=await api.youtube.suggestions(v).catch(()=>[]);
+        if(input.value.trim()!==v)return;
+        q('#searchBody').innerHTML=suggestions.length?`<div class="track-list" style="margin-top:10px">${suggestions.map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">⌕</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div>`:empty('No suggestions');
+      },180);
+    });
+    input?.addEventListener('keydown',e=>{if(e.key==='Enter'){const v=input.value.trim();if(v)navigate('search',{query:v,type:S.activeSearchType},false);}});
+    q('#screenSearchClear')?.addEventListener('click',()=>navigate('search',{query:'',type:S.activeSearchType},false));
+    qa('[data-search-type]').forEach(btn=>btn.addEventListener('click',()=>navigate('search',{query:input?.value.trim()||query,type:btn.dataset.searchType},false)));
+    if(!query)return;
+    try{
+      const result=await api.youtube.search(query,S.activeSearchType);
+      result.tracks?.forEach(cacheTrack);
+      let html='';
+      if(result.entities?.length&&['all','album','artist','playlist'].includes(S.activeSearchType))html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Top results</h2></div></div><div class="card-row">${result.entities.slice(0,18).map(entityCard).join('')}</div></section>`;
+      if(result.tracks?.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>${result.tracks.length} results</p></div></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
+      q('#searchBody').innerHTML=html||empty('No results found','Try another title, artist or album.');
+    }catch(e){q('#searchBody').innerHTML=empty('Search failed',e.message);}
   }
-
   async function renderGenerator() {
-    page.innerHTML = pageHead('Smart Playlist Generator','Build a mix from mood, genre and your local listening signals.') +
-      `<div class="panel-card"><div class="form-grid">
-        <div class="field"><label>Mood</label><select id="genMood"><option>Energetic</option><option>Chill</option><option>Focus</option><option>Happy</option><option>Melancholic</option><option>Workout</option><option>Party</option><option>Sleep</option></select></div>
-        <div class="field"><label>Genre</label><select id="genGenre"><option value="">Any genre</option>${GENRES.slice(0,18).map(x=>`<option>${x}</option>`).join('')}</select></div>
-        <div class="field full"><label>Seed artist / track / idea</label><input id="genSeed" placeholder="e.g. Hans Zimmer, Arijit Singh, cinematic bass, 2000s nostalgia"></div>
-      </div><div class="page-actions" style="margin-top:16px"><button class="primary" id="generateBtn">Generate mix</button><button class="secondary" id="localMixBtn">Use my listening history</button></div></div>
-      <section id="generatedMix" class="section">${empty('Your generated mix will appear here')}</section>`;
-    q('#generateBtn').addEventListener('click', async () => {
-      const mood=q('#genMood').value, genre=q('#genGenre').value, seed=q('#genSeed').value.trim();
-      const q=[mood,genre,seed,'music'].filter(Boolean).join(' ');
-      q('#generatedMix').innerHTML=loading('Generating');
-      const result=await api.youtube.search(q,'song').catch(()=>({tracks:[]}));
-      showGenerated(result.tracks.slice(0,35),`${mood} ${genre || 'mix'}`);
-    });
-    q('#localMixBtn').addEventListener('click', async () => {
-      const tracks=await api.library.smartMix({limit:35});
-      showGenerated(tracks,'Your LastWave mix');
+    const modes=[
+      ['Top','Your most played tracks','★'],['Recent','Your latest listening','↺'],['Similar Tracks','Build song radio','♫'],
+      ['Similar Artists','Artist-based radio','♙'],['Tag','Generate from genre or tag','#'],['Mix','Balanced taste mix','↝'],
+      ['Recommendations','Fresh dual-engine picks','✦'],['Never Heard','Strictly new discoveries','◇'],['Library','Your saved music','▣']
+    ];
+    page.innerHTML=`<div class="android-content settings">${pageHead('Generator','Choose a mode to generate a playlist.')}
+      <div class="screen-body">
+        <div class="generator-group">${modes.map((m,i)=>`<button class="generator-row ${i===0?'selected':''}" data-gen-mode="${escapeHtml(m[0])}"><span class="generator-badge">${m[2]}</span><span><strong>${m[0]}</strong><small>${m[1]}</small></span><i>✓</i></button>`).join('')}</div>
+        <div class="panel-card generator-options" style="margin-top:14px"><div class="section-head" style="padding:0"><div class="section-copy"><h2>Options</h2><p id="generatorHint">Tune your generated playlist</p></div></div>
+          <div class="field"><label>Seed / genre / idea</label><input id="genSeed" placeholder="Optional seed artist, track, genre or mood"></div>
+          <div class="field" style="margin-top:12px"><label>Track count</label><input id="genCount" type="range" min="5" max="35" value="25"></div>
+          <button class="primary" id="generateBtn" style="width:100%;height:52px;margin-top:14px">✦ Generate Playlist</button>
+        </div>
+        <section id="generatedMix" class="section">${empty('Choose a mode and generate')}</section>
+      </div></div>`;
+    let mode='Top';
+    qa('[data-gen-mode]').forEach(btn=>btn.addEventListener('click',()=>{mode=btn.dataset.genMode;qa('[data-gen-mode]').forEach(x=>x.classList.toggle('selected',x===btn));q('#generatorHint').textContent=btn.querySelector('small')?.textContent||'';}));
+    q('#generateBtn').addEventListener('click',async()=>{
+      const seed=q('#genSeed').value.trim();const count=Number(q('#genCount').value)||25;
+      q('#generatedMix').innerHTML=loading('Generating playlist');
+      let tracks=[];
+      if(['Top','Recent','Library','Mix'].includes(mode)&&!seed)tracks=await api.library.smartMix({limit:count});
+      if(!tracks.length){const query=[seed,mode==='Never Heard'?'new discoveries':mode,'music'].filter(Boolean).join(' ');const result=await api.youtube.search(query,'song').catch(()=>({tracks:[]}));tracks=result.tracks.slice(0,count);}
+      showGenerated(tracks,mode);
     });
   }
-
   function showGenerated(tracks,title) {
     const host=q('#generatedMix');
     host.innerHTML=`<div class="section-head"><h2>${escapeHtml(title)}</h2><button class="primary" id="playGeneratedBtn">Play mix</button></div>`+
