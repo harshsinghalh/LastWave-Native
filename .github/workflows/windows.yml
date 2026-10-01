@@ -66,6 +66,7 @@ jobs:
             'services/store.mjs',
             'services/ytmusic.mjs',
             'services/lastfm.mjs',
+            'services/browserstream.mjs',
             'renderer/app.js',
             'tests/smoke.mjs',
             'tests/network-smoke.mjs'
@@ -78,10 +79,8 @@ jobs:
       - name: Run full desktop smoke tests
         run: npm run test:smoke
 
-      - name: Run live YouTube Music service smoke test
-        env:
-          LASTWAVE_NETWORK_SMOKE: '1'
-        run: node tests/network-smoke.mjs
+      - name: Run live desktop playback smoke test
+        run: npx electron tests/network-smoke.mjs
 
       - name: Build Windows installer
         env:
