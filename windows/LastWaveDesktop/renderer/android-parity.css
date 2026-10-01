@@ -78,7 +78,7 @@ body.light{
 html,body{background:var(--m3-surface);font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif}
 #app{display:block;height:100%;background:var(--m3-surface)}
 .workspace{position:relative;display:block;width:100%;height:100%;background:var(--m3-surface);overflow:hidden}
-.topbar{position:fixed!important;left:-10000px!important;top:-10000px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+.topbar{display:none!important}
 .page{
   width:min(100%,var(--android-max));height:100%;margin:0 auto;padding:0 0 176px;
   overflow:auto;background:var(--m3-surface);scrollbar-gutter:stable;
