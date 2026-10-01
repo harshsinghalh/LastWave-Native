@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
@@ -146,6 +146,221 @@ function setupProtocolHandling() {
   });
 }
 
+function decodeHtmlEntities(input) {
+  return String(input || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function collectTrackQueries(value, out = [], depth = 0) {
+  if (!value || depth > 16 || out.length >= 1000) return out;
+  if (Array.isArray(value)) {
+    for (const item of value) collectTrackQueries(item, out, depth + 1);
+    return out;
+  }
+  if (typeof value !== 'object') return out;
+
+  const title = value.trackName || value.title || value.name;
+  const rawArtist =
+    value.artistName ||
+    value.artist?.name ||
+    value.byArtist?.name ||
+    (Array.isArray(value.artists)
+      ? value.artists.map(x => x?.name || x).filter(Boolean).join(', ')
+      : value.artists);
+  const kind = String(value['@type'] || value.type || value.itemType || '').toLowerCase();
+  const hasTrackSignals =
+    Boolean(value.trackName || value.duration_ms || value.durationMs || value.playParams || value.uri || value.audioPreview || value.albumOfTrack) ||
+    kind.includes('musicrecording') ||
+    kind.includes('track');
+
+  if (hasTrackSignals && typeof title === 'string' && title.trim() && rawArtist) {
+    const artist = String(rawArtist).trim();
+    if (artist) out.push(`${artist} - ${title.trim()}`);
+  }
+
+  for (const child of Object.values(value)) {
+    if (child && typeof child === 'object') collectTrackQueries(child, out, depth + 1);
+  }
+  return out;
+}
+
+function extractExternalPlaylistQueries(html, hostname) {
+  const decoded = decodeHtmlEntities(html);
+  const queries = [];
+
+  // Structured JSON/JSON-LD is the most stable source on Apple Music and
+  // Spotify public pages. Parse every script-like JSON payload we can find.
+  const scripts = decoded.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi);
+  for (const match of scripts) {
+    const body = match[1]?.trim();
+    if (!body || (!body.startsWith('{') && !body.startsWith('['))) continue;
+    try { collectTrackQueries(JSON.parse(body), queries); } catch {}
+  }
+
+  // Spotify's serialized page state has changed shape repeatedly. These
+  // patterns are deliberately loose and act as a compatibility fallback.
+  if (hostname.includes('spotify')) {
+    const spotifyPatterns = [
+      /"trackName"\s*:\s*"([^"]+)"[\s\S]{0,700}?"artistName"\s*:\s*"([^"]+)"/g,
+      /"name"\s*:\s*"([^"]+)"[\s\S]{0,900}?"artists"\s*:\s*\[([\s\S]{0,500}?)\]/g
+    ];
+    let m;
+    while ((m = spotifyPatterns[0].exec(decoded)) && queries.length < 1000) {
+      queries.push(`${m[2]} - ${m[1]}`);
+    }
+    while ((m = spotifyPatterns[1].exec(decoded)) && queries.length < 1000) {
+      const artist = /"name"\s*:\s*"([^"]+)"/.exec(m[2])?.[1];
+      if (artist) queries.push(`${artist} - ${m[1]}`);
+    }
+  }
+
+  if (hostname.includes('apple')) {
+    let m;
+    const p = /"name"\s*:\s*"([^"]+)"[\s\S]{0,450}?"artistName"\s*:\s*"([^"]+)"/g;
+    while ((m = p.exec(decoded)) && queries.length < 1000) {
+      queries.push(`${m[2]} - ${m[1]}`);
+    }
+  }
+
+  const seen = new Set();
+  return queries
+    .map(q => q.replace(/\\u0026/g, '&').replace(/\\u0027/g, "'").trim())
+    .filter(q => q.length > 3 && !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()))
+    .slice(0, 600);
+}
+
+async function matchQueriesToYouTube(queries) {
+  const tracks = [];
+  const seen = new Set();
+  for (const query of queries.slice(0, 500)) {
+    const found = await youtube.search(query, 'song').catch(() => ({ tracks: [] }));
+    const track = found.tracks?.[0];
+    if (track?.videoId && !seen.has(track.videoId)) {
+      seen.add(track.videoId);
+      tracks.push(track);
+    }
+  }
+  return tracks;
+}
+
+async function importExternalPlaylist(rawInput) {
+  const raw = String(rawInput || '').trim();
+  if (!raw) throw new Error('Paste a playlist URL first.');
+  let url;
+  try { url = new URL(raw); } catch { throw new Error('That is not a valid playlist URL.'); }
+  const host = url.hostname.toLowerCase();
+
+  if (
+    host.includes('youtube.com') ||
+    host.includes('youtu.be') ||
+    host.includes('music.youtube.com')
+  ) {
+    const id = url.searchParams.get('list') ||
+      raw.split('/playlist/')[1]?.split(/[?&#/]/)[0] ||
+      raw;
+    const result = await youtube.playlist(id);
+    if (!result?.tracks?.length) throw new Error('No tracks were found in that YouTube playlist.');
+    return store.saveImportedPlaylist(
+      result.title || 'Imported YouTube Playlist',
+      result.tracks,
+      'youtube'
+    );
+  }
+
+  if (!host.includes('spotify.com') && !host.includes('music.apple.com')) {
+    throw new Error('Supported public playlist URLs: YouTube Music, Spotify, and Apple Music.');
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9'
+    },
+    redirect: 'follow'
+  });
+  if (!response.ok) throw new Error(`Could not open the public playlist page (HTTP ${response.status}).`);
+  const html = await response.text();
+  const queries = extractExternalPlaylistQueries(html, host);
+  if (!queries.length) {
+    throw new Error('The provider page did not expose track metadata. Export the playlist as CSV/text and use Choose file instead.');
+  }
+  const tracks = await matchQueriesToYouTube(queries);
+  if (!tracks.length) throw new Error('No imported tracks could be matched on YouTube Music.');
+  const provider = host.includes('spotify') ? 'Spotify' : 'Apple Music';
+  return store.saveImportedPlaylist(
+    `${provider} Import`,
+    tracks,
+    provider.toLowerCase().replace(' ', '-')
+  );
+}
+
+async function openYouTubeLogin() {
+  const login = new BrowserWindow({
+    parent: mainWindow,
+    modal: false,
+    width: 1160,
+    height: 820,
+    minWidth: 840,
+    minHeight: 640,
+    title: 'Connect YouTube Music',
+    autoHideMenuBar: true,
+    webPreferences: {
+      partition: 'persist:lastwave-youtube-login',
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  const ses = login.webContents.session;
+  let resolved = false;
+  return new Promise(async (resolve) => {
+    const finish = async () => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        const cookies = await ses.cookies.get({});
+        const ytCookies = cookies.filter(c =>
+          c.domain.includes('youtube.com') ||
+          c.domain.includes('google.com') ||
+          c.domain.includes('googleapis.com')
+        );
+        const cookieHeader = ytCookies.map(c => `${c.name}=${c.value}`).join('; ');
+        const hasAuth = ytCookies.some(c =>
+          ['SAPISID','__Secure-3PAPISID','__Secure-1PAPISID','SID','HSID'].includes(c.name)
+        );
+        if (hasAuth && cookieHeader) {
+          store.updateSettings({ youtubeCookie: cookieHeader });
+          await youtube.init(cookieHeader).catch(() => {});
+          resolve({ connected: true, cookieCount: ytCookies.length });
+        } else {
+          resolve({ connected: false, cookieCount: ytCookies.length });
+        }
+      } catch {
+        resolve({ connected: false, cookieCount: 0 });
+      }
+    };
+
+    login.on('closed', finish);
+    login.webContents.on('did-navigate', async (_e, current) => {
+      if (current.startsWith('https://music.youtube.com/')) {
+        const cookies = await ses.cookies.get({ url: 'https://music.youtube.com/' }).catch(() => []);
+        if (cookies.some(c => ['SAPISID','__Secure-3PAPISID','SID'].includes(c.name))) {
+          // Leave the window open so the user can confirm they reached their
+          // account; closing it persists the authenticated cookie set.
+        }
+      }
+    });
+    await login.loadURL('https://music.youtube.com/');
+  });
+}
+
 async function fetchLyrics(track) {
   const title = track?.title?.trim();
   const artist = track?.artist?.trim();
@@ -220,6 +435,14 @@ function setupIpc() {
     return true;
   });
 
+  ipcMain.handle('yt:login', () => openYouTubeLogin());
+  ipcMain.handle('yt:logout', async () => {
+    store.updateSettings({ youtubeCookie: '' });
+    const ses = session.fromPartition('persist:lastwave-youtube-login');
+    await ses.clearStorageData({ storages: ['cookies'] }).catch(() => {});
+    await youtube.init('').catch(() => {});
+    return true;
+  });
   ipcMain.handle('yt:home', () => youtube.home());
   ipcMain.handle('yt:explore', () => youtube.explore());
   ipcMain.handle('yt:search', async (_e, query, type) => {
@@ -248,18 +471,8 @@ function setupIpc() {
     return { file, name };
   });
 
-  ipcMain.handle('import:youtube-playlist', async (_e, input) => {
-    const raw = String(input || '').trim();
-    let id = raw;
-    try {
-      const u = new URL(raw);
-      id = u.searchParams.get('list') || raw.split('/playlist/')[1]?.split(/[?&#/]/)[0] || raw;
-    } catch {}
-    const result = await youtube.playlist(id);
-    if (!result?.tracks?.length) throw new Error('No tracks were found in that playlist.');
-    const playlist = store.saveImportedPlaylist(result.title || 'Imported YouTube Playlist', result.tracks, 'youtube');
-    return playlist;
-  });
+  ipcMain.handle('import:youtube-playlist', (_e, input) => importExternalPlaylist(input));
+  ipcMain.handle('import:external-url', (_e, input) => importExternalPlaylist(input));
 
   ipcMain.handle('import:file', async () => {
     const d = await dialog.showOpenDialog(mainWindow, {
@@ -278,11 +491,7 @@ function setupIpc() {
       queries = raw.split(/\r?\n/).map(line => line.replace(/^#.*$/, '').trim()).filter(Boolean);
       if (file.toLowerCase().endsWith('.csv')) queries = queries.slice(1).map(line => line.split(',').slice(0,2).join(' - '));
     }
-    const tracks = [];
-    for (const query of queries.slice(0, 500)) {
-      const found = await youtube.search(query, 'song').catch(() => ({ tracks: [] }));
-      if (found.tracks[0]) tracks.push(found.tracks[0]);
-    }
+    const tracks = await matchQueriesToYouTube(queries);
     return store.saveImportedPlaylist(path.basename(file, path.extname(file)), tracks, 'file');
   });
 
