@@ -9,12 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { JsonStore } from './services/store.mjs';
 import { YouTubeMusicService } from './services/ytmusic.mjs';
 import { LastFmService } from './services/lastfm.mjs';
+import { BrowserStreamResolver } from './services/browserstream.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow;
 let store;
 let youtube;
 let lastfm;
+let browserStreams;
 let proxyServer;
 let proxyPort = 0;
 let personalProfile = {};
@@ -65,7 +67,13 @@ async function startStreamProxy() {
         return;
       }
       const videoId = match[1];
-      const stream = await youtube.resolveStream(videoId);
+      let stream;
+      try {
+        stream = await youtube.resolveStream(videoId);
+      } catch (innerTubeError) {
+        console.warn('InnerTube audio resolution failed; using browser-assisted fallback:', innerTubeError?.message || innerTubeError);
+        stream = await browserStreams.resolve(videoId);
+      }
       const headers = {};
       if (req.headers.range) headers.Range = req.headers.range;
       const upstream = await fetch(stream.url, { headers });
@@ -460,7 +468,12 @@ function setupIpc() {
   ipcMain.handle('download:track', async (_e, track) => {
     const t = clean(track);
     if (!t?.videoId) throw new Error('This item has no playable YouTube ID.');
-    const stream = await youtube.resolveStream(t.videoId);
+    let stream;
+    try {
+      stream = await youtube.resolveStream(t.videoId);
+    } catch {
+      stream = await browserStreams.resolve(t.videoId);
+    }
     const response = await fetch(stream.url);
     if (!response.ok || !response.body) throw new Error('Could not download the audio stream.');
     const subtype = (stream.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
@@ -536,6 +549,7 @@ app.whenReady().then(async () => {
   youtube = new YouTubeMusicService(app.getPath('userData'));
   await youtube.init(store.state.settings.youtubeCookie || '').catch(() => {});
   lastfm = new LastFmService(() => store.state.settings);
+  browserStreams = new BrowserStreamResolver('persist:lastwave-youtube-login');
   setupProtocolHandling();
   setupIpc();
   await startStreamProxy();
