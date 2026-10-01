@@ -1,7 +1,8 @@
 import { Innertube, UniversalCache, Platform } from 'youtubei.js';
+import path from 'node:path';
+import { PoTokenService, appendPoToken } from './potoken.mjs';
 
 Platform.shim.eval = async data => new Function(data.output)();
-import path from 'node:path';
 
 function textOf(value) {
   if (value == null) return '';
@@ -217,6 +218,7 @@ export class YouTubeMusicService {
     this.yt = null;
     this.cookie = '';
     this.streamCache = new Map();
+    this.poTokens = new PoTokenService();
   }
 
   async init(cookie = '') {
@@ -341,47 +343,92 @@ export class YouTubeMusicService {
     const cached = this.streamCache.get(videoId);
     if (cached && cached.expires > Date.now() + 60_000) return cached;
     const yt = await this.init(this.cookie);
-
-    // youtubei.js v18.1.0 expects the supported client KEYS below, not the
-    // protocol client names such as WEB_REMIX/ANDROID_MUSIC.
-    // TV and ANDROID_VR are tried early because they are useful playback
-    // fallbacks when web/music clients omit streaming_data.
-    const clients = this.cookie
-      ? ['YTMUSIC', 'YTMUSIC_ANDROID', 'TV', 'ANDROID_VR', 'IOS', 'TV_SIMPLY', 'WEB_EMBEDDED', 'ANDROID', 'MWEB', 'VISIONOS', 'WEB']
-      : ['TV', 'ANDROID_VR', 'IOS', 'TV_SIMPLY', 'WEB_EMBEDDED', 'YTMUSIC_ANDROID', 'ANDROID', 'YTMUSIC', 'MWEB', 'VISIONOS', 'WEB'];
     const failures = [];
 
-    for (const client of clients) {
-      try {
-        const format = await yt.getStreamingData(videoId, {
-          client,
-          type: 'audio',
-          quality: 'best'
-        });
-        const url = format?.url;
-        if (!url || !String(url).startsWith('http')) {
-          failures.push(`${client}: no direct URL`);
-          continue;
-        }
+    const toEntry = async (format, clientProfile, gvsPoToken = '') => {
+      if (!format) throw new Error('No audio format');
+      let directUrl = format.url;
+      if (!directUrl && typeof format.decipher === 'function') {
+        directUrl = await format.decipher(yt.session.player);
+      } else if (typeof format.decipher === 'function') {
+        // Even when a raw URL is present, decipher() also normalizes the
+        // current n/signature transformations when required.
+        directUrl = await format.decipher(yt.session.player).catch(() => directUrl);
+      }
+      if (!directUrl || !String(directUrl).startsWith('http')) {
+        throw new Error('No direct media URL');
+      }
 
-        const entry = {
-          url,
-          mimeType: format.mime_type || format.mimeType || 'audio/webm',
-          bitrate: format.bitrate || 0,
-          contentLength: format.content_length || format.contentLength || null,
-          clientProfile: client,
-          expires: Date.now() + 4 * 60 * 60 * 1000
-        };
-        this.streamCache.set(videoId, entry);
-        return entry;
+      const url = appendPoToken(directUrl, gvsPoToken);
+      const entry = {
+        url,
+        mimeType: format.mime_type || format.mimeType || 'audio/webm',
+        bitrate: format.bitrate || 0,
+        contentLength: format.content_length || format.contentLength || null,
+        clientProfile,
+        expires: Date.now() + 4 * 60 * 60 * 1000
+      };
+      this.streamCache.set(videoId, entry);
+      return entry;
+    };
+
+    const resolveWithoutToken = async (client) => {
+      const format = await yt.getStreamingData(videoId, {
+        client,
+        type: 'audio',
+        quality: 'best'
+      });
+      return toEntry(format, client);
+    };
+
+    // Tier 1: low-latency clients that may still expose streaming_data
+    // without attestation on normal residential networks.
+    for (const client of ['TV', 'ANDROID_VR', 'IOS']) {
+      try {
+        return await resolveWithoutToken(client);
       } catch (error) {
-        failures.push(`${client}: ${error?.message || error?.constructor?.name || 'failed'}`);
+        failures.push(`${client}: ${error?.message || 'failed'}`);
+      }
+    }
+
+    // Tier 2: mirror Android's BotGuard strategy. The player request gets a
+    // content-bound token (video ID), while the Google Video Server URL gets
+    // a token bound to this session's visitorData.
+    try {
+      const visitorData = yt.session?.context?.client?.visitorData || videoId;
+      const { playerToken, sessionToken } = await this.poTokens.mintPair(videoId, visitorData);
+
+      for (const client of ['YTMUSIC', 'WEB_EMBEDDED', 'ANDROID', 'MWEB', 'YTMUSIC_ANDROID']) {
+        try {
+          const info = await yt.getBasicInfo(videoId, {
+            client,
+            po_token: playerToken
+          });
+          const format = info.chooseFormat({
+            type: 'audio',
+            quality: 'best'
+          });
+          return await toEntry(format, `${client}+POT`, sessionToken);
+        } catch (error) {
+          failures.push(`${client}+POT: ${error?.message || 'failed'}`);
+        }
+      }
+    } catch (error) {
+      failures.push(`BOTGUARD: ${error?.message || 'failed'}`);
+    }
+
+    // Tier 3: exhaustive non-token recovery for clients not already tried.
+    for (const client of ['TV_SIMPLY', 'WEB_EMBEDDED', 'YTMUSIC_ANDROID', 'ANDROID', 'YTMUSIC', 'MWEB', 'VISIONOS', 'WEB']) {
+      try {
+        return await resolveWithoutToken(client);
+      } catch (error) {
+        failures.push(`${client}: ${error?.message || 'failed'}`);
       }
     }
 
     throw new Error(
       'No playable YouTube Music audio stream was returned. ' +
-      failures.slice(0, 11).join(' | ')
+      failures.slice(0, 18).join(' | ')
     );
   }
 
@@ -397,7 +444,7 @@ export class YouTubeMusicService {
 
   async rawInfo(videoId) {
     const yt = await this.init(this.cookie);
-    const info = await yt.getBasicInfo(videoId, { client: 'MUSIC' });
+    const info = await yt.getBasicInfo(videoId, { client: 'YTMUSIC' });
     return safeObject(info);
   }
 }
