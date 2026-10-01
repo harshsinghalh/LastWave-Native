@@ -117,6 +117,70 @@
     </div>`;
   }
 
+  function androidGreeting() {
+    const hour = new Date().getHours();
+    const greeting = hour >= 5 && hour <= 11 ? 'Good morning'
+      : hour >= 12 && hour <= 16 ? 'Good afternoon'
+      : hour >= 17 && hour <= 21 ? 'Good evening'
+      : 'Good night';
+    const date = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric'
+    }).format(new Date());
+    return { greeting, date };
+  }
+
+  function androidFeedHero(tracks) {
+    const first = tracks?.find?.(x => x?.artworkUrl) || tracks?.[0] || null;
+    if (first) cacheTrack(first);
+    const art = first?.artworkUrl || '';
+    return '<div class="android-feed-hero">' +
+      (art ? '<div class="android-feed-hero-art" style="background-image:url(&quot;' + escapeHtml(art) + '&quot;)"></div>' : '') +
+      '<div class="android-feed-hero-gradient"></div>' +
+      '<div class="android-feed-hero-content">' +
+        '<div class="android-made-for-you">✦ <span>MADE FOR YOU</span></div>' +
+        '<h2>Infinite Radio</h2>' +
+        '<p>An endless station shaped by your listening</p>' +
+        '<button class="android-hero-play" data-infinite-radio="1" ' + (!tracks?.length ? 'disabled' : '') + '>▶ <span>Play</span></button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function androidQuickAccessTile({title, subtitle, artworkUrl, kind, action}) {
+    const art = artworkUrl
+      ? img(artworkUrl, title)
+      : '<div class="android-quick-fallback">' + (kind === 'liked' ? '♥' : kind === 'recent' ? '↻' : kind === 'release' ? '◌' : '✦') + '</div>';
+    return '<button class="android-quick-card android-quick-' + escapeHtml(kind || 'default') + '" data-quick-action="' + escapeHtml(action || '') + '">' +
+      '<div class="android-quick-art">' + art + '</div>' +
+      '<strong>' + escapeHtml(title) + '</strong>' +
+      '<span>' + escapeHtml(subtitle || '') + '</span>' +
+    '</button>';
+  }
+
+  function androidQuickPicksColumns(tracks) {
+    if (!tracks?.length) return '';
+    tracks.forEach(cacheTrack);
+    const columns = [];
+    for (let i = 0; i < tracks.length; i += 3) columns.push(tracks.slice(i, i + 3));
+    return '<div class="android-picks-strip">' + columns.map(function(column){
+      return '<div class="android-picks-column">' + column.map(function(track){
+        const isCurrent = S.current?.videoId && S.current.videoId === track.videoId;
+        return '<div class="android-pick-row ' + (isCurrent ? 'current' : '') + '" data-play="' + escapeHtml(track.videoId || '') + '">' +
+          '<div class="android-pick-art">' + img(track.artworkUrl, track.title) + (isCurrent && !audio.paused ? '<span class="android-playing-bars">▮▮▮</span>' : '') + '</div>' +
+          '<div class="android-pick-copy"><strong>' + escapeHtml(track.title || 'Untitled') + '</strong><span>' + escapeHtml(track.artist || 'Unknown artist') + '</span></div>' +
+          '<button class="tiny-btn" data-context="' + escapeHtml(track.videoId || '') + '" title="More">⋮</button>' +
+        '</div>';
+      }).join('') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function androidTasteStrip() {
+    const tags = ['Chill','Focus','Energy','Bollywood','Indie','Workout','Nostalgia','Late night'];
+    return '<section class="android-taste-section"><div class="section-head"><div><h2>Your sound</h2><small>Tap a vibe to start instant radio</small></div></div>' +
+      '<div class="android-taste-strip">' +
+        tags.map(tag => '<button class="android-taste-chip" data-taste-query="' + escapeHtml(tag) + '"><i></i><span>' + escapeHtml(tag) + '</span></button>').join('') +
+      '</div></section>';
+  }
+
   function findTrack(videoId) {
     if (!videoId) return null;
     const cached = S.trackCache.get(videoId);
@@ -207,50 +271,93 @@
     const actions =
       '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button>' +
       '<button class="secondary header-circle" data-route="search" title="Search">⌕</button>' +
-      '<button class="secondary header-circle" data-route="settings" title="Settings">●</button>';
+      '<button class="secondary header-circle android-profile-action" data-route="settings" title="Settings"><span>●</span></button>';
 
-    const quickTiles =
-      '<div class="android-quick-grid">' +
-        '<button class="android-quick-tile" data-route="search"><span class="android-quick-icon">⌕</span><strong>Search</strong></button>' +
-        '<button class="android-quick-tile" data-route="discover"><span class="android-quick-icon">✦</span><strong>Discover</strong></button>' +
-        '<button class="android-quick-tile" data-route="genres"><span class="android-quick-icon">◉</span><strong>Genres</strong></button>' +
-        '<button class="android-quick-tile" data-route="generator"><span class="android-quick-icon">✧</span><strong>Create mix</strong></button>' +
-        '<button class="android-quick-tile" data-route="friends"><span class="android-quick-icon">♧</span><strong>Friends</strong></button>' +
-        '<button class="android-quick-tile" data-route="downloads"><span class="android-quick-icon">⇩</span><strong>Downloads</strong></button>' +
-        '<button class="android-quick-tile" data-route="new-releases"><span class="android-quick-icon">◌</span><strong>New releases</strong></button>' +
-        '<button class="android-quick-tile" data-route="settings"><span class="android-quick-icon">⚙</span><strong>Settings</strong></button>' +
-      '</div>';
+    const greeting = androidGreeting();
+    const heroIntro =
+      '<div class="android-greeting"><h2>' + escapeHtml(greeting.greeting) + '</h2><p>' + escapeHtml(greeting.date) + '</p></div>';
 
-    page.innerHTML = pageHead('Home','',actions) + quickTiles + loading('Loading your music');
+    page.innerHTML = pageHead('Home','',actions) + heroIntro + loading('Loading your music');
+
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const hiddenSections = new Set((S.local?.settings?.homeHiddenSections || []).map(function(x){return String(x).toLowerCase();}));
-      const excludedIds = new Set((S.local?.excluded || []).map(function(x){return x.videoId;}));
-      const sections = (S.home || [])
-        .filter(function(x){ return x && x.tracks && x.tracks.length && !hiddenSections.has(String(x.title||'').toLowerCase()); })
-        .map(function(x){ return { ...x, tracks: x.tracks.filter(function(t){return !excludedIds.has(t.videoId);}) }; })
-        .filter(function(x){ return x.tracks.length; });
-      let html = pageHead('Home','',actions) + quickTiles;
 
-      if (sections.length) {
-        sections.forEach(function(section,index){
-          const title = escapeHtml(section.title || (index === 0 ? 'Quick picks' : 'For you'));
-          if (index === 0) {
-            html += '<section class="section"><div class="section-head"><h2>' + title + '</h2><small>' + section.tracks.length + ' picks</small></div>' +
-              '<div class="track-list">' + section.tracks.slice(0,12).map(trackRow).join('') + '</div></section>';
-          } else {
-            html += '<section class="section"><div class="section-head"><h2>' + title + '</h2></div>' +
-              '<div class="card-row">' + section.tracks.slice(0,18).map(card).join('') + '</div></section>';
-          }
-        });
-      } else {
+      const hiddenSections = new Set((S.local?.settings?.homeHiddenSections || []).map(function(x){ return String(x).toLowerCase(); }));
+      const excludedIds = new Set((S.local?.excluded || []).map(function(x){ return x.videoId; }));
+      const sections = (S.home || [])
+        .filter(function(x){ return x && x.tracks && x.tracks.length && !hiddenSections.has(String(x.title || '').toLowerCase()); })
+        .map(function(x){ return { ...x, tracks: x.tracks.filter(function(t){ return !excludedIds.has(t.videoId); }) }; })
+        .filter(function(x){ return x.tracks.length; });
+
+      const allTracks = sections.flatMap(function(x){ return x.tracks; });
+      const quickPicks = sections[0]?.tracks?.slice(0,18) || allTracks.slice(0,18);
+      const firstLiked = S.local?.liked?.find?.(x => x?.artworkUrl) || S.local?.liked?.[0];
+      const firstRecent = S.local?.history?.find?.(x => x?.artworkUrl) || S.local?.history?.[0];
+      const firstFeed = allTracks.find(x => x?.artworkUrl) || allTracks[0];
+
+      const quickTiles =
+        '<section class="android-quick-surface">' +
+          '<div class="section-head"><div><h2>Quick access</h2></div></div>' +
+          '<div class="android-quick-strip">' +
+            androidQuickAccessTile({title:'Liked songs',subtitle:(S.local?.liked?.length || 0) + ' tracks',artworkUrl:firstLiked?.artworkUrl,kind:'liked',action:'liked'}) +
+            androidQuickAccessTile({title:'Recently played',subtitle:'Jump back in',artworkUrl:firstRecent?.artworkUrl,kind:'recent',action:'recent'}) +
+            androidQuickAccessTile({title:'Discover',subtitle:'Radio & mixes',artworkUrl:firstFeed?.artworkUrl,kind:'mix',action:'discover'}) +
+            androidQuickAccessTile({title:'New releases',subtitle:'Fresh drops',artworkUrl:sections[1]?.tracks?.[0]?.artworkUrl,kind:'release',action:'new-releases'}) +
+          '</div>' +
+        '</section>';
+
+      let html = pageHead('Home','',actions) +
+        heroIntro +
+        androidFeedHero(quickPicks) +
+        quickTiles +
+        androidTasteStrip();
+
+      if (quickPicks.length) {
+        html += '<section class="android-picks-surface"><div class="section-head android-section-actions"><div><h2>Picked for you</h2><small>From your listening · refreshed for you</small></div><div class="android-header-pills"><button class="chip" data-shuffle-picks="1">Shuffle</button><button class="chip active" data-play-picks="1">▶ Play all</button></div></div>' +
+          androidQuickPicksColumns(quickPicks) + '</section>';
+      }
+
+      sections.slice(1).forEach(function(section){
+        html += '<section class="section"><div class="section-head"><div><h2>' + escapeHtml(section.title || 'For you') + '</h2></div></div>' +
+          '<div class="card-row">' + section.tracks.slice(0,18).map(card).join('') + '</div></section>';
+      });
+
+      if (!sections.length) {
         html += empty('Your feed is empty','Search for a favorite or explore something new.');
       }
+
+      html += '<div class="android-feed-footer">Made for you from your taste</div>';
       page.innerHTML = html;
+
+      q('[data-infinite-radio]')?.addEventListener('click', function(){
+        if (quickPicks[0]) playTrack(quickPicks[0], quickPicks);
+      });
+      q('[data-play-picks]')?.addEventListener('click', function(){
+        if (quickPicks[0]) playTrack(quickPicks[0], quickPicks);
+      });
+      q('[data-shuffle-picks]')?.addEventListener('click', function(){
+        if (!quickPicks.length) return;
+        const shuffled = [...quickPicks].sort(() => Math.random() - .5);
+        playTrack(shuffled[0], shuffled);
+      });
+      qa('[data-quick-action]').forEach(function(button){
+        button.addEventListener('click', function(){
+          const action = button.dataset.quickAction;
+          if (action === 'liked') navigate('playlists');
+          else if (action === 'recent') navigate('stats');
+          else if (action === 'discover') navigate('discover');
+          else if (action === 'new-releases') navigate('new-releases');
+        });
+      });
+      qa('[data-taste-query]').forEach(function(button){
+        button.addEventListener('click', function(){
+          navigate('search',{query:button.dataset.tasteQuery + ' music',type:'song'});
+        });
+      });
     } catch (e) {
       setConnection('Catalog unavailable','error');
-      page.innerHTML = pageHead('Home','',actions) + quickTiles + empty('Could not load your music', e.message || 'Try again.');
+      page.innerHTML = pageHead('Home','',actions) + heroIntro + empty('Could not load your music', e.message || 'Try again.');
     }
   }
 
