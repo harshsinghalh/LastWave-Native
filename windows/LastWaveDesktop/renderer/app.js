@@ -42,7 +42,9 @@
     playedHistoryFor: null,
     scrobbledFor: null,
     activeSearchType: 'all',
-    trackCache: new Map()
+    trackCache: new Map(),
+    fullPlayerOpen: false,
+    playerTab: 'now'
   };
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
@@ -136,10 +138,25 @@
     return null;
   }
 
-  function pageHead(title, subtitle='', actions='') {
-    return `<div class="page-head"><div class="page-title"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="page-actions">${actions}</div></div>`;
+  function androidHeader(title, subtitle='', actions='', options={}) {
+    const pushed = options.pushed ?? !['feed','stats','playlists'].includes(S.route);
+    const back = pushed ? '<button class="header-icon header-back" data-history-back title="Back">←</button>' : '';
+    return `<header class="expressive-header">
+      <div class="header-row">
+        ${back}
+        <div class="header-copy"><h1>${escapeHtml(title)}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}</div>
+        <div class="header-actions">${actions}</div>
+      </div>
+    </header>`;
   }
 
+  function headerAction(symbol, label, route, id='') {
+    return `<button class="header-icon" ${route ? `data-route="${route}"` : ''} ${id ? `id="${id}"` : ''} title="${escapeHtml(label)}">${symbol}</button>`;
+  }
+
+  function pageHead(title, subtitle='', actions='') {
+    return androidHeader(title, subtitle, actions);
+  }
   function setConnection(text, kind='online') {
     const el = q('#connectionBadge');
     el.textContent = text;
@@ -149,8 +166,9 @@
   function setTheme() {
     const theme = S.local?.settings?.theme || 'dark';
     document.body.classList.toggle('light', theme === 'light');
-    const accent = S.local?.settings?.accent || '#c6f100';
+    const accent = S.local?.settings?.accent || '#c9f45b';
     document.documentElement.style.setProperty('--accent', accent);
+    document.documentElement.style.setProperty('--primary', accent);
   }
 
   function navigate(route, params = {}, push = true) {
@@ -161,15 +179,18 @@
       S.history.push({ route, params });
       S.historyIndex = S.history.length - 1;
     }
+    const isRoot = ['feed','stats','playlists'].includes(route);
+    q('#nav')?.classList.toggle('hidden', !isRoot);
+    q('#generatorFab')?.classList.toggle('hidden', route !== 'playlists');
     qa('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.route === route));
     renderRoute().catch(err => {
       console.error(err);
-      page.innerHTML = pageHead('Something went wrong') + empty(err?.message || 'Could not open this screen.');
+      page.innerHTML = `<div class="android-content pushed">${pageHead('Something went wrong')}${empty(err?.message || 'Could not open this screen.')}</div>`;
     });
-    q('#backBtn').disabled = S.historyIndex <= 0;
-    q('#forwardBtn').disabled = S.historyIndex >= S.history.length - 1;
+    const back=q('#backBtn'), forward=q('#forwardBtn');
+    if(back) back.disabled=S.historyIndex<=0;
+    if(forward) forward.disabled=S.historyIndex>=S.history.length-1;
   }
-
   async function renderRoute() {
     switch (S.route) {
       case 'feed': return renderFeed();
@@ -182,6 +203,14 @@
       case 'friends': return renderFriends();
       case 'downloads': return renderDownloads();
       case 'settings': return renderSettings();
+      case 'provider-modules': return renderProviderModules();
+      case 'home-sections': return renderHomeSections();
+      case 'excluded-songs': return renderExcludedSongs();
+      case 'youtube-import': return renderImportScreen('YouTube Music Import','Paste a YouTube Music playlist URL','youtube');
+      case 'external-import': return renderImportScreen('Import Playlist','Paste a YouTube Music, Spotify or Apple Music playlist URL','external');
+      case 'youtube-login': return renderYouTubeLogin();
+      case 'new-releases': return renderNewReleases();
+      case 'friend-profile': return renderFriendProfile(S.routeParams.username);
       case 'entity': return renderEntity(S.routeParams.kind, S.routeParams.id, S.routeParams.title);
       case 'playlist-detail': return renderLocalPlaylist(S.routeParams.id);
       default: return renderFeed();
@@ -189,45 +218,107 @@
   }
 
   async function renderFeed() {
-    page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Your music, now native to your Windows workflow.</h1><p>Ad-free YouTube Music catalog access, synced lyrics, smart playlists, Last.fm, downloads and your Laya-personalized DJ Energy profile.</p><button class="primary" data-route="discover">Discover music</button></div></section>${loading('Loading your music feed')}`;
+    const actions =
+      headerAction('⇩','Downloads','downloads') +
+      headerAction('⌕','Search','search') +
+      '<button class="profile-avatar" data-route="settings" title="Settings">LW</button>';
+    page.innerHTML = `<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}<div class="screen-body flush">${loading('Loading your music feed')}</div></div>`;
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections = (S.home || []).filter(x => x?.tracks?.length);
-      page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Listen your way.</h1><p>Full music client with smart discovery, local playlists, Last.fm and predictive Personal DJ dynamics.</p><div class="page-actions"><button class="primary" data-route="discover">Discover music</button><button class="secondary" data-route="generator">Generate a mix</button></div></div></section>` +
-        (sections.length ? sections.map(s => `<section class="section"><div class="section-head"><h2>${escapeHtml(s.title || 'For you')}</h2><small>${s.tracks.length} picks</small></div><div class="card-row">${s.tracks.map(card).join('')}</div></section>`).join('') : empty('Your feed is empty','Try Search or Discover.'));
+      const hiddenSections=new Set(S.local?.settings?.hiddenHomeSections||[]);
+      const excludedIds=new Set((S.local?.excluded||[]).map(x=>x.videoId));
+      const sections=(S.home||[])
+        .filter(x=>x?.tracks?.length)
+        .filter(x=>!hiddenSections.has(x.title||''))
+        .map(x=>({...x,tracks:(x.tracks||[]).filter(t=>!excludedIds.has(t.videoId))}));
+      const liked=S.local?.liked||[];
+      const playlists=S.local?.playlists||[];
+      const history=S.local?.history||[];
+      const quickTiles=[
+        {title:'Liked songs',subtitle:`${liked.length} tracks`,icon:'♥',route:'playlists',tone:'primary'},
+        {title:'Your playlists',subtitle:`${playlists.length} playlists`,icon:'≡',route:'playlists',tone:'secondary'},
+        {title:'Discover',subtitle:'Fresh music',icon:'✦',route:'discover',tone:'tertiary'},
+        {title:'New releases',subtitle:'Fresh drops',icon:'●',route:'new-releases',tone:'surface'}
+      ];
+      const quickTileHtml=quickTiles.map(t=>`<article class="quick-tile" ${t.route?`data-route="${t.route}"`:`data-search-query="${escapeHtml(t.query)}"`}>
+        <div class="quick-tile-art">${t.icon}</div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.subtitle)}</span>
+      </article>`).join('');
+
+      let html=`<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}<div class="screen-body flush">
+        <section class="section"><div class="quick-tile-row">${quickTileHtml}</div></section>`;
+
+      const first=sections[0]?.tracks||[];
+      if(first.length && !hiddenSections.has('Quick picks')){
+        first.forEach(cacheTrack);
+        html+=`<section class="section">
+          <div class="section-head"><div class="section-copy"><h2>Quick picks</h2><p>Start listening instantly</p></div><button class="section-action" data-shuffle-list="home-first">Shuffle</button></div>
+          <div class="quick-picks-scroll"><div class="quick-picks-grid">${first.slice(0,18).map(t=>`<div class="quick-pick ${S.current?.videoId===t.videoId?'playing':''}" data-play="${escapeHtml(t.videoId||'')}">
+            ${img(t.artworkUrl,t.title)}<div class="quick-pick-copy"><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.artist||'Unknown artist')}</span></div>
+            <button class="tiny-btn" data-context="${escapeHtml(t.videoId||'')}">⋮</button></div>`).join('')}</div></div>
+        </section>`;
+      }
+
+      if(history.length && !hiddenSections.has('Jump back in')){
+        const recent=[];
+        const seen=new Set();
+        for(const t of history){if(t?.videoId&&!seen.has(t.videoId)){seen.add(t.videoId);recent.push(t);}if(recent.length>=12)break;}
+        if(recent.length){
+          recent.forEach(cacheTrack);
+          html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Jump back in</h2><p>Recently played</p></div></div><div class="card-row">${recent.map(card).join('')}</div></section>`;
+        }
+      }
+
+      sections.slice(first.length?1:0).forEach((sec,index)=>{
+        const tracks=(sec.tracks||[]).slice(0,16);tracks.forEach(cacheTrack);
+        if(!tracks.length)return;
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${escapeHtml(sec.title||'For you')}</h2><p>${index%2===0?'Made for your listening':'More music to explore'}</p></div><button class="section-action" data-search-query="${escapeHtml(sec.title||'music')}">More</button></div><div class="card-row">${tracks.map(card).join('')}</div></section>`;
+      });
+      html+='</div></div>';
+      page.innerHTML=html;
+      q('[data-shuffle-list="home-first"]')?.addEventListener('click',()=>{
+        if(!first.length)return;const shuffled=[...first].sort(()=>Math.random()-.5);playTrack(shuffled[0],shuffled);
+      });
     } catch (e) {
       setConnection('Catalog unavailable','error');
-      page.innerHTML += empty('Could not load the feed', e.message);
+      page.innerHTML=`<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}${empty('Could not load Home',e.message)}</div>`;
     }
   }
-
   async function renderStats() {
-    page.innerHTML = pageHead('Listening stats','Your LastWave history and Last.fm activity.') + loading('Calculating stats');
-    const stats = await api.library.stats();
-    let html = pageHead('Listening stats','Your LastWave history and Last.fm activity.');
-    html += `<div class="wide-grid">
-      <div class="stat-card"><b>${stats.totalPlays}</b><span>Local plays</span></div>
-      <div class="stat-card"><b>${stats.uniqueTracks}</b><span>Unique tracks</span></div>
-      <div class="stat-card"><b>${stats.activeDays}</b><span>Active listening days</span></div>
-    </div>`;
-    if (stats.topTracks.length) html += `<section class="section"><div class="section-head"><h2>Top tracks</h2></div><div class="track-list">${stats.topTracks.map(trackRow).join('')}</div></section>`;
-    if (stats.topArtists.length) html += `<section class="section"><div class="section-head"><h2>Top artists</h2></div><div class="wide-grid">${stats.topArtists.map(x => `<div class="panel-card"><strong>${escapeHtml(x.artist)}</strong><div class="mini-note">${x.plays} plays</div></div>`).join('')}</div></section>`;
-    const username = S.local.settings.lastfm?.username;
-    if (username && S.local.settings.lastfm?.apiKey) {
-      try {
-        const user = await api.lastfm.user(username);
-        html += `<section class="section"><div class="section-head"><h2>Last.fm</h2></div><div class="wide-grid"><div class="stat-card"><b>${user.playcount.toLocaleString()}</b><span>Total scrobbles</span></div><div class="stat-card"><b>${escapeHtml(user.username)}</b><span>Connected profile</span></div></div></section>`;
-      } catch {}
-    }
-    page.innerHTML = html;
+    page.innerHTML=`<div class="android-content pushed">${androidHeader('Statistics','',headerAction('⇩','Downloads','downloads')+headerAction('⌕','Search','search')+'<button class="profile-avatar" data-route="settings">LW</button>',{pushed:false})}${loading('Loading your listening history')}</div>`;
+    const stats=await api.library.stats();
+    await refreshLocal();
+    const history=S.local?.history||[];
+    const albums=new Set(history.map(x=>x.album).filter(Boolean)).size;
+    const username=S.local.settings.lastfm?.username||'Guest';
+    let html=`<div class="android-content pushed">${androidHeader('Statistics','',headerAction('⇩','Downloads','downloads')+headerAction('⌕','Search','search')+'<button class="profile-avatar" data-route="settings">LW</button>',{pushed:false})}
+      <div class="screen-body">
+        <div class="section-head" style="padding:2px 0 8px"><div class="section-copy"><h2>${escapeHtml(username)}</h2><p>Listening history</p></div><button class="section-action" data-route="friends">Friends</button></div>
+        <div class="stats-hero">
+          <div class="stats-label">Plays</div><div class="stats-number">${stats.totalPlays.toLocaleString()}</div>
+          <div class="stats-pill-row">
+            <div class="stat-pill"><strong>${stats.uniqueTracks}</strong><span>Tracks</span></div>
+            <div class="stat-pill"><strong>${stats.topArtists.length}</strong><span>Artists</span></div>
+            <div class="stat-pill"><strong>${albums}</strong><span>Albums</span></div>
+          </div>
+          <div class="page-actions" style="margin-top:14px"><button class="secondary" data-route="genres">Your Genres</button><button class="secondary" data-route="discover">Discover</button></div>
+        </div>`;
+    if(stats.topTracks.length){
+      stats.topTracks.forEach(cacheTrack);
+      html+=`<section class="section"><div class="section-head" style="padding-left:0;padding-right:0"><div class="section-copy"><h2>List</h2><p>Recent and most played</p></div><span class="section-action">Recent</span></div><div class="track-list" style="margin:0">${stats.topTracks.map(trackRow).join('')}</div></section>`;
+    } else html+=empty('No listening history yet','Play some music and your statistics will appear here.');
+    html+='</div></div>';
+    page.innerHTML=html;
   }
-
   function playlistCard(p) {
-    const cover = p.tracks?.[0]?.artworkUrl || '';
-    return `<article class="music-card" data-local-playlist="${escapeHtml(p.id)}"><div class="card-overlay">${img(cover,p.title)}</div><h3>${escapeHtml(p.title)}</h3><p>${p.tracks?.length || 0} tracks</p></article>`;
+    const cover=p.tracks?.[0]?.artworkUrl||'';
+    return `<div class="playlist-row" data-local-playlist="${escapeHtml(p.id)}">
+      ${img(cover,p.title)}
+      <div class="playlist-copy"><strong>${escapeHtml(p.title)}</strong><span>${p.tracks?.length||0} tracks · ${escapeHtml(p.source||'LastWave')}</span></div>
+      ${p.tracks?.length?'<button class="round-icon playlist-play" data-playlist-play="'+escapeHtml(p.id)+'">▶</button>':'<span></span>'}
+      <button class="tiny-btn" data-playlist-menu="${escapeHtml(p.id)}">⋮</button>
+    </div>`;
   }
-
   async function refreshLocal() {
     S.local = await api.state();
     setTheme();
@@ -236,106 +327,154 @@
 
   async function renderPlaylists() {
     await refreshLocal();
-    page.innerHTML = pageHead('Playlists','Your local LastWave library and imported playlists.',
-      `<button class="secondary" id="importPlaylistBtn">Import</button><button class="primary" id="createPlaylistBtn">New playlist</button>`) +
-      `<section class="section"><div class="section-head"><h2>Liked songs</h2><small>${S.local.liked.length} tracks</small></div>${S.local.liked.length ? `<div class="track-list">${S.local.liked.slice(0,30).map(trackRow).join('')}</div>` : empty('No liked songs yet','Tap the heart while listening.')}</section>
-      <section class="section"><div class="section-head"><h2>Your playlists</h2></div>${S.local.playlists.length ? `<div class="grid">${S.local.playlists.map(playlistCard).join('')}</div>` : empty('No playlists yet','Create one or import a playlist.')}</section>`;
-    q('#createPlaylistBtn')?.addEventListener('click', createPlaylistDialog);
-    q('#importPlaylistBtn')?.addEventListener('click', importDialog);
+    const count=S.local.playlists.length+(S.local.liked.length?1:0);
+    const tracks=S.local.playlists.reduce((n,p)=>n+(p.tracks?.length||0),0)+S.local.liked.length;
+    const actions='<button class="header-icon" id="createPlaylistBtn" title="Create playlist">＋</button><button class="section-action" id="sortPlaylistBtn">≡ Sort</button>';
+    let html=`<div class="android-content pushed">${androidHeader('Playlist',`${count} Playlists · ${tracks} Tracks`,actions,{pushed:false})}<div class="screen-body flush">`;
+    const rows=[];
+    if(S.local.liked.length) rows.push({id:'__liked__',title:'Liked songs',tracks:S.local.liked,source:'LastWave'});
+    rows.push(...S.local.playlists);
+    html+=rows.length?`<div class="playlist-list">${rows.map(playlistCard).join('')}</div>`:empty('No playlists yet','Tap + to create one, or use the sparkle button to generate a playlist.');
+    html+='</div></div>';
+    page.innerHTML=html;
+    q('#createPlaylistBtn')?.addEventListener('click',createPlaylistDialog);
+    q('#sortPlaylistBtn')?.addEventListener('click',()=>toast('Playlists are sorted by newest first'));
+    qa('[data-playlist-play]').forEach(b=>b.addEventListener('click',e=>{
+      e.stopPropagation();const id=b.dataset.playlistPlay;const p=id==='__liked__'?{tracks:S.local.liked}:S.local.playlists.find(x=>String(x.id)===id);if(p?.tracks?.length)playTrack(p.tracks[0],p.tracks);
+    }));
   }
-
   async function renderLocalPlaylist(id) {
     await refreshLocal();
-    const p = S.local.playlists.find(x => x.id === id);
-    if (!p) return navigate('playlists');
-    const cover = p.tracks?.[0]?.artworkUrl || '';
-    page.innerHTML = `<div class="entity-hero">${img(cover,p.title)}<div><span class="eyebrow">Playlist</span><h1>${escapeHtml(p.title)}</h1><p>${p.tracks.length} tracks • ${escapeHtml(p.source || 'LastWave')}</p><div class="page-actions"><button class="primary" id="playPlaylistBtn">Play</button><button class="secondary" id="renamePlaylistBtn">Rename</button><button class="danger-btn" id="deletePlaylistBtn">Delete</button></div></div></div>` +
-      (p.tracks.length ? `<div class="track-list">${p.tracks.map(trackRow).join('')}</div>` : empty('This playlist is empty'));
-    q('#playPlaylistBtn')?.addEventListener('click', () => p.tracks[0] && playTrack(p.tracks[0], p.tracks));
-    q('#renamePlaylistBtn')?.addEventListener('click', () => renamePlaylistDialog(p));
-    q('#deletePlaylistBtn')?.addEventListener('click', async () => {
-      if (confirm(`Delete "${p.title}"?`)) { await api.library.deletePlaylist(p.id); navigate('playlists'); }
-    });
+    const p=id==='__liked__'?{id,title:'Liked songs',tracks:S.local.liked,source:'LastWave'}:S.local.playlists.find(x=>String(x.id)===String(id));
+    if(!p)return navigate('playlists');
+    const cover=p.tracks?.[0]?.artworkUrl||'';
+    p.tracks?.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">
+      ${androidHeader(p.title,`${p.tracks.length} tracks`,'')}
+      <div class="entity-hero">${img(cover,p.title)}<div><span class="eyebrow">Playlist</span><h1>${escapeHtml(p.title)}</h1><p>${p.tracks.length} tracks · ${escapeHtml(p.source||'LastWave')}</p><div class="page-actions"><button class="primary" id="playPlaylistBtn">▶ Play</button>${id!=='__liked__'?'<button class="secondary" id="renamePlaylistBtn">Rename</button><button class="danger-btn" id="deletePlaylistBtn">Delete</button>':''}</div></div></div>
+      ${p.tracks.length?`<div class="track-list">${p.tracks.map(trackRow).join('')}</div>`:empty('This playlist is empty')}
+    </div>`;
+    q('#playPlaylistBtn')?.addEventListener('click',()=>p.tracks[0]&&playTrack(p.tracks[0],p.tracks));
+    q('#renamePlaylistBtn')?.addEventListener('click',()=>renamePlaylistDialog(p));
+    q('#deletePlaylistBtn')?.addEventListener('click',async()=>{if(confirm(`Delete "${p.title}"?`)){await api.library.deletePlaylist(p.id);navigate('playlists');}});
   }
-
   async function renderDiscover() {
-    page.innerHTML = pageHead('Discover','Explore new music, releases, artists and albums.') + loading('Exploring YouTube Music');
-    try {
-      if (!S.explore) S.explore = await api.youtube.explore();
-      let html = pageHead('Discover','Explore new music, releases, artists and albums.',
-        `<button class="secondary" id="newReleasesBtn">New releases</button>`);
-      if (S.explore.entities?.length) html += `<section class="section"><div class="section-head"><h2>Explore</h2></div><div class="card-row">${S.explore.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
-      for (const sec of S.explore.sections || []) {
-        if (sec.tracks?.length) html += `<section class="section"><div class="section-head"><h2>${escapeHtml(sec.title)}</h2></div><div class="card-row">${sec.tracks.map(card).join('')}</div></section>`;
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Discover','Explore new music, releases, artists and albums.',headerAction('↻','Refresh','', 'refreshDiscoverBtn'))}${loading('Exploring YouTube Music')}</div>`;
+    try{
+      if(!S.explore)S.explore=await api.youtube.explore();
+      let html=`<div class="android-content pushed">${pageHead('Discover','Explore new music, releases, artists and albums.',headerAction('↻','Refresh','', 'refreshDiscoverBtn'))}<div class="screen-body flush">`;
+      if(S.explore.entities?.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore</h2><p>Artists, albums and playlists</p></div></div><div class="card-row">${S.explore.entities.slice(0,18).map(entityCard).join('')}</div></section>`;
+      for(const sec of S.explore.sections||[]){
+        const tracks=(sec.tracks||[]).slice(0,18);tracks.forEach(cacheTrack);
+        if(tracks.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${escapeHtml(sec.title||'Music')}</h2></div></div><div class="card-row">${tracks.map(card).join('')}</div></section>`;
       }
-      if (S.explore.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Tracks</h2></div><div class="track-list">${S.explore.tracks.slice(0,35).map(trackRow).join('')}</div></section>`;
-      page.innerHTML = html;
-      q('#newReleasesBtn')?.addEventListener('click', () => navigate('search',{query:'new music releases 2026'}));
-    } catch(e) {
-      page.innerHTML = pageHead('Discover') + empty('Discovery is unavailable',e.message);
-    }
+      if(S.explore.tracks?.length){S.explore.tracks.forEach(cacheTrack);html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>Fresh picks</p></div></div><div class="track-list">${S.explore.tracks.slice(0,35).map(trackRow).join('')}</div></section>`;}
+      html+='</div></div>';page.innerHTML=html;
+      q('#refreshDiscoverBtn')?.addEventListener('click',()=>{S.explore=null;renderDiscover();});
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead('Discover')}${empty('Discovery is unavailable',e.message)}</div>`;}
   }
-
-  const GENRES = ['Pop','Hip-Hop','Rock','R&B','Electronic','Indie','Classical','Jazz','Bollywood','Punjabi','Lo-fi','Metal','Folk','Country','K-Pop','Latin','Afrobeats','Devotional','Ambient','Workout','Chill','Focus','Party','Sleep'];
-
   async function renderGenres() {
-    page.innerHTML = pageHead('Genre DNA','Jump into a genre, mood or activity.') +
-      `<section class="section"><div class="chips">${GENRES.map(g => `<button class="chip" data-genre="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>
-       <section id="genreResults" class="section">${empty('Choose a genre','LastWave will build an instant music shelf.')}</section>`;
-    qa('[data-genre]').forEach(btn => btn.addEventListener('click', async () => {
-      qa('[data-genre]').forEach(x => x.classList.remove('active')); btn.classList.add('active');
-      const container = q('#genreResults');
-      container.innerHTML = loading(`Finding ${btn.dataset.genre}`);
-      const result = await api.youtube.search(btn.dataset.genre + ' music', 'song').catch(() => ({tracks:[]}));
-      container.innerHTML = `<div class="section-head"><h2>${escapeHtml(btn.dataset.genre)}</h2><small>${result.tracks.length} results</small></div>` +
-        (result.tracks.length ? `<div class="track-list">${result.tracks.slice(0,40).map(trackRow).join('')}</div>` : empty('Nothing found'));
+    const stats=await api.library.stats().catch(()=>({topArtists:[]}));
+    const base=GENRES.map((name,i)=>({name,percent:Math.max(.08,1-i/(GENRES.length+4))}));
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Your Genres','Based on your listening history','<button class="section-action">Overall</button>')}
+      <div class="screen-body">
+        <div id="genreBars">${base.slice(0,14).map(g=>`<div class="genre-bar-row" data-genre="${escapeHtml(g.name)}"><div class="genre-bar-label"><strong>${escapeHtml(g.name)}</strong><span>${Math.round(g.percent*100)}%</span></div><div class="genre-bar"><i style="width:${Math.round(g.percent*100)}%"></i></div></div>`).join('')}</div>
+        <section id="genreResults" class="section">${empty('Choose a genre','Open any genre to see matching tracks.')}</section>
+      </div></div>`;
+    qa('[data-genre]').forEach(btn=>btn.addEventListener('click',async()=>{
+      qa('[data-genre]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+      const host=q('#genreResults');host.innerHTML=loading(`Finding ${btn.dataset.genre}`);
+      const result=await api.youtube.search(btn.dataset.genre+' music','song').catch(()=>({tracks:[]}));
+      result.tracks?.forEach(cacheTrack);
+      host.innerHTML=`<div class="section-head" style="padding:0"><div class="section-copy"><h2>${escapeHtml(btn.dataset.genre)}</h2><p>Your Tracks · discoveries</p></div><button class="primary" id="genreStartMix">Start Mix</button></div>`+
+        (result.tracks?.length?`<div class="track-list" style="margin:0">${result.tracks.slice(0,35).map(trackRow).join('')}</div>`:empty('No tracks found'));
+      q('#genreStartMix')?.addEventListener('click',()=>result.tracks?.[0]&&playTrack(result.tracks[0],result.tracks));
     }));
   }
-
   async function renderSearch(query='') {
-    S.activeSearchType = S.routeParams.type || 'all';
-    page.innerHTML = pageHead('Search', query ? `Results for “${query}”` : 'Find songs, artists, albums and playlists.') +
-      `<div class="search-tabs">${['all','song','album','artist','playlist'].map(t => `<button class="chip ${S.activeSearchType===t?'active':''}" data-search-type="${t}">${t==='song'?'Songs':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
-       <div id="searchBody">${query ? loading('Searching') : empty('Start typing above','Use the search box in the top bar.')}</div>`;
-    qa('[data-search-type]').forEach(btn => btn.addEventListener('click', () => {
-      navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
-    }));
-    if (!query) return;
-    const body = q('#searchBody');
-    try {
-      const result = await api.youtube.search(query, S.activeSearchType);
-      let html = '';
-      if (result.entities?.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
-        html += `<section class="section"><div class="section-head"><h2>Artists, albums & playlists</h2></div><div class="card-row">${result.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
+    S.activeSearchType=S.routeParams.type||'song';
+    const tabs=[['song','Tracks'],['artist','Artists'],['album','Albums'],['playlist','Playlists'],['users','Users']];
+    const header=`<div class="search-header"><div class="search-input-row"><button class="header-icon header-back" data-history-back>←</button><div class="search-pill"><span>⌕</span><input id="screenSearchInput" value="${escapeHtml(query)}" placeholder="${S.activeSearchType==='users'?'Search Last.fm users…':'Search YouTube Music…'}" autocomplete="off"><button id="screenSearchClear" class="round-icon ${query?'':'hidden'}">×</button></div></div><div class="search-filters">${tabs.map(([v,l])=>`<button class="chip ${S.activeSearchType===v?'active':''}" data-search-type="${v}">${l}</button>`).join('')}</div></div>`;
+    page.innerHTML=`<div class="android-content pushed">${header}<div id="searchBody" class="screen-body flush">${query?loading('Searching'):`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>${(S.local?.searchHistory||[]).length?`<section class="section"><div class="section-head"><div class="section-copy"><h2>Recent searches</h2></div></div><div class="track-list">${S.local.searchHistory.slice(0,8).map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">↺</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div></section>`:''}`}</div></div>`;
+
+    const input=q('#screenSearchInput');
+    let suggestTimer;
+    input?.focus();
+    input?.addEventListener('input',()=>{
+      clearTimeout(suggestTimer);
+      const v=input.value.trim();
+      q('#screenSearchClear')?.classList.toggle('hidden',!v);
+      if(!v){
+        q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>`;
+        return;
       }
-      if (result.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Songs</h2><small>${result.tracks.length} results</small></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
-      body.innerHTML = html || empty('No results found','Try a different title, artist or album.');
-    } catch(e) {
-      body.innerHTML = empty('Search failed',e.message);
+      if(S.activeSearchType==='users'){
+        q('#searchBody').innerHTML=`<div class="track-list" style="margin-top:10px"><div class="track-row" style="grid-template-columns:40px 1fr 40px" data-user-query="${escapeHtml(v)}"><div style="font-size:18px;text-align:center">♙</div><div class="track-main"><strong>${escapeHtml(v)}</strong><span>Find exact Last.fm user</span></div><span>↗</span></div></div>`;
+        return;
+      }
+      suggestTimer=setTimeout(async()=>{
+        const suggestions=await api.youtube.suggestions(v).catch(()=>[]);
+        if(input.value.trim()!==v)return;
+        q('#searchBody').innerHTML=suggestions.length?`<div class="track-list" style="margin-top:10px">${suggestions.map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">⌕</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div>`:empty('No suggestions');
+      },180);
+    });
+
+    const execute=()=>{const v=input?.value.trim();if(v)navigate('search',{query:v,type:S.activeSearchType},false);};
+    input?.addEventListener('keydown',e=>{if(e.key==='Enter')execute();});
+    q('#screenSearchClear')?.addEventListener('click',()=>navigate('search',{query:'',type:S.activeSearchType},false));
+    qa('[data-search-type]').forEach(btn=>btn.addEventListener('click',()=>navigate('search',{query:input?.value.trim()||query,type:btn.dataset.searchType},false)));
+    if(!query)return;
+
+    try{
+      if(S.activeSearchType==='users'){
+        const user=await api.lastfm.user(query);
+        q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Users</h2><p>Exact Last.fm user</p></div></div><div class="settings-category-list" style="padding:0 16px"><button class="settings-category-row" data-route="friend-profile" data-username="${escapeHtml(user.username)}"><span class="settings-category-icon tone-0">${escapeHtml((user.realname||user.username||'?').slice(0,1).toUpperCase())}</span><span><strong>${escapeHtml(user.realname||user.username)}</strong><small>@${escapeHtml(user.username)} · ${Number(user.playcount||0).toLocaleString()} scrobbles</small></span><i>›</i></button></div></section>`;
+        const row=q('[data-route="friend-profile"][data-username]');
+        row?.addEventListener('click',e=>{e.stopPropagation();navigate('friend-profile',{username:row.dataset.username});});
+        return;
+      }
+
+      const result=await api.youtube.search(query,S.activeSearchType);
+      result.tracks?.forEach(cacheTrack);
+      let html='';
+      if(result.entities?.length&&['album','artist','playlist'].includes(S.activeSearchType)){
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${S.activeSearchType==='artist'?'Artists':S.activeSearchType==='album'?'Albums':'Playlists'}</h2><p>${result.entities.length} results</p></div></div><div class="card-row">${result.entities.slice(0,24).map(entityCard).join('')}</div></section>`;
+      }
+      if(result.tracks?.length){
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>${result.tracks.length} results</p></div></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
+      }
+      q('#searchBody').innerHTML=html||empty('No results found','Try another title, artist, album or playlist.');
+    }catch(e){
+      q('#searchBody').innerHTML=empty(S.activeSearchType==='users'?'Last.fm user not found':'Search failed',e.message);
     }
   }
-
   async function renderGenerator() {
-    page.innerHTML = pageHead('Smart Playlist Generator','Build a mix from mood, genre and your local listening signals.') +
-      `<div class="panel-card"><div class="form-grid">
-        <div class="field"><label>Mood</label><select id="genMood"><option>Energetic</option><option>Chill</option><option>Focus</option><option>Happy</option><option>Melancholic</option><option>Workout</option><option>Party</option><option>Sleep</option></select></div>
-        <div class="field"><label>Genre</label><select id="genGenre"><option value="">Any genre</option>${GENRES.slice(0,18).map(x=>`<option>${x}</option>`).join('')}</select></div>
-        <div class="field full"><label>Seed artist / track / idea</label><input id="genSeed" placeholder="e.g. Hans Zimmer, Arijit Singh, cinematic bass, 2000s nostalgia"></div>
-      </div><div class="page-actions" style="margin-top:16px"><button class="primary" id="generateBtn">Generate mix</button><button class="secondary" id="localMixBtn">Use my listening history</button></div></div>
-      <section id="generatedMix" class="section">${empty('Your generated mix will appear here')}</section>`;
-    q('#generateBtn').addEventListener('click', async () => {
-      const mood=q('#genMood').value, genre=q('#genGenre').value, seed=q('#genSeed').value.trim();
-      const q=[mood,genre,seed,'music'].filter(Boolean).join(' ');
-      q('#generatedMix').innerHTML=loading('Generating');
-      const result=await api.youtube.search(q,'song').catch(()=>({tracks:[]}));
-      showGenerated(result.tracks.slice(0,35),`${mood} ${genre || 'mix'}`);
-    });
-    q('#localMixBtn').addEventListener('click', async () => {
-      const tracks=await api.library.smartMix({limit:35});
-      showGenerated(tracks,'Your LastWave mix');
+    const modes=[
+      ['Top','Your most played tracks','★'],['Recent','Your latest listening','↺'],['Similar Tracks','Build song radio','♫'],
+      ['Similar Artists','Artist-based radio','♙'],['Tag','Generate from genre or tag','#'],['Mix','Balanced taste mix','↝'],
+      ['Recommendations','Fresh dual-engine picks','✦'],['Never Heard','Strictly new discoveries','◇'],['Library','Your saved music','▣']
+    ];
+    page.innerHTML=`<div class="android-content settings">${pageHead('Generator','Choose a mode to generate a playlist.')}
+      <div class="screen-body">
+        <div class="generator-group">${modes.map((m,i)=>`<button class="generator-row ${i===0?'selected':''}" data-gen-mode="${escapeHtml(m[0])}"><span class="generator-badge">${m[2]}</span><span><strong>${m[0]}</strong><small>${m[1]}</small></span><i>✓</i></button>`).join('')}</div>
+        <div class="panel-card generator-options" style="margin-top:14px"><div class="section-head" style="padding:0"><div class="section-copy"><h2>Options</h2><p id="generatorHint">Tune your generated playlist</p></div></div>
+          <div class="field"><label>Seed / genre / idea</label><input id="genSeed" placeholder="Optional seed artist, track, genre or mood"></div>
+          <div class="field" style="margin-top:12px"><label>Track count</label><input id="genCount" type="range" min="5" max="35" value="25"></div>
+          <button class="primary" id="generateBtn" style="width:100%;height:52px;margin-top:14px">✦ Generate Playlist</button>
+        </div>
+        <section id="generatedMix" class="section">${empty('Choose a mode and generate')}</section>
+      </div></div>`;
+    let mode='Top';
+    qa('[data-gen-mode]').forEach(btn=>btn.addEventListener('click',()=>{mode=btn.dataset.genMode;qa('[data-gen-mode]').forEach(x=>x.classList.toggle('selected',x===btn));q('#generatorHint').textContent=btn.querySelector('small')?.textContent||'';}));
+    q('#generateBtn').addEventListener('click',async()=>{
+      const seed=q('#genSeed').value.trim();const count=Number(q('#genCount').value)||25;
+      q('#generatedMix').innerHTML=loading('Generating playlist');
+      let tracks=[];
+      if(['Top','Recent','Library','Mix'].includes(mode)&&!seed)tracks=await api.library.smartMix({limit:count});
+      if(!tracks.length){const query=[seed,mode==='Never Heard'?'new discoveries':mode,'music'].filter(Boolean).join(' ');const result=await api.youtube.search(query,'song').catch(()=>({tracks:[]}));tracks=result.tracks.slice(0,count);}
+      showGenerated(tracks,mode);
     });
   }
-
   function showGenerated(tracks,title) {
     const host=q('#generatedMix');
     host.innerHTML=`<div class="section-head"><h2>${escapeHtml(title)}</h2><button class="primary" id="playGeneratedBtn">Play mix</button></div>`+
@@ -345,18 +484,17 @@
 
   async function renderFriends() {
     const lf=S.local.settings.lastfm||{};
-    page.innerHTML=pageHead('Friends','See Last.fm friends and what they are listening to.',
-      `<button class="secondary" data-route="settings">Last.fm settings</button>`) + (lf.username&&lf.apiKey?loading('Loading friends'):empty('Connect Last.fm first','Add your API key and username in Settings → Integrations.'));
-    if (!lf.username || !lf.apiKey) return;
-    try {
+    const head=pageHead('Friends','See Last.fm friends and what they are listening to.',headerAction('⚙','Last.fm settings','settings'));
+    page.innerHTML=`<div class="android-content pushed">${head}<div class="screen-body">${lf.username&&lf.apiKey?loading('Loading friends'):empty('Connect Last.fm first','Add your API key and username in Settings → Integrations.')}</div></div>`;
+    if(!lf.username||!lf.apiKey)return;
+    try{
       const friends=await api.lastfm.friends(lf.username);
-      page.innerHTML=pageHead('Friends',`Last.fm friends for ${lf.username}`,`<button class="secondary" data-route="settings">Last.fm settings</button>`) +
-        (friends.length?`<div class="wide-grid">${friends.map(f=>`<div class="friend-card" data-friend="${escapeHtml(f.username)}">${img(f.artworkUrl,f.username)}<div><strong>${escapeHtml(f.realname||f.username)}</strong><span>@${escapeHtml(f.username)}${f.recentTrack?` • ${escapeHtml(f.recentTrack.artist)} — ${escapeHtml(f.recentTrack.title)}`:''}</span></div><button class="secondary" data-friend-open="${escapeHtml(f.username)}">Open</button></div>`).join('')}</div>`:empty('No friends returned'));
+      page.innerHTML=`<div class="android-content pushed">${pageHead('Friends',`Last.fm friends for ${lf.username}`,headerAction('⚙','Last.fm settings','settings'))}<div class="screen-body"><div class="wide-grid">${friends.map(f=>`<div class="friend-card">${img(f.artworkUrl,f.username)}<div><strong>${escapeHtml(f.realname||f.username)}</strong><span>@${escapeHtml(f.username)}${f.recentTrack?` · ${escapeHtml(f.recentTrack.artist)} — ${escapeHtml(f.recentTrack.title)}`:''}</span></div><button class="secondary" data-friend-open="${escapeHtml(f.username)}">Open</button></div>`).join('')}</div></div></div>`;
       qa('[data-friend-open]').forEach(b=>b.addEventListener('click',()=>showFriendProfile(b.dataset.friendOpen)));
-    } catch(e) { page.innerHTML=pageHead('Friends')+empty('Could not load Last.fm friends',e.message); }
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead('Friends')}${empty('Could not load Last.fm friends',e.message)}</div>`;}
   }
-
   async function showFriendProfile(username) {
+    navigate('friend-profile',{username});return;
     openRightPanel(username,'Last.fm profile',loading('Loading profile'));
     try {
       const [user,recent,top]=await Promise.all([api.lastfm.user(username),api.lastfm.recent(username,20),api.lastfm.top(username,'7day',10)]);
@@ -367,76 +505,152 @@
   }
 
   async function renderDownloads() {
-    await refreshLocal();
-    const rows=S.local.downloads||[];
-    page.innerHTML=pageHead('Downloads','Audio saved by LastWave on this PC.',`<button class="secondary" id="openDownloadsBtn">Open folder</button>`) +
-      (rows.length?`<div class="wide-grid">${rows.map(x=>`<div class="download-row">${img(x.artworkUrl,x.title)}<div><strong>${escapeHtml(x.title)}</strong><div class="mini-note">${escapeHtml(x.artist||'')} • ${escapeHtml(x.format||'audio')}</div></div><button class="secondary" data-show-file="${escapeHtml(x.file||'')}">Show</button></div>`).join('')}</div>`:empty('No downloads yet','Use ••• on a track and choose Download.'));
-    q('#openDownloadsBtn')?.addEventListener('click',()=>api.openDownloads());
-    qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
+    await refreshLocal();const rows=S.local.downloads||[];
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Downloads','Audio saved by LastWave on this PC.','<button class="header-icon" id="openDownloadsBtn">↗</button>')}<div class="screen-body"><div class="wide-grid">${rows.map(x=>`<div class="download-row">${img(x.artworkUrl,x.title)}<div><strong>${escapeHtml(x.title)}</strong><div class="mini-note">${escapeHtml(x.artist||'')} · ${escapeHtml(x.format||'audio')}</div></div><button class="secondary" data-show-file="${escapeHtml(x.file||'')}">Show</button></div>`).join('')}</div>${rows.length?'':empty('No downloads yet','Use ⋮ on a track and choose Download.')}</div></div>`;
+    q('#openDownloadsBtn')?.addEventListener('click',()=>api.openDownloads());qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
   }
-
   async function renderSettings() {
     await refreshLocal();
-    const s=S.local.settings, lf=s.lastfm||{};
-    page.innerHTML=pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.') +
-      `<div class="setting-group"><h2>Audio & Playback</h2><div class="setting-card">
-        ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',s.djEnergy)}
-        ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',s.loudnessNormalization)}
+    const settings=S.local.settings, lf=settings.lastfm||{}, tab=S.routeParams.tab||'';
+    const categoryRows=[
+      ['audio','▥','Audio & Playback','Streaming quality, Audio engine, Equalizer, Output & Loudness'],
+      ['appearance','◐','Appearance & Visuals','Themes, Accent colors, Fluid artwork, Canvas, Lyrics'],
+      ['youtube','☁','YouTube & Sync','Account connection, Library sync, Channels, History'],
+      ['lastfm','◉','Last.fm','Account connection, Scrobbling sync & API credentials'],
+      ['library','≡','Library & Content','Home layout, Playlist imports, Downloads, Exclusions'],
+      ['data','⇅','Data & Storage','Backup & Restore, Cache, history and reset'],
+      ['about','✦','About & System','App version, Community, Diagnostics, Source code']
+    ];
+    if(!tab){
+      page.innerHTML=`<div class="android-content settings">
+        ${pageHead('Settings','',headerAction('⌕','Search settings','', 'settingsSearchToggle'))}
+        <div class="screen-body">
+          <div id="settingsSearchWrap" class="field hidden" style="margin-bottom:12px"><input id="settingsSearchInput" placeholder="Search settings…"></div>
+          <div class="settings-category-list">${categoryRows.map((r,i)=>`<button class="settings-category-row" data-settings-tab="${r[0]}"><span class="settings-category-icon tone-${i%3}">${r[1]}</span><span><strong>${r[2]}</strong><small>${r[3]}</small></span><i>›</i></button>`).join('')}</div>
+        </div></div>`;
+      q('#settingsSearchToggle')?.addEventListener('click',()=>{q('#settingsSearchWrap').classList.toggle('hidden');q('#settingsSearchInput')?.focus();});
+      q('#settingsSearchInput')?.addEventListener('input',e=>{const term=e.target.value.trim().toLowerCase();qa('.settings-category-row').forEach(row=>row.classList.toggle('hidden',term&&!row.textContent.toLowerCase().includes(term)));});
+      return;
+    }
+
+    const names={audio:'Audio & Playback',appearance:'Appearance & Visuals',youtube:'YouTube & Sync',lastfm:'Last.fm',library:'Library & Content',data:'Data & Storage',about:'About & System'};
+    let body='';
+    if(tab==='audio'){
+      body=`<div class="setting-group"><h2>Audio</h2><div class="setting-card">
+        ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',settings.djEnergy)}
+        ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',settings.loudnessNormalization)}
+        <div class="setting-row"><div class="setting-copy"><strong>Streaming Quality</strong><span>YouTube Music audio stream preference</span></div><select id="qualitySetting"><option value="best">Best</option><option value="balanced">Balanced</option><option value="data-saver">Data Saver</option></select></div>
         <div class="setting-row"><div class="setting-copy"><strong>Crossfade</strong><span>Fade between tracks</span></div><select id="crossfadeSetting"><option value="0">Off</option><option value="2">2 seconds</option><option value="4">4 seconds</option><option value="6">6 seconds</option></select></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Audio quality</strong><span>Preferred YouTube Music stream quality</span></div><select id="qualitySetting"><option value="best">Best</option><option value="balanced">Balanced</option><option value="data-saver">Data saver</option></select></div>
       </div></div>
-      <div class="setting-group"><h2>Appearance</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Choose dark, light or system</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Accent</strong><span>LastWave highlight color</span></div><input type="color" id="accentSetting" value="${escapeHtml(s.accent||'#c6f100')}"></div>
-      </div></div>
-      <div class="setting-group"><h2>Downloads & Library</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(s.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Import playlist</strong><span>YouTube playlist URL or local CSV/JSON/M3U</span></div><button class="secondary" id="settingsImportBtn">Import</button></div>
-      </div></div>
-      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${s.youtubeCookie ? 'Authenticated session saved' : 'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
-        <div class="field"><label>Advanced: authenticated cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string if browser sign-in is unavailable.">${escapeHtml(s.youtubeCookie||'')}</textarea></div>
-        <div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save manual connection</button></div>
-      </div></div>
-      <div class="setting-group"><h2>Last.fm Integration</h2><div class="setting-card"><div class="form-grid">
+      <div class="setting-group"><h2>Output & Loudness</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Equalizer</strong><span>Desktop WebAudio equalizer is preserved as a platform-adapted control surface</span></div><button class="secondary" id="eqInfoBtn">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Personal DJ profile</strong><span>${escapeHtml(S.profile?.source||'Laya')}</span></div><span class="mini-note">−2 → +5 dB</span></div>
+      </div></div>`;
+    } else if(tab==='appearance'){
+      body=`<div class="setting-group"><h2>Theme</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Dark, Light or System</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Accent Color</strong><span>Material 3 expressive primary color</span></div><input type="color" id="accentSetting" value="${escapeHtml(settings.accent||'#c9f45b')}"></div>
+        ${settingToggle('Liquid Glass','Use translucent floating chrome when supported','liquidGlass',settings.liquidGlass!==false)}
+      </div></div>`;
+    } else if(tab==='youtube'){
+      body=`<div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${settings.youtubeCookie?'Authenticated session saved':'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" data-route="youtube-login">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
+        <div class="setting-row" data-route="youtube-import"><div class="setting-copy"><strong>Import YouTube playlist</strong><span>Match a playlist into LastWave</span></div><span>›</span></div>
+        <div class="field" style="padding:14px 16px"><label>Advanced cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string">${escapeHtml(settings.youtubeCookie||'')}</textarea><button class="secondary" id="saveYouTubeCookie" style="margin-top:8px">Save manual connection</button></div>
+      </div></div>`;
+    } else if(tab==='lastfm'){
+      body=`<div class="setting-group"><h2>Last.fm Account</h2><div class="setting-card" style="padding:16px"><div class="form-grid">
         <div class="field"><label>Username</label><input id="lfUsername" value="${escapeHtml(lf.username||'')}"></div>
         <div class="field"><label>API key</label><input id="lfApiKey" value="${escapeHtml(lf.apiKey||'')}"></div>
         <div class="field"><label>API secret</label><input id="lfApiSecret" type="password" value="${escapeHtml(lf.apiSecret||'')}"></div>
-        <div class="field"><label>Session key (optional)</label><input id="lfSessionKey" type="password" value="${escapeHtml(lf.sessionKey||'')}"></div>
-      </div><div class="page-actions" style="margin-top:14px"><button class="primary" id="saveLastFm">Save Last.fm</button><button class="secondary" id="authLastFm">Web sign-in</button></div></div></div>
-      <div class="setting-group"><h2>Backup</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>Export / restore</strong><span>Playlists, likes, history, settings and friends</span></div><div class="page-actions"><button class="secondary" id="exportBackup">Export</button><button class="secondary" id="importBackup">Restore</button></div></div></div></div>
-      <div class="setting-group"><h2>Personal DJ profile</h2><div class="setting-card"><pre class="mini-note" style="white-space:pre-wrap">${escapeHtml(JSON.stringify(S.profile,null,2))}</pre></div></div>`;
+        <div class="field"><label>Session key</label><input id="lfSessionKey" type="password" value="${escapeHtml(lf.sessionKey||'')}"></div>
+      </div><div class="page-actions" style="margin-top:14px"><button class="primary" id="saveLastFm">Save</button><button class="secondary" id="authLastFm">Web sign-in</button></div></div></div>`;
+    } else if(tab==='library'){
+      body=`<div class="setting-group"><h2>Library & Content</h2><div class="setting-card">
+        <div class="setting-row" data-route="home-sections"><div class="setting-copy"><strong>Home Sections</strong><span>Choose what appears on Home</span></div><span>›</span></div>
+        <div class="setting-row" data-route="external-import"><div class="setting-copy"><strong>Playlist imports</strong><span>YouTube, Spotify, Apple Music, CSV, JSON and M3U</span></div><span>›</span></div>
+        <div class="setting-row" data-route="downloads"><div class="setting-copy"><strong>Downloads</strong><span>${S.local.downloads?.length||0} songs downloaded</span></div><span>›</span></div>
+        <div class="setting-row" data-route="excluded-songs"><div class="setting-copy"><strong>Excluded Songs</strong><span>${S.local.excluded?.length||0} excluded from generated mixes</span></div><span>›</span></div>
+        <div class="setting-row" data-route="provider-modules"><div class="setting-copy"><strong>Modules & Addons</strong><span>YouTube Music, LRCLIB and Last.fm providers</span></div><span>›</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(settings.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
+      </div></div>`;
+    } else if(tab==='data'){
+      body=`<div class="setting-group"><h2>Backup & Restore</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Export backup</strong><span>Playlists, likes, history, settings and friends</span></div><button class="secondary" id="exportBackup">Export</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Restore backup</strong><span>Restore a LastWave JSON backup</span></div><button class="secondary" id="importBackup">Restore</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Search history</strong><span>${S.local.searchHistory?.length||0} recent searches</span></div><span class="mini-note">Local</span></div>
+      </div></div>`;
+    } else {
+      body=`<div class="setting-group"><h2>LastWave</h2><div class="setting-card">
+        <div class="about-card"><div class="about-mark">LW</div><h2>LastWave</h2><span>Version ${escapeHtml(S.bootstrap?.appVersion||'4.5.0')}</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Android UI parity</strong><span>Windows renderer follows the Android Compose source and Material width classes</span></div><span class="mini-note">v4.5</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Source code</strong><span>harshsinghalh/LastWave-Native</span></div><button class="secondary" id="sourceCodeBtn">Open</button></div>
+      </div></div>`;
+    }
 
-    q('#crossfadeSetting').value=String(s.crossfadeSeconds||0);
-    q('#qualitySetting').value=s.audioQuality||'best';
-    q('#themeSetting').value=s.theme||'dark';
+    page.innerHTML=`<div class="android-content settings">${pageHead(names[tab]||'Settings','')}<div class="screen-body">${body}</div></div>`;
 
-    qa('[data-setting-toggle]').forEach(btn=>btn.addEventListener('click',async()=>{
-      const key=btn.dataset.settingToggle, value=!btn.classList.contains('on');
-      S.local.settings=await api.settings.update({[key]:value}); btn.classList.toggle('on',value);
-      if(key==='djEnergy'){updateDjUi();configureDjDelay();}
-    }));
-    q('#crossfadeSetting').addEventListener('change',e=>api.settings.update({crossfadeSeconds:Number(e.target.value)}));
-    q('#qualitySetting').addEventListener('change',e=>api.settings.update({audioQuality:e.target.value}));
-    q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});
-    q('#accentSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
-    q('#chooseDownloadFolder').addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
-    q('#settingsImportBtn').addEventListener('click',importDialog);
-    q('#youtubeLoginBtn').addEventListener('click',async()=>{
-      toast('A YouTube Music sign-in window has opened. Close it after your account is visible.',5000);
-      const result=await api.youtube.login();
-      await refreshLocal();S.home=null;S.explore=null;
-      toast(result?.connected?'YouTube Music account connected':'No authenticated YouTube session was detected');
-      renderSettings();
-    });
-    q('#youtubeLogoutBtn').addEventListener('click',async()=>{
-      await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music account disconnected');renderSettings();
-    });
-    q('#saveYouTubeCookie').addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:q('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
-    q('#saveLastFm').addEventListener('click',saveLastFmSettings);
-    q('#authLastFm').addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);else toast('Add your Last.fm API key first');});
-    q('#exportBackup').addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
-    q('#importBackup').addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    qa('[data-setting-toggle]').forEach(btn=>btn.addEventListener('click',async()=>{const key=btn.dataset.settingToggle,value=!btn.classList.contains('on');S.local.settings=await api.settings.update({[key]:value});btn.classList.toggle('on',value);if(key==='djEnergy'){updateDjUi();configureDjDelay();}}));
+    if(q('#qualitySetting')){q('#qualitySetting').value=settings.audioQuality||'best';q('#qualitySetting').addEventListener('change',e=>api.settings.update({audioQuality:e.target.value}));}
+    if(q('#crossfadeSetting')){q('#crossfadeSetting').value=String(settings.crossfadeSeconds||0);q('#crossfadeSetting').addEventListener('change',e=>api.settings.update({crossfadeSeconds:Number(e.target.value)}));}
+    if(q('#themeSetting')){q('#themeSetting').value=settings.theme||'dark';q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});}
+    q('#accentSetting')?.addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
+    q('#chooseDownloadFolder')?.addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
+    q('#youtubeLogoutBtn')?.addEventListener('click',async()=>{await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music disconnected');renderSettings();});
+    q('#saveYouTubeCookie')?.addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:q('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
+    q('#saveLastFm')?.addEventListener('click',saveLastFmSettings);
+    q('#authLastFm')?.addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);});
+    q('#exportBackup')?.addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
+    q('#importBackup')?.addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    q('#sourceCodeBtn')?.addEventListener('click',()=>api.openExternal('https://github.com/harshsinghalh/LastWave-Native'));
+    q('#eqInfoBtn')?.addEventListener('click',()=>toast('Equalizer remains available through the desktop audio path; detailed 15-band parity is being mapped to WebAudio.'));
+  }
+
+  async function renderProviderModules(){
+    const lf=S.local.settings.lastfm||{};
+    page.innerHTML=`<div class="android-content settings">${pageHead('Modules & Addons','Provider modules used by this Windows build')}<div class="screen-body"><div class="settings-category-list">
+      <div class="settings-category-row static"><span class="settings-category-icon tone-0">▶</span><span><strong>YouTube Music</strong><small>Catalog, search, playback and recommendations</small></span><i>${S.local.settings.youtubeCookie?'Connected':'Ready'}</i></div>
+      <div class="settings-category-row static"><span class="settings-category-icon tone-1">≋</span><span><strong>LRCLIB</strong><small>Synced and plain lyrics with YouTube fallback</small></span><i>Enabled</i></div>
+      <div class="settings-category-row static"><span class="settings-category-icon tone-2">◉</span><span><strong>Last.fm</strong><small>Stats, friends, now-playing and scrobbling</small></span><i>${lf.apiKey?'Configured':'Optional'}</i></div>
+    </div></div></div>`;
+  }
+
+  async function renderHomeSections(){
+    const sections=['Quick picks','Jump back in','Mixes','Top artists','Recent albums','Heavy rotation','Liked songs','New releases','Friends'];
+    const hidden=new Set(S.local.settings.hiddenHomeSections||[]);
+    page.innerHTML=`<div class="android-content settings">${pageHead('Home Sections','Choose what appears on Home')}<div class="screen-body"><div class="setting-card">${sections.map(name=>settingToggle(name,'Show this recommendation section on Home','home:'+name,!hidden.has(name))).join('')}</div></div></div>`;
+    qa('[data-setting-toggle^="home:"]').forEach(btn=>btn.addEventListener('click',async()=>{const name=btn.dataset.settingToggle.slice(5);if(hidden.has(name))hidden.delete(name);else hidden.add(name);S.local.settings=await api.settings.update({hiddenHomeSections:[...hidden]});btn.classList.toggle('on',!hidden.has(name));S.home=null;}));
+  }
+
+  async function renderExcludedSongs(){
+    await refreshLocal();const rows=S.local.excluded||[];rows.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Excluded Songs',`${rows.length} songs excluded`,rows.length?'<button class="section-action" id="clearExcludedBtn">Clear</button>':'')}<div class="screen-body flush">${rows.length?`<div class="track-list">${rows.map(trackRow).join('')}</div>`:empty('No excluded songs','Use a track menu and choose Exclude from recommendations.')}</div></div>`;
+    q('#clearExcludedBtn')?.addEventListener('click',async()=>{await api.library.clearExcluded();await refreshLocal();renderExcludedSongs();});
+  }
+
+  async function renderImportScreen(title,subtitle,kind){
+    page.innerHTML=`<div class="android-content settings">${pageHead(title,subtitle)}<div class="screen-body"><div class="panel-card"><div class="field"><label>Public playlist URL</label><input id="dedicatedImportUrl" placeholder="https://…"></div><p class="mini-note" style="margin-top:10px">YouTube Music, Spotify and Apple Music public playlists are matched into the YouTube Music catalog. CSV, JSON, M3U and text files are also supported.</p><div class="page-actions" style="margin-top:14px"><button class="secondary" id="dedicatedImportFile">Choose file</button><button class="primary" id="dedicatedImportBtn">Import</button></div></div></div></div>`;
+    q('#dedicatedImportFile')?.addEventListener('click',async()=>{toast('Matching imported tracks…',6000);const p=await api.imports.file();if(p){await refreshLocal();navigate('playlist-detail',{id:p.id});}});
+    q('#dedicatedImportBtn')?.addEventListener('click',async()=>{const input=q('#dedicatedImportUrl').value.trim();if(!input)return;toast('Reading and matching playlist…',7000);try{const p=await api.imports.externalUrl(input);await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message,6000);}});
+  }
+
+  async function renderYouTubeLogin(){
+    page.innerHTML=`<div class="android-content settings">${pageHead('YouTube Music','Connect your account')}<div class="screen-body"><div class="panel-card"><h2>Connect YouTube Music</h2><p class="mini-note">The sign-in happens in a dedicated secure browser window. Close that window after your account is visible.</p><button class="primary" id="dedicatedYtLogin" style="margin-top:14px">Sign in with YouTube Music</button></div></div></div>`;
+    q('#dedicatedYtLogin')?.addEventListener('click',async()=>{const result=await api.youtube.login();await refreshLocal();toast(result?.connected?'YouTube Music connected':'No authenticated session detected');if(result?.connected)goBack();});
+  }
+
+  async function renderNewReleases(){
+    page.innerHTML=`<div class="android-content pushed">${pageHead('New Releases','Fresh drops from YouTube Music')}${loading('Loading new releases')}</div>`;
+    const result=await api.youtube.search('new music releases 2026','song').catch(()=>({tracks:[],entities:[]}));
+    result.tracks?.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">${pageHead('New Releases','Fresh drops from YouTube Music')}<div class="screen-body flush">${result.entities?.length?`<section class="section"><div class="card-row">${result.entities.slice(0,18).map(entityCard).join('')}</div></section>`:''}${result.tracks?.length?`<div class="track-list">${result.tracks.map(trackRow).join('')}</div>`:empty('No new releases returned')}</div></div>`;
+  }
+
+  async function renderFriendProfile(username){
+    page.innerHTML=`<div class="android-content pushed">${pageHead(username||'Friend','Last.fm profile')}${loading('Loading profile')}</div>`;
+    try{const [user,recent,top]=await Promise.all([api.lastfm.user(username),api.lastfm.recent(username,25),api.lastfm.top(username,'7day',20)]);
+      page.innerHTML=`<div class="android-content pushed">${pageHead(user.realname||user.username,`@${user.username} · ${user.playcount.toLocaleString()} scrobbles`)}<div class="screen-body flush">${recent.length?`<section class="section"><div class="section-head"><div class="section-copy"><h2>Recent</h2></div></div><div class="track-list">${recent.map(x=>`<div class="track-row" style="grid-template-columns:52px minmax(0,1fr) 70px">${img(x.artworkUrl,x.title)}<div class="track-main"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.artist)}</span></div><span class="mini-note">${x.nowPlaying?'Now':''}</span></div>`).join('')}</div></section>`:''}<section class="section"><div class="section-head"><div class="section-copy"><h2>Top this week</h2></div></div><div class="track-list">${top.map(x=>`<div class="track-row" style="grid-template-columns:52px minmax(0,1fr) 70px">${img(x.artworkUrl,x.title)}<div class="track-main"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.artist)}</span></div><span class="mini-note">${x.plays} plays</span></div>`).join('')}</div></section></div></div>`;
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead(username||'Friend')}${empty('Could not load profile',e.message)}</div>`;}
   }
 
   function settingToggle(title,copy,key,on) {
@@ -449,18 +663,16 @@
   }
 
   async function renderEntity(kind,id,title='') {
-    page.innerHTML=loading('Loading details');
-    try {
-      const data=await api.youtube.entity(kind,id);
-      const name=data.title||title||kind;
-      const cover=data.tracks?.[0]?.artworkUrl || data.entities?.[0]?.artworkUrl || '';
-      page.innerHTML=`<div class="entity-hero">${img(cover,name)}<div><span class="eyebrow">${escapeHtml(kind)}</span><h1>${escapeHtml(name)}</h1><p>${data.tracks.length} playable tracks</p><div class="page-actions"><button class="primary" id="entityPlay">Play</button><button class="secondary" id="entitySave">Save as playlist</button></div></div></div>`+
-        (data.tracks.length?`<div class="track-list">${data.tracks.map(trackRow).join('')}</div>`:empty('No playable tracks returned'));
+    page.innerHTML=`<div class="android-content pushed">${loading('Loading details')}</div>`;
+    try{
+      const data=await api.youtube.entity(kind,id);const name=data.title||title||kind;const cover=data.tracks?.[0]?.artworkUrl||data.entities?.[0]?.artworkUrl||'';data.tracks?.forEach(cacheTrack);
+      page.innerHTML=`<div class="android-content pushed">${pageHead(name,kind[0].toUpperCase()+kind.slice(1))}
+        <div class="entity-hero">${img(cover,name)}<div><span class="eyebrow">${escapeHtml(kind)}</span><h1>${escapeHtml(name)}</h1><p>${data.tracks.length} playable tracks</p><div class="page-actions"><button class="primary" id="entityPlay">▶ Play</button><button class="secondary" id="entitySave">Save playlist</button></div></div></div>
+        ${data.tracks.length?`<div class="track-list">${data.tracks.map(trackRow).join('')}</div>`:empty('No playable tracks returned')}</div>`;
       q('#entityPlay')?.addEventListener('click',()=>data.tracks[0]&&playTrack(data.tracks[0],data.tracks));
       q('#entitySave')?.addEventListener('click',async()=>{if(!data.tracks.length)return;const p=await api.library.createPlaylist(name);await api.library.addToPlaylist(p.id,data.tracks);await refreshLocal();toast('Saved to your playlists');});
-    } catch(e){page.innerHTML=pageHead(title||'Details')+empty('Could not load this item',e.message);}
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead(title||'Details')}${empty('Could not load this item',e.message)}</div>`;}
   }
-
   function modal(title,body,actions) {
     const host=q('#modalHost');
     host.innerHTML=`<div class="modal-wrap"><div class="modal"><h2>${escapeHtml(title)}</h2>${body}<div class="modal-actions">${actions}</div></div></div>`;
@@ -490,13 +702,46 @@
   }
   function closeRightPanel(){ q('#rightPanel').classList.add('hidden'); }
 
+  function setPlayerTab(tab) {
+    S.playerTab=tab;
+    qa('[data-player-tab]').forEach(b=>b.classList.toggle('active',b.dataset.playerTab===tab));
+    q('#fullNowPlaying')?.classList.toggle('active',tab==='now');
+    q('#fullLyrics')?.classList.toggle('active',tab==='lyrics');
+    q('#fullQueue')?.classList.toggle('active',tab==='queue');
+    if(tab==='queue') renderFullQueue();
+    if(tab==='lyrics' && S.current) {
+      if(S.lyrics) renderLyricsPanel();
+      else showLyrics();
+    }
+  }
+
+  function openFullPlayer(tab='now') {
+    if(!S.current)return;
+    S.fullPlayerOpen=true;
+    q('#fullPlayer')?.classList.remove('hidden');
+    q('#fullPlayer')?.setAttribute('aria-hidden','false');
+    q('#miniPlayer')?.classList.add('hidden');
+    setPlayerTab(tab);
+    updatePlayerUi();
+  }
+
+  function closeFullPlayer() {
+    S.fullPlayerOpen=false;
+    q('#fullPlayer')?.classList.add('hidden');
+    q('#fullPlayer')?.setAttribute('aria-hidden','true');
+    if(S.current)q('#miniPlayer')?.classList.remove('hidden');
+  }
+
   async function showLyrics(){
     if(!S.current)return toast('Play a song first');
-    openRightPanel('Lyrics',S.current.title,loading('Finding synced lyrics'));
+    openFullPlayer('lyrics');
+    q('#lyricsSubtitle').textContent=S.current.title||'';
+    q('#lyricsBody').innerHTML=loading('Finding synced lyrics');
     try{
-      S.lyrics=await api.lyrics.get(S.current);S.parsedLyrics=parseLrc(S.lyrics.synced);
+      S.lyrics=await api.lyrics.get(S.current);
+      S.parsedLyrics=parseLrc(S.lyrics.synced);
       renderLyricsPanel();
-    }catch(e){q('#rightPanelBody').innerHTML=empty('No lyrics available',e.message);}
+    }catch(e){q('#lyricsBody').innerHTML=empty('No lyrics available',e.message);}
   }
 
   function parseLrc(text){
@@ -511,44 +756,51 @@
   }
 
   function renderLyricsPanel(){
-    const host=q('#rightPanelBody');
+    const host=q('#lyricsBody');if(!host)return;
+    q('#lyricsSubtitle').textContent=S.current?.title||'';
     if(S.parsedLyrics.length){
-      host.innerHTML=`<div class="lyrics">${S.parsedLyrics.map((x,i)=>`<div class="lyric-line" data-lyric-index="${i}">${escapeHtml(x.text||'♪')}</div>`).join('')}</div><div class="mini-note" style="padding:10px">Provider: ${escapeHtml(S.lyrics.provider||'Unknown')}</div>`;
-      qa('[data-lyric-index]').forEach(el=>el.addEventListener('click',()=>{audio.currentTime=S.parsedLyrics[Number(el.dataset.lyricIndex)].time+(djLookahead()/1000);}));
+      host.innerHTML=`<div class="lyrics">${S.parsedLyrics.map((x,i)=>`<div class="lyric-line" data-lyric-index="${i}">${escapeHtml(x.text||'♪')}</div>`).join('')}</div><div class="mini-note" style="padding:10px;color:rgba(255,255,255,.62)">Provider: ${escapeHtml(S.lyrics?.provider||'Unknown')}</div>`;
+      qa('[data-lyric-index]',host).forEach(el=>el.addEventListener('click',()=>{audio.currentTime=S.parsedLyrics[Number(el.dataset.lyricIndex)].time+(djLookahead()/1000);}));
     }else if(S.lyrics?.plain){
-      host.innerHTML=`<div class="plain-lyrics">${escapeHtml(S.lyrics.plain)}</div><div class="mini-note" style="margin-top:12px">Provider: ${escapeHtml(S.lyrics.provider||'Unknown')}</div>`;
+      host.innerHTML=`<div class="plain-lyrics">${escapeHtml(S.lyrics.plain)}</div><div class="mini-note" style="margin-top:12px;color:rgba(255,255,255,.62)">Provider: ${escapeHtml(S.lyrics.provider||'Unknown')}</div>`;
     }else host.innerHTML=empty(S.lyrics?.instrumental?'Instrumental track':'Lyrics not found');
   }
 
   function syncLyrics(){
-    if(!S.parsedLyrics.length || q('#rightPanel').classList.contains('hidden') || q('#rightPanelTitle').textContent!=='Lyrics')return;
+    if(!S.fullPlayerOpen||S.playerTab!=='lyrics'||!S.parsedLyrics.length)return;
     const t=Math.max(0,audio.currentTime-djLookahead()/1000);
     let idx=-1;
     for(let i=0;i<S.parsedLyrics.length;i++){if(S.parsedLyrics[i].time<=t)idx=i;else break;}
-    qa('.lyric-line').forEach((el,i)=>el.classList.toggle('active',i===idx));
-    const active=q('.lyric-line.active');if(active)active.scrollIntoView({block:'center',behavior:'smooth'});
+    qa('#lyricsBody .lyric-line').forEach((el,i)=>el.classList.toggle('active',i===idx));
+    const active=q('#lyricsBody .lyric-line.active');
+    if(active&&!active.matches(':hover'))active.scrollIntoView({block:'center',behavior:'smooth'});
+  }
+
+  function renderFullQueue(){
+    const host=q('#queueBody');if(!host)return;
+    q('#queueSubtitle').textContent=`${S.queue.length} tracks`;
+    host.innerHTML=S.queue.length?S.queue.map((t,i)=>`<div class="queue-row ${i===S.queueIndex?'playing':''}" data-queue-index="${i}">${img(t.artworkUrl,t.title)}<div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.artist)}</span></div><span>${i===S.queueIndex?'▶':''}</span></div>`).join(''):empty('Queue is empty');
+    qa('[data-queue-index]',host).forEach(el=>el.addEventListener('click',()=>playIndex(Number(el.dataset.queueIndex))));
   }
 
   function showQueue(){
-    openRightPanel('Queue',`${S.queue.length} tracks`,S.queue.length?S.queue.map((t,i)=>`<div class="queue-row ${i===S.queueIndex?'playing':''}" data-queue-index="${i}">${img(t.artworkUrl,t.title)}<div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.artist)}</span></div><span>${i===S.queueIndex?'▶':''}</span></div>`).join(''):empty('Queue is empty'));
-    qa('[data-queue-index]').forEach(el=>el.addEventListener('click',()=>playIndex(Number(el.dataset.queueIndex))));
+    if(!S.current)return toast('Play a song first');
+    openFullPlayer('queue');
+    renderFullQueue();
   }
-
   async function playTrack(track,queue=null){
     if(!track?.videoId)return;
     if(queue?.length){S.queue=[...queue];S.queueIndex=Math.max(0,S.queue.findIndex(x=>x.videoId===track.videoId));}
     else if(!S.queue.length||!S.queue.some(x=>x.videoId===track.videoId)){S.queue=[track];S.queueIndex=0;}
     else S.queueIndex=S.queue.findIndex(x=>x.videoId===track.videoId);
     S.current=track;S.lyrics=null;S.parsedLyrics=[];S.playedHistoryFor=null;S.scrobbledFor=null;
-    updatePlayerUi();
+    updatePlayerUi();renderFullQueue();
     await ensureAudioGraph();
     audio.src=S.streamBase+encodeURIComponent(track.videoId);
     audio.load();
-    try{await audio.play();setConnection('Playing • YouTube Music');await api.lastfm.nowPlaying(track).catch(()=>{});}catch(e){toast('Playback failed: '+e.message);}
+    try{await audio.play();setConnection('Playing · YouTube Music');await api.lastfm.nowPlaying(track).catch(()=>{});}catch(e){toast('Playback failed: '+e.message);}
     updateMediaSession();
-    if(q('#rightPanelTitle').textContent==='Queue')showQueue();
   }
-
   function playIndex(index){
     if(!S.queue.length)return;
     if(S.shuffle)index=Math.floor(Math.random()*S.queue.length);
@@ -616,12 +868,19 @@
   function updateDjUi(){const enabled=Boolean(S.local?.settings?.djEnergy);q('#djQuickToggle').classList.toggle('active',enabled);q('#djQuickToggle').textContent=enabled?'DJ Energy':'DJ Off';updateDjMeter();}
 
   function updatePlayerUi(){
-    const t=S.current;q('#playerTitle').textContent=t?.title||'Nothing playing';q('#playerArtist').textContent=t?.artist||'Choose a song to start';q('#playerArt').src=t?.artworkUrl||placeholder(t?.title||'LW');updatePlayerLike();updateDjUi();
+    const t=S.current;
+    const title=t?.title||'Nothing playing',artist=t?.artist||'Choose a song to start',art=t?.artworkUrl||placeholder(t?.title||'LW');
+    q('#playerTitle').textContent=title;q('#playerArtist').textContent=artist;q('#playerArt').src=art;
+    q('#fullPlayerTitle').textContent=title;q('#fullPlayerArtist').textContent=artist;q('#fullPlayerArt').src=art;
+    if(t?.artworkUrl)q('#fullPlayerBackdrop').style.backgroundImage=`url("${String(t.artworkUrl).replace(/"/g,'%22')}")`;
+    else q('#fullPlayerBackdrop').style.backgroundImage='none';
+    q('#miniPlayer').classList.toggle('hidden',!t||S.fullPlayerOpen);
+    updatePlayerLike();updateDjUi();
   }
   function updatePlayerLike(){
-    const liked=S.current&&S.local?.liked?.some(x=>x.videoId===S.current.videoId);q('#likeBtn').textContent=liked?'♥':'♡';q('#likeBtn').classList.toggle('active',Boolean(liked));
+    const liked=Boolean(S.current&&S.local?.liked?.some(x=>x.videoId===S.current.videoId));
+    for(const el of [q('#likeBtn'),q('#fullLikeBtn')])if(el){el.textContent=liked?'♥':'♡';el.classList.toggle('active',liked);}
   }
-
   function updateMediaSession(){
     if(!('mediaSession'in navigator)||!S.current)return;
     try{
@@ -633,10 +892,10 @@
 
   function contextMenu(track,x,y){
     if(!track)return;
-    const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);
-    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button>`;
+    const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);const excluded=(S.local.excluded||[]).some(t=>t.videoId===track.videoId);
+    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button><button data-cm="exclude">${excluded?'Remove exclusion':'Exclude from recommendations'}</button>`;
     menu.style.left=Math.min(x,innerWidth-240)+'px';menu.style.top=Math.min(y,innerHeight-280)+'px';menu.classList.remove('hidden');
-    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;}}));
+    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;case'exclude':{const value=await api.library.toggleExcluded(track);await refreshLocal();toast(value?'Excluded from recommendations':'Removed from exclusions');break;}}}));
   }
 
   async function toggleLike(track){const liked=await api.library.toggleLike(track);await refreshLocal();toast(liked?'Added to liked songs':'Removed from liked songs');updatePlayerLike();}
@@ -650,7 +909,10 @@
   async function showRelated(track){openRightPanel('Related',track.title,loading('Finding related music'));const list=await api.youtube.related(track.videoId).catch(()=>[]);q('#rightPanelBody').innerHTML=list.length?`<div class="track-list">${list.slice(0,30).map(trackRow).join('')}</div>`:empty('No related tracks returned');}
 
   document.addEventListener('click',e=>{
-    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route);return;}
+    const back=e.target.closest('[data-history-back]');if(back){goBack();return;}
+    const search=e.target.closest('[data-search-query]');if(search){navigate('search',{query:search.dataset.searchQuery});return;}
+    const settingsTab=e.target.closest('[data-settings-tab]');if(settingsTab){navigate('settings',{tab:settingsTab.dataset.settingsTab});return;}
+    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route,route.dataset.username?{username:route.dataset.username}:{});return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
     const like=e.target.closest('[data-like]');if(like){e.stopPropagation();const t=findTrack(like.dataset.like);if(t)toggleLike(t);return;}
@@ -658,34 +920,49 @@
     const play=e.target.closest('[data-play]');if(play){const t=findTrack(play.dataset.play);if(t){const list=play.closest('.track-list')?qa('.track-row',play.closest('.track-list')).map(el=>findTrack(el.dataset.play)).filter(Boolean):null;playTrack(t,list);}return;}
     if(!e.target.closest('#contextMenu'))q('#contextMenu').classList.add('hidden');
   });
-
-  function installTopbar(){
-    q('#nav').addEventListener('click',e=>{const b=e.target.closest('[data-route]');if(b)navigate(b.dataset.route);});
-    q('#openSettingsBtn').addEventListener('click',()=>navigate('settings'));
-    q('#backBtn').addEventListener('click',()=>{if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
-    q('#forwardBtn').addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
-    const input=q('#globalSearchInput');let timer;
-    input.addEventListener('input',()=>{clearTimeout(timer);const q=input.value.trim();if(!q){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const s=await api.youtube.suggestions(q).catch(()=>[]);const host=q('#suggestions');host.innerHTML=s.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!s.length);},220);});
-    input.addEventListener('keydown',e=>{if(e.key==='Enter'){const q=input.value.trim();if(q){q('#suggestions').classList.add('hidden');navigate('search',{query:q});}}});
-    q('#suggestions').addEventListener('click',e=>{const s=e.target.closest('[data-suggest]');if(s){input.value=s.dataset.suggest;q('#suggestions').classList.add('hidden');navigate('search',{query:s.dataset.suggest});}});
+  function goBack(){
+    if(S.fullPlayerOpen){closeFullPlayer();return;}
+    if(S.historyIndex>0){
+      S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;
+      const isRoot=['feed','stats','playlists'].includes(S.route);
+      q('#nav').classList.toggle('hidden',!isRoot);q('#generatorFab').classList.toggle('hidden',S.route!=='playlists');
+      qa('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.route===S.route));renderRoute();
+    }else navigate('feed',{},false);
   }
 
+  function installTopbar(){
+    q('#backBtn')?.addEventListener('click',goBack);
+    q('#forwardBtn')?.addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];navigate(h.route,h.params,false);}});
+  }
   function installPlayer(){
-    q('#playBtn').addEventListener('click',async()=>{if(!S.current)return navigate('search');if(audio.paused)await audio.play();else audio.pause();});
-    q('#nextBtn').addEventListener('click',next);q('#prevBtn').addEventListener('click',prev);
-    q('#shuffleBtn').addEventListener('click',()=>{S.shuffle=!S.shuffle;q('#shuffleBtn').classList.toggle('active',S.shuffle);});
-    q('#repeatBtn').addEventListener('click',()=>{S.repeat=!S.repeat;q('#repeatBtn').classList.toggle('active',S.repeat);});
-    q('#volume').addEventListener('input',e=>{S.volume=Number(e.target.value)/100;audio.volume=S.volume;});
-    q('#seek').addEventListener('input',e=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
-    q('#likeBtn').addEventListener('click',()=>S.current&&toggleLike(S.current));
-    q('#lyricsBtn').addEventListener('click',showLyrics);q('#queueBtn').addEventListener('click',showQueue);q('#closeRightPanel').addEventListener('click',closeRightPanel);
-    q('#djQuickToggle').addEventListener('click',async()=>{const value=!S.local.settings.djEnergy;S.local.settings=await api.settings.update({djEnergy:value});updateDjUi();configureDjDelay();});
+    const toggle=async()=>{if(!S.current)return navigate('search');if(audio.paused)await audio.play();else audio.pause();};
+    q('#playBtn')?.addEventListener('click',e=>{e.stopPropagation();toggle();});
+    q('#fullPlayBtn')?.addEventListener('click',toggle);
+    q('#nextBtn')?.addEventListener('click',e=>{e.stopPropagation();next();});
+    q('#fullNextBtn')?.addEventListener('click',next);
+    q('#prevBtn')?.addEventListener('click',prev);
+    q('#miniPlayer')?.addEventListener('click',e=>{if(!e.target.closest('button'))openFullPlayer('now');});
+    q('#collapsePlayerBtn')?.addEventListener('click',closeFullPlayer);
+    qa('[data-player-tab]').forEach(b=>b.addEventListener('click',()=>setPlayerTab(b.dataset.playerTab)));
+    q('#shuffleBtn')?.addEventListener('click',()=>{S.shuffle=!S.shuffle;q('#shuffleBtn').classList.toggle('active',S.shuffle);});
+    q('#repeatBtn')?.addEventListener('click',()=>{S.repeat=!S.repeat;q('#repeatBtn').classList.toggle('active',S.repeat);});
+    q('#volume')?.addEventListener('input',e=>{S.volume=Number(e.target.value)/100;audio.volume=S.volume;});
+    q('#seek')?.addEventListener('input',e=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
+    q('#likeBtn')?.addEventListener('click',e=>{e.stopPropagation();if(S.current)toggleLike(S.current);});
+    q('#fullLikeBtn')?.addEventListener('click',()=>S.current&&toggleLike(S.current));
+    q('#lyricsBtn')?.addEventListener('click',showLyrics);q('#queueBtn')?.addEventListener('click',showQueue);q('#closeRightPanel')?.addEventListener('click',closeRightPanel);
+    q('#djQuickToggle')?.addEventListener('click',async()=>{const value=!S.local.settings.djEnergy;S.local.settings=await api.settings.update({djEnergy:value});updateDjUi();configureDjDelay();});
+    q('#fullPlayerArtist')?.addEventListener('click',()=>{if(S.current?.artist)navigate('search',{query:S.current.artist});closeFullPlayer();});
     audio.volume=S.volume;
-    audio.addEventListener('play',()=>{q('#playBtn').textContent='❚❚';if(S.audioCtx?.state==='suspended')S.audioCtx.resume();});
-    audio.addEventListener('pause',()=>q('#playBtn').textContent='▶');
+    audio.addEventListener('play',()=>{for(const el of [q('#playBtn'),q('#fullPlayBtn')])if(el)el.textContent='❚❚';if(S.audioCtx?.state==='suspended')S.audioCtx.resume();});
+    audio.addEventListener('pause',()=>{for(const el of [q('#playBtn'),q('#fullPlayBtn')])if(el)el.textContent='▶';});
     audio.addEventListener('loadedmetadata',()=>{q('#duration').textContent=fmtTime(audio.duration);});
     audio.addEventListener('timeupdate',async()=>{
-      if(Number.isFinite(audio.duration)&&audio.duration>0){q('#seek').value=String(Math.floor(audio.currentTime/audio.duration*1000));q('#currentTime').textContent=fmtTime(audio.currentTime);q('#duration').textContent=fmtTime(audio.duration);}
+      if(Number.isFinite(audio.duration)&&audio.duration>0){
+        const ratio=clamp(audio.currentTime/audio.duration,0,1);
+        q('#seek').value=String(Math.floor(ratio*1000));q('#currentTime').textContent=fmtTime(audio.currentTime);q('#duration').textContent=fmtTime(audio.duration);
+        q('#miniProgressFill').style.width=`${ratio*100}%`;
+      }
       syncLyrics();
       if(S.current&&audio.currentTime>5&&S.playedHistoryFor!==S.current.videoId){S.playedHistoryFor=S.current.videoId;api.history.add(S.current,audio.currentTime).catch(()=>{});}
       const threshold=Math.min(240,Math.max(30,(audio.duration||180)*.5));
@@ -694,9 +971,6 @@
     audio.addEventListener('ended',next);
     audio.addEventListener('error',()=>toast('The current stream could not be played. Try another track.'));
   }
-
-  api.onLastFmAuth(async result=>{if(result.ok){await refreshLocal();toast('Last.fm connected as '+result.value.username);if(S.route==='settings')renderSettings();}else toast(result.message||'Last.fm sign-in failed');});
-
   async function init(){
     try{
       S.bootstrap=await api.bootstrap();S.local=S.bootstrap.state;S.profile=S.bootstrap.profile||{};S.streamBase=S.bootstrap.streamBase;

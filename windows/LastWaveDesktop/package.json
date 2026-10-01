@@ -1,7 +1,7 @@
 {
   "name": "lastwave-desktop",
-  "version": "4.4.0",
-  "description": "Full LastWave desktop client for Windows 11",
+  "version": "4.5.0",
+  "description": "Android-faithful LastWave desktop client for Windows 11",
   "type": "module",
   "main": "main.mjs",
   "scripts": {
