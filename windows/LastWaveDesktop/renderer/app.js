@@ -580,8 +580,8 @@
       qa('[data-recent-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.recentQuery); }); });
       qa('[data-explore-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.exploreQuery); }); });
       q('#searchRecentClear')?.addEventListener('click',async function(){
-        S.local.searchHistory = [];
-        await api.settings.update({ searchHistory: [] }).catch(function(){});
+        await api.search.clearHistory();
+        await refreshLocal();
         renderSearch('');
       });
       input?.focus();
