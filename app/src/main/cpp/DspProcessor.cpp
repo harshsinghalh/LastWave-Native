@@ -33,6 +33,13 @@ constexpr float kAirExciterAmount = 0.18F;
 constexpr std::int32_t kDjControlIntervalFrames = 256;
 constexpr float kDjMaxBoostDb = 5.0F;
 constexpr float kDjMaxVocalDuckDb = 2.0F;
+constexpr float kDjPreDropDb = -2.0F;
+constexpr float kDjImpactDb = 5.0F;
+constexpr double kDjLookAheadSeconds = 0.080;
+constexpr double kDjImpactHoldSeconds = 0.070;
+constexpr double kDjImpactCooldownSeconds = 0.420;
+constexpr float kDjStrongSurgeDb = 4.5F;
+constexpr float kDjLoudSurgeDb = 2.5F;
 // Studio Master Clarity design gains (dB). Single source for configure()
 // and trim rebuilds; per-stage trims add to these values.
 constexpr double kClarityBassGainDb = 3.2;
@@ -160,6 +167,14 @@ void DspProcessor::configure(double sampleRate) noexcept {
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.080)));
     djRelease_ = static_cast<float>(
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.350)));
+    // Performance-envelope timings: a noticeable pre-drop ramp, near-instant
+    // impact lift, then a musical release back to the normal DJ rider.
+    djPreDuckSmoothing_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.022)));
+    djImpactAttackSmoothing_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.006)));
+    djImpactReleaseSmoothing_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * 0.180)));
     dcBlockerR_ = static_cast<float>(
         std::exp(-2.0 * kPi * 10.0 / sampleRate_));
     microFadeFrameCount_ = std::max(
@@ -230,6 +245,10 @@ void DspProcessor::reset() noexcept {
     djSideEnergy_ = 0.0F;
     djGain_ = 1.0F;
     djTargetGain_ = 1.0F;
+    djPerformanceDb_ = 0.0F;
+    djImpactCountdown_ = -1;
+    djImpactHoldFrames_ = 0;
+    djImpactCooldownFrames_ = 0;
     djControlCountdown_ = 0;
     microFadePosition_ = 0;
     dcXPrev_.fill(0.0);
@@ -613,6 +632,60 @@ void DspProcessor::process(
                 if (rmsDb < -52.0F) targetDb = 0.0F;
                 targetDb = std::clamp(targetDb, -2.0F, kDjMaxBoostDb);
                 djTargetGain_ = std::pow(10.0F, targetDb / 20.0F);
+
+                // Short in-buffer look-ahead: inspect untouched decoded PCM
+                // ahead of the current frame. This creates the concert/DJ
+                // "pull back before the drop" without adding global playback
+                // latency or disturbing lyric/video synchronization.
+                if (djImpactCooldownFrames_ <= 0 &&
+                    djImpactCountdown_ < 0 &&
+                    djImpactHoldFrames_ <= 0) {
+                    const std::int32_t availableFrames = frameCount - frame - 1;
+                    const std::int32_t lookAheadFrames = std::min(
+                        availableFrames,
+                        static_cast<std::int32_t>(std::llround(
+                            sampleRate_ * kDjLookAheadSeconds)));
+                    constexpr std::int32_t scanStep = 32;
+                    constexpr std::int32_t rmsWindow = 32;
+                    float strongestFuturePower = total;
+                    std::int32_t strongestFutureOffset = -1;
+
+                    for (std::int32_t ahead = 64;
+                         ahead + rmsWindow < lookAheadFrames;
+                         ahead += scanStep) {
+                        float windowPower = 0.0F;
+                        for (std::int32_t w = 0; w < rmsWindow; ++w) {
+                            const auto futureOffset =
+                                static_cast<std::size_t>(frame + ahead + w) *
+                                static_cast<std::size_t>(channelCount);
+                            const float futureLeft = samples[futureOffset];
+                            const float futureRight = channelCount == 2
+                                ? samples[futureOffset + 1U]
+                                : futureLeft;
+                            windowPower += 0.5F *
+                                (futureLeft * futureLeft + futureRight * futureRight);
+                        }
+                        windowPower /= static_cast<float>(rmsWindow);
+                        if (windowPower > strongestFuturePower) {
+                            strongestFuturePower = windowPower;
+                            strongestFutureOffset = ahead;
+                        }
+                    }
+
+                    if (strongestFutureOffset > 0) {
+                        const float futureDb =
+                            10.0F * std::log10(std::max(strongestFuturePower, epsilon));
+                        const float surgeDb = futureDb - rmsDb;
+                        const bool strongRise =
+                            surgeDb >= kDjStrongSurgeDb && futureDb > -24.0F;
+                        const bool loudRise =
+                            surgeDb >= kDjLoudSurgeDb && futureDb > -10.0F;
+                        if (strongRise || loudRise) {
+                            djImpactCountdown_ = strongestFutureOffset;
+                        }
+                    }
+                }
+
                 djControlCountdown_ = kDjControlIntervalFrames;
             }
         } else {
@@ -623,6 +696,52 @@ void DspProcessor::process(
         const float djSmoothing = djTargetGain_ < djGain_ ? djAttack_ : djRelease_;
         djGain_ += (djTargetGain_ - djGain_) * djSmoothing;
         if (std::abs(djTargetGain_ - djGain_) < 0.00001F) djGain_ = djTargetGain_;
+
+        if (djImpactCooldownFrames_ > 0) --djImpactCooldownFrames_;
+        if (djEnabled && djImpactCountdown_ >= 0) {
+            if (djImpactCountdown_ == 0) {
+                djImpactCountdown_ = -1;
+                djImpactHoldFrames_ = std::max(
+                    1,
+                    static_cast<std::int32_t>(std::llround(
+                        sampleRate_ * kDjImpactHoldSeconds)));
+                djImpactCooldownFrames_ = std::max(
+                    1,
+                    static_cast<std::int32_t>(std::llround(
+                        sampleRate_ * kDjImpactCooldownSeconds)));
+            } else {
+                --djImpactCountdown_;
+            }
+        }
+
+        const float baseDjDb = 20.0F * std::log10(std::max(djGain_, 1.0e-6F));
+        float performanceTargetDb = baseDjDb;
+        float performanceSmoothing = djImpactReleaseSmoothing_;
+        if (djEnabled && djImpactCountdown_ >= 0) {
+            // Absolute -2 dB pre-drop target creates contrast even if the
+            // steady-state rider was already boosting the passage.
+            performanceTargetDb = kDjPreDropDb;
+            performanceSmoothing = djPreDuckSmoothing_;
+        } else if (djEnabled && djImpactHoldFrames_ > 0) {
+            // Snap to the top of the established 7 dB operating window at
+            // impact. The limiter/soft knee below still owns clip protection.
+            performanceTargetDb = kDjImpactDb;
+            performanceSmoothing = djImpactAttackSmoothing_;
+            --djImpactHoldFrames_;
+        }
+        performanceTargetDb = std::clamp(
+            performanceTargetDb, kDjPreDropDb, kDjImpactDb);
+        djPerformanceDb_ +=
+            (performanceTargetDb - djPerformanceDb_) * performanceSmoothing;
+        if (std::abs(performanceTargetDb - djPerformanceDb_) < 0.001F) {
+            djPerformanceDb_ = performanceTargetDb;
+        }
+        if (!djEnabled &&
+            std::abs(djPerformanceDb_ - baseDjDb) < 0.001F) {
+            djPerformanceDb_ = baseDjDb;
+        }
+        const float djPerformanceGain =
+            std::pow(10.0F, djPerformanceDb_ / 20.0F);
 
         float outputLeft = dryLeft;
         float outputRight = dryRight;
@@ -683,8 +802,8 @@ void DspProcessor::process(
             outputRight += (wetRight - dryRight) * clarityMix;
         }
 
-        outputLeft *= djGain_;
-        outputRight *= djGain_;
+        outputLeft *= djPerformanceGain;
+        outputRight *= djPerformanceGain;
 
         // Analog soft-knee saturation: provides clean headroom without squashing the track
         auto softSaturate = [](float x) noexcept -> float {
