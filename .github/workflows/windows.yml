@@ -1,0 +1,92 @@
+name: Build Windows EXE
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'windows/**'
+      - 'tools/generate_laya_profile.py'
+      - 'personalization/**'
+      - '.github/workflows/windows.yml'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'windows/**'
+      - 'tools/generate_laya_profile.py'
+      - 'personalization/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Python for Laya personalizer
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Laya preference decision layer
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "laya==0.3.4"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Laya install failed. The generator will use its pinned safe fallback."
+          }
+          python tools/generate_laya_profile.py --use-laya --emit-cs windows/LastWaveWindows/GeneratedPersonalDjProfile.cs
+          Get-Content personalization/generated_profile.json
+
+      - name: Build and run Windows DSP self-test
+        run: dotnet run --project windows/LastWaveWindows/LastWaveWindows.csproj -c Release -- --self-test
+
+      - name: Publish self-contained Windows EXE
+        run: dotnet publish windows/LastWaveWindows/LastWaveWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
+
+      - name: Smoke check EXE
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/windows/LastWaveWindows.exe')) { throw 'Windows EXE was not produced' }
+          Get-Item 'dist/windows/LastWaveWindows.exe' | Format-List Name,Length,VersionInfo
+          Get-FileHash 'dist/windows/LastWaveWindows.exe' -Algorithm SHA256 | Format-List
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          Copy-Item personalization/harsh_dj_preference.txt dist/windows/
+          Copy-Item personalization/generated_profile.json dist/windows/
+          Compress-Archive -Path dist/windows/* -DestinationPath LastWave-Windows-v4.3.0.zip -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-Windows-v4.3.0
+          path: |
+            dist/windows/LastWaveWindows.exe
+            LastWave-Windows-v4.3.0.zip
+          if-no-files-found: error
+
+      - name: Publish Windows assets to GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $currentMain = (git ls-remote origin refs/heads/main).Split([char]9)[0]
+          if ($currentMain -ne $env:GITHUB_SHA) { Write-Host 'Newer main commit exists; skipping release publication.'; exit 0 }
+          $tag = 'v4.3.0'
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title 'LastWave v4.3.0 - Android + Windows Personal DJ' --notes 'Multi-platform release: Windows 11 EXE plus Android APKs. The Personal DJ profile keeps the requested -2 dB to +5 dB window, predictive pre-drop and impact spike, and limiter protection. Laya is used as a build-time preference decision layer, not in the realtime PCM loop.'
+          }
+          gh release upload $tag dist/windows/LastWaveWindows.exe LastWave-Windows-v4.3.0.zip --clobber

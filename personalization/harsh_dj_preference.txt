@@ -1,0 +1,1 @@
+I want a concert/DJ-style music ride. When the next vocal, instrument, bass or musical section is about to become much louder, pull the song down briefly just before it arrives, then make the impact feel sudden and large as the loud section lands. Keep normal riding between -2 dB and +5 dB, avoid clipping, and keep the effect musical rather than constantly pumping.
