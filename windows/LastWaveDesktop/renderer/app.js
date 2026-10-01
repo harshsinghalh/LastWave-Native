@@ -209,45 +209,102 @@
   }
 
   async function renderFeed() {
-    page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Your music, now native to your Windows workflow.</h1><p>Ad-free YouTube Music catalog access, synced lyrics, smart playlists, Last.fm, downloads and your Laya-personalized DJ Energy profile.</p><button class="primary" data-route="discover">Discover music</button></div></section>${loading('Loading your music feed')}`;
+    const actions =
+      headerAction('⇩','Downloads','downloads') +
+      headerAction('⌕','Search','search') +
+      '<button class="profile-avatar" data-route="settings" title="Settings">LW</button>';
+    page.innerHTML = `<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}<div class="screen-body flush">${loading('Loading your music feed')}</div></div>`;
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections = (S.home || []).filter(x => x?.tracks?.length);
-      page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Listen your way.</h1><p>Full music client with smart discovery, local playlists, Last.fm and predictive Personal DJ dynamics.</p><div class="page-actions"><button class="primary" data-route="discover">Discover music</button><button class="secondary" data-route="generator">Generate a mix</button></div></div></section>` +
-        (sections.length ? sections.map(s => `<section class="section"><div class="section-head"><h2>${escapeHtml(s.title || 'For you')}</h2><small>${s.tracks.length} picks</small></div><div class="card-row">${s.tracks.map(card).join('')}</div></section>`).join('') : empty('Your feed is empty','Try Search or Discover.'));
+      const sections=(S.home||[]).filter(x=>x?.tracks?.length);
+      const liked=S.local?.liked||[];
+      const playlists=S.local?.playlists||[];
+      const history=S.local?.history||[];
+      const quickTiles=[
+        {title:'Liked songs',subtitle:`${liked.length} tracks`,icon:'♥',route:'playlists',tone:'primary'},
+        {title:'Your playlists',subtitle:`${playlists.length} playlists`,icon:'≡',route:'playlists',tone:'secondary'},
+        {title:'Discover',subtitle:'Fresh music',icon:'✦',route:'discover',tone:'tertiary'},
+        {title:'New releases',subtitle:'Fresh drops',icon:'●',query:'new music releases 2026',tone:'surface'}
+      ];
+      const quickTileHtml=quickTiles.map(t=>`<article class="quick-tile" ${t.route?`data-route="${t.route}"`:`data-search-query="${escapeHtml(t.query)}"`}>
+        <div class="quick-tile-art">${t.icon}</div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.subtitle)}</span>
+      </article>`).join('');
+
+      let html=`<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}<div class="screen-body flush">
+        <section class="section"><div class="quick-tile-row">${quickTileHtml}</div></section>`;
+
+      const first=sections[0]?.tracks||[];
+      if(first.length){
+        first.forEach(cacheTrack);
+        html+=`<section class="section">
+          <div class="section-head"><div class="section-copy"><h2>Quick picks</h2><p>Start listening instantly</p></div><button class="section-action" data-shuffle-list="home-first">Shuffle</button></div>
+          <div class="quick-picks-scroll"><div class="quick-picks-grid">${first.slice(0,18).map(t=>`<div class="quick-pick ${S.current?.videoId===t.videoId?'playing':''}" data-play="${escapeHtml(t.videoId||'')}">
+            ${img(t.artworkUrl,t.title)}<div class="quick-pick-copy"><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.artist||'Unknown artist')}</span></div>
+            <button class="tiny-btn" data-context="${escapeHtml(t.videoId||'')}">⋮</button></div>`).join('')}</div></div>
+        </section>`;
+      }
+
+      if(history.length){
+        const recent=[];
+        const seen=new Set();
+        for(const t of history){if(t?.videoId&&!seen.has(t.videoId)){seen.add(t.videoId);recent.push(t);}if(recent.length>=12)break;}
+        if(recent.length){
+          recent.forEach(cacheTrack);
+          html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Jump back in</h2><p>Recently played</p></div></div><div class="card-row">${recent.map(card).join('')}</div></section>`;
+        }
+      }
+
+      sections.slice(first.length?1:0).forEach((sec,index)=>{
+        const tracks=(sec.tracks||[]).slice(0,16);tracks.forEach(cacheTrack);
+        if(!tracks.length)return;
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${escapeHtml(sec.title||'For you')}</h2><p>${index%2===0?'Made for your listening':'More music to explore'}</p></div><button class="section-action" data-search-query="${escapeHtml(sec.title||'music')}">More</button></div><div class="card-row">${tracks.map(card).join('')}</div></section>`;
+      });
+      html+='</div></div>';
+      page.innerHTML=html;
+      q('[data-shuffle-list="home-first"]')?.addEventListener('click',()=>{
+        if(!first.length)return;const shuffled=[...first].sort(()=>Math.random()-.5);playTrack(shuffled[0],shuffled);
+      });
     } catch (e) {
       setConnection('Catalog unavailable','error');
-      page.innerHTML += empty('Could not load the feed', e.message);
+      page.innerHTML=`<div class="android-content">${androidHeader('Home','',actions,{pushed:false})}${empty('Could not load Home',e.message)}</div>`;
     }
   }
-
   async function renderStats() {
-    page.innerHTML = pageHead('Listening stats','Your LastWave history and Last.fm activity.') + loading('Calculating stats');
-    const stats = await api.library.stats();
-    let html = pageHead('Listening stats','Your LastWave history and Last.fm activity.');
-    html += `<div class="wide-grid">
-      <div class="stat-card"><b>${stats.totalPlays}</b><span>Local plays</span></div>
-      <div class="stat-card"><b>${stats.uniqueTracks}</b><span>Unique tracks</span></div>
-      <div class="stat-card"><b>${stats.activeDays}</b><span>Active listening days</span></div>
-    </div>`;
-    if (stats.topTracks.length) html += `<section class="section"><div class="section-head"><h2>Top tracks</h2></div><div class="track-list">${stats.topTracks.map(trackRow).join('')}</div></section>`;
-    if (stats.topArtists.length) html += `<section class="section"><div class="section-head"><h2>Top artists</h2></div><div class="wide-grid">${stats.topArtists.map(x => `<div class="panel-card"><strong>${escapeHtml(x.artist)}</strong><div class="mini-note">${x.plays} plays</div></div>`).join('')}</div></section>`;
-    const username = S.local.settings.lastfm?.username;
-    if (username && S.local.settings.lastfm?.apiKey) {
-      try {
-        const user = await api.lastfm.user(username);
-        html += `<section class="section"><div class="section-head"><h2>Last.fm</h2></div><div class="wide-grid"><div class="stat-card"><b>${user.playcount.toLocaleString()}</b><span>Total scrobbles</span></div><div class="stat-card"><b>${escapeHtml(user.username)}</b><span>Connected profile</span></div></div></section>`;
-      } catch {}
-    }
-    page.innerHTML = html;
+    page.innerHTML=`<div class="android-content pushed">${androidHeader('Statistics','',headerAction('⇩','Downloads','downloads')+headerAction('⌕','Search','search')+'<button class="profile-avatar" data-route="settings">LW</button>',{pushed:false})}${loading('Loading your listening history')}</div>`;
+    const stats=await api.library.stats();
+    await refreshLocal();
+    const history=S.local?.history||[];
+    const albums=new Set(history.map(x=>x.album).filter(Boolean)).size;
+    const username=S.local.settings.lastfm?.username||'Guest';
+    let html=`<div class="android-content pushed">${androidHeader('Statistics','',headerAction('⇩','Downloads','downloads')+headerAction('⌕','Search','search')+'<button class="profile-avatar" data-route="settings">LW</button>',{pushed:false})}
+      <div class="screen-body">
+        <div class="section-head" style="padding:2px 0 8px"><div class="section-copy"><h2>${escapeHtml(username)}</h2><p>Listening history</p></div><button class="section-action" data-route="friends">Friends</button></div>
+        <div class="stats-hero">
+          <div class="stats-label">Plays</div><div class="stats-number">${stats.totalPlays.toLocaleString()}</div>
+          <div class="stats-pill-row">
+            <div class="stat-pill"><strong>${stats.uniqueTracks}</strong><span>Tracks</span></div>
+            <div class="stat-pill"><strong>${stats.topArtists.length}</strong><span>Artists</span></div>
+            <div class="stat-pill"><strong>${albums}</strong><span>Albums</span></div>
+          </div>
+          <div class="page-actions" style="margin-top:14px"><button class="secondary" data-route="genres">Your Genres</button><button class="secondary" data-route="discover">Discover</button></div>
+        </div>`;
+    if(stats.topTracks.length){
+      stats.topTracks.forEach(cacheTrack);
+      html+=`<section class="section"><div class="section-head" style="padding-left:0;padding-right:0"><div class="section-copy"><h2>List</h2><p>Recent and most played</p></div><span class="section-action">Recent</span></div><div class="track-list" style="margin:0">${stats.topTracks.map(trackRow).join('')}</div></section>`;
+    } else html+=empty('No listening history yet','Play some music and your statistics will appear here.');
+    html+='</div></div>';
+    page.innerHTML=html;
   }
-
   function playlistCard(p) {
-    const cover = p.tracks?.[0]?.artworkUrl || '';
-    return `<article class="music-card" data-local-playlist="${escapeHtml(p.id)}"><div class="card-overlay">${img(cover,p.title)}</div><h3>${escapeHtml(p.title)}</h3><p>${p.tracks?.length || 0} tracks</p></article>`;
+    const cover=p.tracks?.[0]?.artworkUrl||'';
+    return `<div class="playlist-row" data-local-playlist="${escapeHtml(p.id)}">
+      ${img(cover,p.title)}
+      <div class="playlist-copy"><strong>${escapeHtml(p.title)}</strong><span>${p.tracks?.length||0} tracks · ${escapeHtml(p.source||'LastWave')}</span></div>
+      ${p.tracks?.length?'<button class="round-icon playlist-play" data-playlist-play="'+escapeHtml(p.id)+'">▶</button>':'<span></span>'}
+      <button class="tiny-btn" data-playlist-menu="${escapeHtml(p.id)}">⋮</button>
+    </div>`;
   }
-
   async function refreshLocal() {
     S.local = await api.state();
     setTheme();
@@ -256,28 +313,37 @@
 
   async function renderPlaylists() {
     await refreshLocal();
-    page.innerHTML = pageHead('Playlists','Your local LastWave library and imported playlists.',
-      `<button class="secondary" id="importPlaylistBtn">Import</button><button class="primary" id="createPlaylistBtn">New playlist</button>`) +
-      `<section class="section"><div class="section-head"><h2>Liked songs</h2><small>${S.local.liked.length} tracks</small></div>${S.local.liked.length ? `<div class="track-list">${S.local.liked.slice(0,30).map(trackRow).join('')}</div>` : empty('No liked songs yet','Tap the heart while listening.')}</section>
-      <section class="section"><div class="section-head"><h2>Your playlists</h2></div>${S.local.playlists.length ? `<div class="grid">${S.local.playlists.map(playlistCard).join('')}</div>` : empty('No playlists yet','Create one or import a playlist.')}</section>`;
-    q('#createPlaylistBtn')?.addEventListener('click', createPlaylistDialog);
-    q('#importPlaylistBtn')?.addEventListener('click', importDialog);
+    const count=S.local.playlists.length+(S.local.liked.length?1:0);
+    const tracks=S.local.playlists.reduce((n,p)=>n+(p.tracks?.length||0),0)+S.local.liked.length;
+    const actions='<button class="header-icon" id="createPlaylistBtn" title="Create playlist">＋</button><button class="section-action" id="sortPlaylistBtn">≡ Sort</button>';
+    let html=`<div class="android-content pushed">${androidHeader('Playlist',`${count} Playlists · ${tracks} Tracks`,actions,{pushed:false})}<div class="screen-body flush">`;
+    const rows=[];
+    if(S.local.liked.length) rows.push({id:'__liked__',title:'Liked songs',tracks:S.local.liked,source:'LastWave'});
+    rows.push(...S.local.playlists);
+    html+=rows.length?`<div class="playlist-list">${rows.map(playlistCard).join('')}</div>`:empty('No playlists yet','Tap + to create one, or use the sparkle button to generate a playlist.');
+    html+='</div></div>';
+    page.innerHTML=html;
+    q('#createPlaylistBtn')?.addEventListener('click',createPlaylistDialog);
+    q('#sortPlaylistBtn')?.addEventListener('click',()=>toast('Playlists are sorted by newest first'));
+    qa('[data-playlist-play]').forEach(b=>b.addEventListener('click',e=>{
+      e.stopPropagation();const id=b.dataset.playlistPlay;const p=id==='__liked__'?{tracks:S.local.liked}:S.local.playlists.find(x=>String(x.id)===id);if(p?.tracks?.length)playTrack(p.tracks[0],p.tracks);
+    }));
   }
-
   async function renderLocalPlaylist(id) {
     await refreshLocal();
-    const p = S.local.playlists.find(x => x.id === id);
-    if (!p) return navigate('playlists');
-    const cover = p.tracks?.[0]?.artworkUrl || '';
-    page.innerHTML = `<div class="entity-hero">${img(cover,p.title)}<div><span class="eyebrow">Playlist</span><h1>${escapeHtml(p.title)}</h1><p>${p.tracks.length} tracks • ${escapeHtml(p.source || 'LastWave')}</p><div class="page-actions"><button class="primary" id="playPlaylistBtn">Play</button><button class="secondary" id="renamePlaylistBtn">Rename</button><button class="danger-btn" id="deletePlaylistBtn">Delete</button></div></div></div>` +
-      (p.tracks.length ? `<div class="track-list">${p.tracks.map(trackRow).join('')}</div>` : empty('This playlist is empty'));
-    q('#playPlaylistBtn')?.addEventListener('click', () => p.tracks[0] && playTrack(p.tracks[0], p.tracks));
-    q('#renamePlaylistBtn')?.addEventListener('click', () => renamePlaylistDialog(p));
-    q('#deletePlaylistBtn')?.addEventListener('click', async () => {
-      if (confirm(`Delete "${p.title}"?`)) { await api.library.deletePlaylist(p.id); navigate('playlists'); }
-    });
+    const p=id==='__liked__'?{id,title:'Liked songs',tracks:S.local.liked,source:'LastWave'}:S.local.playlists.find(x=>String(x.id)===String(id));
+    if(!p)return navigate('playlists');
+    const cover=p.tracks?.[0]?.artworkUrl||'';
+    p.tracks?.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">
+      ${androidHeader(p.title,`${p.tracks.length} tracks`,'')}
+      <div class="entity-hero">${img(cover,p.title)}<div><span class="eyebrow">Playlist</span><h1>${escapeHtml(p.title)}</h1><p>${p.tracks.length} tracks · ${escapeHtml(p.source||'LastWave')}</p><div class="page-actions"><button class="primary" id="playPlaylistBtn">▶ Play</button>${id!=='__liked__'?'<button class="secondary" id="renamePlaylistBtn">Rename</button><button class="danger-btn" id="deletePlaylistBtn">Delete</button>':''}</div></div></div>
+      ${p.tracks.length?`<div class="track-list">${p.tracks.map(trackRow).join('')}</div>`:empty('This playlist is empty')}
+    </div>`;
+    q('#playPlaylistBtn')?.addEventListener('click',()=>p.tracks[0]&&playTrack(p.tracks[0],p.tracks));
+    q('#renamePlaylistBtn')?.addEventListener('click',()=>renamePlaylistDialog(p));
+    q('#deletePlaylistBtn')?.addEventListener('click',async()=>{if(confirm(`Delete "${p.title}"?`)){await api.library.deletePlaylist(p.id);navigate('playlists');}});
   }
-
   async function renderDiscover() {
     page.innerHTML = pageHead('Discover','Explore new music, releases, artists and albums.') + loading('Exploring YouTube Music');
     try {
