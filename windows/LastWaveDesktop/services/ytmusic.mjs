@@ -341,20 +341,59 @@ export class YouTubeMusicService {
     const cached = this.streamCache.get(videoId);
     if (cached && cached.expires > Date.now() + 60_000) return cached;
     const yt = await this.init(this.cookie);
-    const info = await yt.getBasicInfo(videoId, { client: 'YTMUSIC' });
-    let format = info.chooseFormat({ type: 'audio', quality: 'best' });
-    if (!format) format = info.chooseFormat({ type: 'audio' });
-    if (!format) throw new Error('No playable audio stream was returned.');
-    const url = await format.decipher(yt.session.player);
-    const entry = {
-      url,
-      mimeType: format.mime_type || format.mimeType || 'audio/webm',
-      bitrate: format.bitrate || 0,
-      contentLength: format.content_length || format.contentLength || null,
-      expires: Date.now() + 4 * 60 * 60 * 1000
-    };
-    this.streamCache.set(videoId, entry);
-    return entry;
+
+    // YouTube does not expose streaming_data uniformly to every client
+    // profile. Try music-native profiles first, then bounded fallbacks used by
+    // official TV/Android clients. This mirrors the Android app's philosophy:
+    // one rejected extractor must never make the track globally unplayable.
+    const clients = this.cookie
+      ? ['YTMUSIC', 'YTMUSIC_ANDROID', 'ANDROID', 'TV_EMBEDDED', 'WEB']
+      : ['TV_EMBEDDED', 'ANDROID', 'YTMUSIC_ANDROID', 'YTMUSIC', 'WEB'];
+    const failures = [];
+
+    for (const client of clients) {
+      try {
+        const info = await yt.getBasicInfo(videoId, { client });
+        let format;
+        try {
+          format = info.chooseFormat({ type: 'audio', quality: 'best' });
+        } catch {
+          format = info.streaming_data?.adaptive_formats
+            ?.filter(x => String(x.mime_type || x.mimeType || '').startsWith('audio/'))
+            ?.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+        }
+        if (!format) {
+          failures.push(`${client}: no audio format`);
+          continue;
+        }
+
+        const url = typeof format.decipher === 'function'
+          ? await format.decipher(yt.session.player)
+          : format.url;
+        if (!url || !String(url).startsWith('http')) {
+          failures.push(`${client}: no direct URL`);
+          continue;
+        }
+
+        const entry = {
+          url,
+          mimeType: format.mime_type || format.mimeType || 'audio/webm',
+          bitrate: format.bitrate || 0,
+          contentLength: format.content_length || format.contentLength || null,
+          clientProfile: client,
+          expires: Date.now() + 4 * 60 * 60 * 1000
+        };
+        this.streamCache.set(videoId, entry);
+        return entry;
+      } catch (error) {
+        failures.push(`${client}: ${error?.message || error?.constructor?.name || 'failed'}`);
+      }
+    }
+
+    throw new Error(
+      'No playable YouTube Music audio stream was returned. ' +
+      failures.slice(0, 5).join(' | ')
+    );
   }
 
   async youtubeLyrics(videoId) {
