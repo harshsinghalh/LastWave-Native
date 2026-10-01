@@ -11,6 +11,7 @@ assert.match(html, /android-search-parity\.css/);
 assert.match(html, /android-player-parity\.css/);
 assert.match(html, /android-stats-parity\.css/);
 assert.match(html, /android-playlists-parity\.css/);
+assert.match(html, /android-generator-parity\.css/);
 
 for (const route of ['feed','stats','playlists','generator']) {
   assert.match(html, new RegExp('data-route="' + route + '"'));
@@ -34,6 +35,10 @@ assert.match(js, /android-stats-list/);
 assert.match(js, /androidPlaylistRow/);
 assert.match(js, /android-playlist-group/);
 assert.match(js, /playlistSortDialog/);
+assert.match(js, /Top Tracks/);
+assert.match(js, /Never Heard/);
+assert.match(js, /Song Radio/);
+assert.match(js, /android-generator-group/);
 assert.match(js, /android-quick-surface/);
 assert.match(js, /async function renderSearch/);
 assert.match(js, /android-feed-hero/);
