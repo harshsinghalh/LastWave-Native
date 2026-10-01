@@ -63,6 +63,18 @@ jobs:
             fi
           done
 
+      - name: Set up Python for Laya personalizer
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate Personal DJ profile with Laya
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "laya==0.3.4" || echo "::warning::Laya install failed; using pinned safe fallback profile."
+          python tools/generate_laya_profile.py --use-laya --emit-cpp app/src/main/cpp/GeneratedPersonalDjProfile.h
+          cat personalization/generated_profile.json
+
       - name: Run unit tests (audio pipeline + regression)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
@@ -119,6 +131,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
           echo "Building APKs for LastWave v$VERSION"
+          cp personalization/generated_profile.json final_apk/Personal-DJ-profile.json
           # Compressed release (Android 10+, R8 + ProGuard + shrinkResources)
           if [ -f "app/build/outputs/apk/release/app-release-signed.apk" ]; then
             cp app/build/outputs/apk/release/app-release-signed.apk final_apk/LastWave-v${VERSION}-release.apk
@@ -211,11 +224,11 @@ jobs:
           git push --force origin "refs/tags/$TAG"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" \
-              --title "LastWave v${VERSION} - DJ Energy 7 dB" \
-              --notes "DJ Energy keeps its -2 dB to +5 dB (7 dB) operating window and adds concert-style predictive drop shaping: a short pre-drop dip before detected vocal/instrumental energy surges, then a fast +5 dB impact spike at the hit. Includes limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
+              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
           else
             gh release create "$TAG" \
-              --title "LastWave v${VERSION} - DJ Energy 7 dB" \
-              --notes "DJ Energy keeps its -2 dB to +5 dB (7 dB) operating window and adds concert-style predictive drop shaping: a short pre-drop dip before detected vocal/instrumental energy surges, then a fast +5 dB impact spike at the hit. Includes limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
+              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
           fi
           gh release upload "$TAG" final_apk/* --clobber
