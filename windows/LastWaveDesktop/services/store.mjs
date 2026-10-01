@@ -176,6 +176,28 @@ export class JsonStore {
     return clone(this.state.friends);
   }
 
+  excludeTrack(track) {
+    const id = track?.videoId;
+    if (!id) return false;
+    if (!this.state.excluded.some(x => x.videoId === id)) {
+      this.state.excluded.unshift({ ...track, excludedAt: Date.now() });
+      this.state.excluded = this.state.excluded.slice(0, 5000);
+      this.save();
+    }
+    return true;
+  }
+
+  restoreExcluded(videoId) {
+    const before = this.state.excluded.length;
+    this.state.excluded = this.state.excluded.filter(x => x.videoId !== videoId);
+    if (this.state.excluded.length !== before) this.save();
+    return this.state.excluded.length !== before;
+  }
+
+  isExcluded(videoId) {
+    return this.state.excluded.some(x => x.videoId === videoId);
+  }
+
   addDownload(entry) {
     this.state.downloads = [
       { ...entry, savedAt: Date.now() },
