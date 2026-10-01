@@ -1,4 +1,5 @@
 #include "DspProcessor.h"
+#include "GeneratedPersonalDjProfile.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,15 +32,15 @@ constexpr float kClarityMakeupGain = 1.04F;
 constexpr float kClarityStereoWidth = 1.22F;
 constexpr float kAirExciterAmount = 0.18F;
 constexpr std::int32_t kDjControlIntervalFrames = 256;
-constexpr float kDjMaxBoostDb = 5.0F;
-constexpr float kDjMaxVocalDuckDb = 2.0F;
-constexpr float kDjPreDropDb = -2.0F;
-constexpr float kDjImpactDb = 5.0F;
-constexpr double kDjLookAheadSeconds = 0.080;
-constexpr double kDjImpactHoldSeconds = 0.070;
-constexpr double kDjImpactCooldownSeconds = 0.420;
-constexpr float kDjStrongSurgeDb = 4.5F;
-constexpr float kDjLoudSurgeDb = 2.5F;
+constexpr float kDjMaxBoostDb = personal_dj::kMaximumDb;
+constexpr float kDjMaxVocalDuckDb = -personal_dj::kMinimumDb;
+constexpr float kDjPreDropDb = personal_dj::kPreDropDb;
+constexpr float kDjImpactDb = personal_dj::kImpactDb;
+constexpr double kDjLookAheadSeconds = personal_dj::kLookAheadSeconds;
+constexpr double kDjImpactHoldSeconds = personal_dj::kImpactHoldSeconds;
+constexpr double kDjImpactCooldownSeconds = personal_dj::kCooldownSeconds;
+constexpr float kDjStrongSurgeDb = personal_dj::kStrongSurgeDb;
+constexpr float kDjLoudSurgeDb = personal_dj::kLoudSurgeDb;
 // Studio Master Clarity design gains (dB). Single source for configure()
 // and trim rebuilds; per-stage trims add to these values.
 constexpr double kClarityBassGainDb = 3.2;
@@ -170,11 +171,11 @@ void DspProcessor::configure(double sampleRate) noexcept {
     // Performance-envelope timings: a noticeable pre-drop ramp, near-instant
     // impact lift, then a musical release back to the normal DJ rider.
     djPreDuckSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * 0.022)));
+        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kPreDuckSeconds)));
     djImpactAttackSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * 0.006)));
+        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactAttackSeconds)));
     djImpactReleaseSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * 0.180)));
+        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactReleaseSeconds)));
     dcBlockerR_ = static_cast<float>(
         std::exp(-2.0 * kPi * 10.0 / sampleRate_));
     microFadeFrameCount_ = std::max(
@@ -630,7 +631,7 @@ void DspProcessor::process(
                 float targetDb = instrumental * (0.75F + 4.25F * energy) -
                     vocalProbability * kDjMaxVocalDuckDb;
                 if (rmsDb < -52.0F) targetDb = 0.0F;
-                targetDb = std::clamp(targetDb, -2.0F, kDjMaxBoostDb);
+                targetDb = std::clamp(targetDb, personal_dj::kMinimumDb, kDjMaxBoostDb);
                 djTargetGain_ = std::pow(10.0F, targetDb / 20.0F);
 
                 // Short in-buffer look-ahead: inspect untouched decoded PCM
