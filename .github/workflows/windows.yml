@@ -60,14 +60,20 @@ jobs:
       - name: Syntax checks
         shell: pwsh
         run: |
-          node --check main.mjs
-          node --check preload.mjs
-          node --check services/store.mjs
-          node --check services/ytmusic.mjs
-          node --check services/lastfm.mjs
-          node --check renderer/app.js
-          node --check tests/smoke.mjs
-          node --check tests/network-smoke.mjs
+          $files = @(
+            'main.mjs',
+            'preload.mjs',
+            'services/store.mjs',
+            'services/ytmusic.mjs',
+            'services/lastfm.mjs',
+            'renderer/app.js',
+            'tests/smoke.mjs',
+            'tests/network-smoke.mjs'
+          )
+          foreach ($file in $files) {
+            node --check $file
+            if ($LASTEXITCODE -ne 0) { throw "Syntax check failed: $file" }
+          }
 
       - name: Run full desktop smoke tests
         run: npm run test:smoke
