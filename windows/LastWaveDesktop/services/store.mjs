@@ -84,6 +84,12 @@ export class JsonStore {
     this.save();
   }
 
+  clearSearchHistory() {
+    this.state.searchHistory = [];
+    this.save();
+    return [];
+  }
+
   toggleLike(track) {
     const id = track?.videoId;
     if (!id) return false;
