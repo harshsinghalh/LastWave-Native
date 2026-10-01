@@ -200,6 +200,11 @@ jobs:
         run: |
           VERSION="${{ steps.prep_apk.outputs.version }}"
           TAG="v${VERSION}"
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$CURRENT_MAIN" != "$GITHUB_SHA" ]; then
+            echo "Skipping release publication: a newer main commit exists."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -f "$TAG" "$GITHUB_SHA"
@@ -207,10 +212,10 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" \
               --title "LastWave v${VERSION} - DJ Energy 7 dB" \
-              --notes "DJ Energy now operates from -2 dB to +5 dB (7 dB total window). Includes adaptive vocal ducking, instrumental-energy lift, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+              --notes "DJ Energy keeps its -2 dB to +5 dB (7 dB) operating window and adds concert-style predictive drop shaping: a short pre-drop dip before detected vocal/instrumental energy surges, then a fast +5 dB impact spike at the hit. Includes limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           else
             gh release create "$TAG" \
               --title "LastWave v${VERSION} - DJ Energy 7 dB" \
-              --notes "DJ Energy now operates from -2 dB to +5 dB (7 dB total window). Includes adaptive vocal ducking, instrumental-energy lift, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
+              --notes "DJ Energy keeps its -2 dB to +5 dB (7 dB) operating window and adds concert-style predictive drop shaping: a short pre-drop dip before detected vocal/instrumental energy surges, then a fast +5 dB impact spike at the hit. Includes limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           fi
           gh release upload "$TAG" final_apk/* --clobber
