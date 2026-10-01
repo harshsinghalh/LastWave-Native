@@ -149,14 +149,16 @@ export function collectEntities(root, limit = 80) {
       if (browseId.startsWith('UC') || browseId.includes('artist')) kind = 'artist';
       else if (browseId.startsWith('MPRE') || browseId.includes('release')) kind = 'album';
       else if (browseId.startsWith('VL') || browseId.startsWith('PL')) kind = 'playlist';
-      seen.add(browseId);
-      out.push({
-        browseId,
-        title,
-        subtitle: artistOf(node) || textOf(node?.subtitle),
-        artworkUrl: thumbnailOf(node),
-        kind
-      });
+      if (kind !== 'collection') {
+        seen.add(browseId);
+        out.push({
+          browseId,
+          title,
+          subtitle: artistOf(node) || textOf(node?.subtitle),
+          artworkUrl: thumbnailOf(node),
+          kind
+        });
+      }
     }
 
     for (const key of Object.keys(node)) {
