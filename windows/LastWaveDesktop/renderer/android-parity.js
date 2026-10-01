@@ -483,7 +483,7 @@
     S.isFullPlayer=true;S.fullTab=tab||'now';$('#fullPlayer').classList.remove('hidden');
     $('#nowPlayingTab').classList.toggle('active',S.fullTab==='now');$('#lyricsTab').classList.toggle('active',S.fullTab==='lyrics');$('#queueTab').classList.toggle('active',S.fullTab==='queue');
     $('#playerHeaderLabel').textContent=S.fullTab==='lyrics'?'LYRICS':S.fullTab==='queue'?'PLAYING QUEUE':'NOW PLAYING';
-    if(S.fullTab==='lyrics'){if(!S.lyrics)showLyrics();else renderLyricsFull()}if(S.fullTab==='queue')renderQueueFull();
+    if(S.fullTab==='lyrics'){if(S.lyrics)renderLyricsFull();else $('#lyricsFullscreen').innerHTML=loading()}if(S.fullTab==='queue')renderQueueFull();
   }
   function hideFullPlayer(){S.isFullPlayer=false;S.fullTab='now';$('#fullPlayer').classList.add('hidden')}
   async function playTrack(t,queue){
