@@ -67,6 +67,7 @@ jobs:
             'services/ytmusic.mjs',
             'services/lastfm.mjs',
             'services/browserstream.mjs',
+            'services/potoken.mjs',
             'renderer/app.js',
             'tests/smoke.mjs',
             'tests/network-smoke.mjs'
@@ -80,6 +81,8 @@ jobs:
         run: npm run test:smoke
 
       - name: Run live desktop playback smoke test
+        env:
+          LASTWAVE_NETWORK_SMOKE: '1'
         run: npx electron tests/network-smoke.mjs
 
       - name: Build Windows installer
