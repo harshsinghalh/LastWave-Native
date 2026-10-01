@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "test:smoke": "node tests/smoke.mjs",
-    "dist": "electron-builder --win nsis portable --x64"
+    "dist": "electron-builder --win nsis --x64"
   },
   "dependencies": {
     "youtubei.js": "18.1.0"
@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.lastwave.desktop",
     "productName": "LastWave",
-    "artifactName": "LastWave-${version}-${arch}.${ext}",
+    "artifactName": "LastWave-Setup-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -44,12 +44,6 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
           "arch": [
             "x64"
           ]
