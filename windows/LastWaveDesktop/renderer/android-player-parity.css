@@ -1,0 +1,79 @@
+/* PlayerHost.kt parity refinements */
+.android-player-art{
+  transition:transform .26s var(--android-ease),opacity .2s;
+  touch-action:none;
+  user-select:none;
+}
+.android-player-art.dragging{transition:none;cursor:grabbing}
+.android-player-controls{
+  grid-template-columns:58px minmax(180px,1fr) 58px!important;
+  gap:14px!important;
+}
+.android-player-controls .side{
+  width:58px!important;height:58px!important;border-radius:50%!important;
+  background:rgba(255,255,255,.14)!important;
+  color:rgba(255,255,255,.94)!important;
+  backdrop-filter:blur(18px) saturate(1.15);
+}
+.android-player-controls .main{
+  height:60px!important;border-radius:999px!important;
+  background:rgba(255,255,255,.14)!important;color:white!important;
+  backdrop-filter:blur(18px) saturate(1.15);
+  font-size:25px!important;font-weight:800!important
+}
+.android-player-extras{
+  width:100%;margin-top:14px!important;
+  display:grid!important;grid-template-columns:1fr 1.8fr 1fr!important;gap:8px!important
+}
+.android-player-extras button{height:46px!important;margin:0!important}
+.android-player-mode{
+  border:0!important;border-radius:23px!important;background:rgba(255,255,255,.12)!important;
+  color:rgba(255,255,255,.85)!important;font-size:20px!important;cursor:pointer;
+  backdrop-filter:blur(16px) saturate(1.15)
+}
+.android-player-mode.active{
+  background:color-mix(in srgb,var(--m3-primary-container) 86%,rgba(255,255,255,.12))!important;
+  color:var(--m3-on-primary-container)!important
+}
+.android-player-quality{
+  border:0!important;border-radius:24px!important;background:rgba(255,255,255,.12)!important;
+  color:white!important;display:flex!important;align-items:center!important;justify-content:center!important;
+  gap:7px!important;padding:0 12px!important;cursor:pointer;backdrop-filter:blur(16px) saturate(1.15)
+}
+.android-player-quality span{font-size:17px;line-height:1}
+.android-player-quality b{font-size:12px;line-height:16px;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.android-player-dj-chip{
+  margin-top:10px;height:38px;padding:0 14px;border:0;border-radius:999px;
+  background:rgba(255,255,255,.10);color:rgba(255,255,255,.92);
+  font-size:12px;font-weight:700;cursor:pointer;backdrop-filter:blur(14px)
+}
+.android-player-dj-chip:hover{background:rgba(255,255,255,.16)}
+.android-player-progress input{accent-color:white}
+.android-player-meta h2{
+  font-size:24px!important;line-height:32px!important;font-weight:720!important;letter-spacing:-.35px!important
+}
+.android-player-meta p{font-size:15px!important;line-height:22px!important}
+.android-player-tabs button{font-family:"Google Sans Flex","Segoe UI Variable",sans-serif!important}
+.android-player-pane .queue-row{min-height:70px}
+.android-player-pane .queue-row strong{font-size:15px;line-height:20px}
+.android-player-pane .queue-row span{font-size:12px;line-height:17px}
+.android-player-pane.lyrics{scroll-behavior:smooth}
+.android-player-pane .lyric-line{transition:color .2s,transform .24s var(--android-ease),opacity .2s}
+.android-player-pane .lyric-line.active{transform:translateX(4px) scale(1.01);transform-origin:left center}
+
+@media(max-width:599px){
+  .android-player-content{padding:12px 16px 20px!important}
+  .android-player-tabs button{padding:0 11px!important;font-size:11px!important}
+  .android-player-art{width:min(48vh,86vw)!important;border-radius:28px!important}
+  .android-player-meta{margin-top:16px!important}
+  .android-player-meta h2{font-size:21px!important;line-height:27px!important}
+  .android-player-controls{grid-template-columns:52px minmax(150px,1fr) 52px!important;gap:10px!important}
+  .android-player-controls .side{width:52px!important;height:52px!important}
+  .android-player-controls .main{height:56px!important}
+  .android-player-extras{gap:6px!important}
+  .android-player-extras button{height:42px!important}
+}
+@media(min-width:840px){
+  .android-player-art{width:min(47vh,420px,46vw)!important}
+  .android-now-playing{width:min(100%,600px)!important}
+}
