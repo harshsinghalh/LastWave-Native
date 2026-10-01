@@ -107,6 +107,18 @@ export class BrowserStreamResolver {
           }
         });
         win.webContents.setAudioMuted(true);
+        win.webContents.setUserAgent(
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+        );
+        win.webContents.on('did-finish-load', () => {
+          // Autoplay can still be conservative on some Chromium builds even
+          // with the command-line policy. Explicitly ask the embedded player
+          // element to start so its signed audio request is emitted.
+          win.webContents.executeJavaScript(
+            `document.querySelector('video')?.play?.().catch?.(() => {})`
+          ).catch(() => {});
+        });
         win.webContents.on('did-fail-load', (_e, code, desc) => {
           if (code !== -3) finish(null, new Error('Hidden YouTube player failed: ' + desc));
         });
