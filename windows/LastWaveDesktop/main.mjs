@@ -541,27 +541,53 @@ function setupIpc() {
   ipcMain.handle('lastfm:love', (_e, track, loved) => lastfm.love(clean(track), Boolean(loved)));
 }
 
-app.requestSingleInstanceLock();
+const networkSmokeMode = process.argv.includes('--network-smoke');
 
-app.whenReady().then(async () => {
-  store = new JsonStore(app.getPath('userData'));
-  personalProfile = loadProfile();
-  nativeTheme.themeSource = store.state.settings.theme === 'light' ? 'light' : store.state.settings.theme === 'system' ? 'system' : 'dark';
-  youtube = new YouTubeMusicService(app.getPath('userData'));
-  await youtube.init(store.state.settings.youtubeCookie || '').catch(() => {});
-  lastfm = new LastFmService(() => store.state.settings);
-  browserStreams = new BrowserStreamResolver('persist:lastwave-youtube-login');
-  setupProtocolHandling();
-  setupIpc();
-  await startStreamProxy();
-  await createWindow();
+if (networkSmokeMode) {
+  // Run the live playback check through the exact same Electron entrypoint as
+  // the installed application. A hard watchdog guarantees CI cannot hang
+  // forever even if Chromium or YouTube leaves a session request pending.
+  const watchdog = setTimeout(() => {
+    console.error('LastWave network smoke watchdog expired.');
+    process.exit(1);
+  }, 95_000);
 
-  app.on('activate', async () => {
-    if (BrowserWindow.getAllWindows().length === 0) await createWindow();
+  app.whenReady().then(async () => {
+    try {
+      const { runNetworkSmoke } = await import('./tests/network-smoke.mjs');
+      const report = await runNetworkSmoke();
+      console.log(JSON.stringify(report, null, 2));
+      clearTimeout(watchdog);
+      process.exit(0);
+    } catch (error) {
+      console.error(error);
+      clearTimeout(watchdog);
+      process.exit(1);
+    }
   });
-});
+} else {
+  app.requestSingleInstanceLock();
 
-app.on('window-all-closed', () => {
-  if (proxyServer) proxyServer.close();
-  if (process.platform !== 'darwin') app.quit();
-});
+  app.whenReady().then(async () => {
+    store = new JsonStore(app.getPath('userData'));
+    personalProfile = loadProfile();
+    nativeTheme.themeSource = store.state.settings.theme === 'light' ? 'light' : store.state.settings.theme === 'system' ? 'system' : 'dark';
+    youtube = new YouTubeMusicService(app.getPath('userData'));
+    await youtube.init(store.state.settings.youtubeCookie || '').catch(() => {});
+    lastfm = new LastFmService(() => store.state.settings);
+    browserStreams = new BrowserStreamResolver('persist:lastwave-youtube-login');
+    setupProtocolHandling();
+    setupIpc();
+    await startStreamProxy();
+    await createWindow();
+
+    app.on('activate', async () => {
+      if (BrowserWindow.getAllWindows().length === 0) await createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (proxyServer) proxyServer.close();
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
