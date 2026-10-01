@@ -52,6 +52,7 @@ jobs:
           }
           python tools/generate_laya_profile.py --use-laya
           Copy-Item personalization/generated_profile.json windows/LastWaveDesktop/resources/generated_profile.json -Force
+          Copy-Item app/src/main/res/font/google_sans_flex.ttf windows/LastWaveDesktop/resources/google_sans_flex.ttf -Force
           Get-Content windows/LastWaveDesktop/resources/generated_profile.json
 
       - name: Install desktop dependencies
