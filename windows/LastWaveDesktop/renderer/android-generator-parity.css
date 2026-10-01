@@ -1,0 +1,20 @@
+/* GenerateScreen.kt parity */
+body[data-route="generator"] .page{width:min(100%,760px)}
+.android-generator-group{margin:16px;display:flex;flex-direction:column;gap:2px}
+.android-generator-mode{min-height:72px;border:0;padding:10px 14px;display:grid;grid-template-columns:42px minmax(0,1fr) 28px;gap:12px;align-items:center;background:var(--m3-surface-container);color:var(--m3-on-surface);text-align:left;cursor:pointer;transition:background .16s,transform .16s var(--android-ease)}
+.android-generator-mode.first{border-radius:24px 24px 7px 7px}.android-generator-mode.middle{border-radius:7px}.android-generator-mode.last{border-radius:7px 7px 24px 24px}.android-generator-mode.single{border-radius:24px}
+.android-generator-mode:hover{background:var(--m3-surface-container-high)}
+.android-generator-mode:active{transform:scale(.985)}
+.android-generator-mode.selected{background:color-mix(in srgb,var(--m3-primary-container) 58%,var(--m3-surface-container));color:var(--m3-on-primary-container)}
+.android-generator-badge{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--m3-secondary-container);color:var(--m3-on-secondary-container);font-size:18px;font-weight:750}
+.android-generator-mode.selected .android-generator-badge{background:var(--m3-primary);color:var(--m3-on-primary)}
+.android-generator-copy{min-width:0}.android-generator-copy strong,.android-generator-copy small{display:block}.android-generator-copy strong{font-size:15px;line-height:21px;font-weight:680}.android-generator-copy small{font-size:12px;line-height:17px;color:var(--m3-on-surface-variant);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.android-generator-mode>b{font-size:19px;text-align:center;color:var(--m3-primary)}
+.android-generator-options{margin:12px 16px 130px;padding:20px;border-radius:24px;background:var(--m3-surface-container-high)}
+.android-generator-option-head{display:grid;grid-template-columns:38px 1fr;gap:10px;align-items:center;margin-bottom:18px}.android-generator-option-head>span{width:36px;height:36px;border-radius:13px;display:grid;place-items:center;background:var(--m3-primary-container);color:var(--m3-on-primary-container);font-size:18px}.android-generator-option-head strong,.android-generator-option-head small{display:block}.android-generator-option-head strong{font-size:17px;line-height:23px}.android-generator-option-head small{font-size:12px;line-height:17px;color:var(--m3-on-surface-variant);margin-top:2px}
+.android-field-label{display:block;margin:14px 0 7px;font-size:13px;font-weight:680;color:var(--m3-on-surface)}
+.android-generator-input{width:100%;height:52px;border:1px solid var(--m3-outline-variant);border-radius:16px;background:transparent;color:var(--m3-on-surface);padding:0 14px;outline:0;font-size:15px}.android-generator-input:focus{border-color:var(--m3-primary);box-shadow:0 0 0 1px var(--m3-primary)}
+.android-generator-chips{display:flex;gap:8px;overflow:auto;padding:2px 0 4px;scrollbar-width:none}.android-generator-chips::-webkit-scrollbar{display:none}
+.android-track-count{margin-top:18px;padding:12px 14px;border-radius:18px;background:var(--m3-surface-container);display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:center}.android-track-count strong,.android-track-count small{display:block}.android-track-count strong{font-size:13px}.android-track-count small{font-size:11px;color:var(--m3-on-surface-variant);margin-top:2px}.android-track-count input{width:100%}
+.android-generate-button{width:100%;height:50px;margin-top:16px;border:0;border-radius:25px;background:var(--m3-primary);color:var(--m3-on-primary);font-size:15px;font-weight:750;cursor:pointer}
+.android-generated-results{margin:0 16px 130px}
+@media(max-width:599px){.android-generator-group,.android-generator-options,.android-generated-results{margin-left:10px;margin-right:10px}.android-track-count{grid-template-columns:110px 1fr}.android-generator-copy small{white-space:normal;max-height:34px}}
