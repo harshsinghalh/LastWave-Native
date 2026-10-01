@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('lastwave', {
     save: patch => invoke('lastfm:save', patch),
     authUrl: () => invoke('lastfm:auth-url'),
     user: username => invoke('lastfm:user', username),
+    searchUsers: (query, limit = 30) => invoke('lastfm:search-users', query, limit),
     recent: (username, limit = 50) => invoke('lastfm:recent', username, limit),
     top: (username, period = '7day', limit = 50) => invoke('lastfm:top', username, period, limit),
     friends: username => invoke('lastfm:friends', username),
