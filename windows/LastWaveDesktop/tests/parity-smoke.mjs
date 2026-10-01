@@ -6,6 +6,8 @@ const css = fs.readFileSync(new URL('../renderer/android-parity.css', import.met
 const js = fs.readFileSync(new URL('../renderer/app.js', import.meta.url), 'utf8');
 
 assert.match(html, /android-parity\.css/);
+assert.match(html, /android-feed-parity\.css/);
+assert.match(html, /android-search-parity\.css/);
 
 for (const route of ['feed','stats','playlists','generator']) {
   assert.match(html, new RegExp('data-route="' + route + '"'));
@@ -25,6 +27,10 @@ assert.match(js, /document\.body\.dataset\.route = route/);
 assert.match(js, /async function renderFeed/);
 assert.match(js, /class="android-quick-grid"/);
 assert.match(js, /async function renderSearch/);
+assert.match(js, /android-feed-hero/);
+assert.match(js, /androidQuickPicksColumns/);
+assert.match(js, /android-search-header/);
+assert.match(js, /api\.lastfm\.searchUsers/);
 assert.match(js, /function showFullPlayer/);
 assert.match(js, /function fullPlayerNowMarkup/);
 assert.match(js, /function fullPlayerLyricsMarkup/);
