@@ -137,7 +137,14 @@
   }
 
   function pageHead(title, subtitle='', actions='') {
-    return `<div class="page-head"><div class="page-title"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="page-actions">${actions}</div></div>`;
+    const roots = new Set(['feed','stats','playlists']);
+    const back = roots.has(S.route) ? '' : '<button class="header-back" data-android-back="1" title="Back">‹</button>';
+    const sub = subtitle ? '<p>' + escapeHtml(subtitle) + '</p>' : '';
+    return '<div class="page-head">' +
+      back +
+      '<div class="page-title"><h1>' + escapeHtml(title) + '</h1>' + sub + '</div>' +
+      '<div class="page-actions">' + actions + '</div>' +
+    '</div>';
   }
 
   function setConnection(text, kind='online') {
@@ -156,6 +163,7 @@
   function navigate(route, params = {}, push = true) {
     S.route = route;
     S.routeParams = params || {};
+    document.body.dataset.route = route;
     if (push) {
       S.history = S.history.slice(0, S.historyIndex + 1);
       S.history.push({ route, params });
@@ -189,16 +197,48 @@
   }
 
   async function renderFeed() {
-    page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Your music, now native to your Windows workflow.</h1><p>Ad-free YouTube Music catalog access, synced lyrics, smart playlists, Last.fm, downloads and your Laya-personalized DJ Energy profile.</p><button class="primary" data-route="discover">Discover music</button></div></section>${loading('Loading your music feed')}`;
+    const actions =
+      '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button>' +
+      '<button class="secondary header-circle" data-route="search" title="Search">⌕</button>' +
+      '<button class="secondary header-circle" data-route="settings" title="Settings">●</button>';
+
+    const quickTiles =
+      '<div class="android-quick-grid">' +
+        '<button class="android-quick-tile" data-route="search"><span class="android-quick-icon">⌕</span><strong>Search</strong></button>' +
+        '<button class="android-quick-tile" data-route="discover"><span class="android-quick-icon">✦</span><strong>Discover</strong></button>' +
+        '<button class="android-quick-tile" data-route="genres"><span class="android-quick-icon">◉</span><strong>Genres</strong></button>' +
+        '<button class="android-quick-tile" data-route="generator"><span class="android-quick-icon">✧</span><strong>Create mix</strong></button>' +
+        '<button class="android-quick-tile" data-route="friends"><span class="android-quick-icon">♧</span><strong>Friends</strong></button>' +
+        '<button class="android-quick-tile" data-route="downloads"><span class="android-quick-icon">⇩</span><strong>Downloads</strong></button>' +
+        '<button class="android-quick-tile" data-route="search" data-query="new music releases"><span class="android-quick-icon">◌</span><strong>New releases</strong></button>' +
+        '<button class="android-quick-tile" data-route="settings"><span class="android-quick-icon">⚙</span><strong>Settings</strong></button>' +
+      '</div>';
+
+    page.innerHTML = pageHead('Home','',actions) + quickTiles + loading('Loading your music');
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections = (S.home || []).filter(x => x?.tracks?.length);
-      page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Listen your way.</h1><p>Full music client with smart discovery, local playlists, Last.fm and predictive Personal DJ dynamics.</p><div class="page-actions"><button class="primary" data-route="discover">Discover music</button><button class="secondary" data-route="generator">Generate a mix</button></div></div></section>` +
-        (sections.length ? sections.map(s => `<section class="section"><div class="section-head"><h2>${escapeHtml(s.title || 'For you')}</h2><small>${s.tracks.length} picks</small></div><div class="card-row">${s.tracks.map(card).join('')}</div></section>`).join('') : empty('Your feed is empty','Try Search or Discover.'));
+      const sections = (S.home || []).filter(function(x){ return x && x.tracks && x.tracks.length; });
+      let html = pageHead('Home','',actions) + quickTiles;
+
+      if (sections.length) {
+        sections.forEach(function(section,index){
+          const title = escapeHtml(section.title || (index === 0 ? 'Quick picks' : 'For you'));
+          if (index === 0) {
+            html += '<section class="section"><div class="section-head"><h2>' + title + '</h2><small>' + section.tracks.length + ' picks</small></div>' +
+              '<div class="track-list">' + section.tracks.slice(0,12).map(trackRow).join('') + '</div></section>';
+          } else {
+            html += '<section class="section"><div class="section-head"><h2>' + title + '</h2></div>' +
+              '<div class="card-row">' + section.tracks.slice(0,18).map(card).join('') + '</div></section>';
+          }
+        });
+      } else {
+        html += empty('Your feed is empty','Search for a favorite or explore something new.');
+      }
+      page.innerHTML = html;
     } catch (e) {
       setConnection('Catalog unavailable','error');
-      page.innerHTML += empty('Could not load the feed', e.message);
+      page.innerHTML = pageHead('Home','',actions) + quickTiles + empty('Could not load your music', e.message || 'Try again.');
     }
   }
 
@@ -294,24 +334,49 @@
 
   async function renderSearch(query='') {
     S.activeSearchType = S.routeParams.type || 'all';
-    page.innerHTML = pageHead('Search', query ? `Results for “${query}”` : 'Find songs, artists, albums and playlists.') +
-      `<div class="search-tabs">${['all','song','album','artist','playlist'].map(t => `<button class="chip ${S.activeSearchType===t?'active':''}" data-search-type="${t}">${t==='song'?'Songs':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
-       <div id="searchBody">${query ? loading('Searching') : empty('Start typing above','Use the search box in the top bar.')}</div>`;
-    qa('[data-search-type]').forEach(btn => btn.addEventListener('click', () => {
-      navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
-    }));
-    if (!query) return;
+    page.innerHTML =
+      pageHead('Search','Find songs, artists, albums and playlists.') +
+      '<div class="android-search-wrap"><div class="android-search-field"><span>⌕</span><input id="pageSearchInput" value="' + escapeHtml(query) + '" placeholder="Search music" autocomplete="off"><button class="tiny-btn" id="pageSearchSubmit">→</button></div></div>' +
+      '<div class="search-tabs">' +
+        ['all','song','album','artist','playlist'].map(function(t){
+          const label = t === 'song' ? 'Songs' : t.charAt(0).toUpperCase() + t.slice(1);
+          return '<button class="chip ' + (S.activeSearchType===t?'active':'') + '" data-search-type="' + t + '">' + label + '</button>';
+        }).join('') +
+      '</div><div id="searchBody">' + (query ? loading('Searching') : empty('Search LastWave','Type a song, artist, album or playlist.')) + '</div>';
+
+    const input = q('#pageSearchInput');
+    const submit = function(){
+      const value = input.value.trim();
+      if (value) navigate('search',{query:value,type:S.activeSearchType},false);
+    };
+    q('#pageSearchSubmit')?.addEventListener('click',submit);
+    input?.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+    qa('[data-search-type]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
+      });
+    });
+
+    if (!query) {
+      input?.focus();
+      return;
+    }
+
     const body = q('#searchBody');
     try {
       const result = await api.youtube.search(query, S.activeSearchType);
       let html = '';
-      if (result.entities?.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
-        html += `<section class="section"><div class="section-head"><h2>Artists, albums & playlists</h2></div><div class="card-row">${result.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
+      if (result.entities && result.entities.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
+        html += '<section class="section"><div class="section-head"><h2>Top results</h2></div><div class="card-row">' +
+          result.entities.slice(0,20).map(entityCard).join('') + '</div></section>';
       }
-      if (result.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Songs</h2><small>${result.tracks.length} results</small></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
+      if (result.tracks && result.tracks.length) {
+        html += '<section class="section"><div class="section-head"><h2>Songs</h2><small>' + result.tracks.length + ' results</small></div><div class="track-list">' +
+          result.tracks.map(trackRow).join('') + '</div></section>';
+      }
       body.innerHTML = html || empty('No results found','Try a different title, artist or album.');
     } catch(e) {
-      body.innerHTML = empty('Search failed',e.message);
+      body.innerHTML = empty('Search failed',e.message || 'Please try again.');
     }
   }
 
@@ -616,7 +681,14 @@
   function updateDjUi(){const enabled=Boolean(S.local?.settings?.djEnergy);q('#djQuickToggle').classList.toggle('active',enabled);q('#djQuickToggle').textContent=enabled?'DJ Energy':'DJ Off';updateDjMeter();}
 
   function updatePlayerUi(){
-    const t=S.current;q('#playerTitle').textContent=t?.title||'Nothing playing';q('#playerArtist').textContent=t?.artist||'Choose a song to start';q('#playerArt').src=t?.artworkUrl||placeholder(t?.title||'LW');updatePlayerLike();updateDjUi();
+    const t=S.current;
+    q('#playerTitle').textContent=t?.title||'Nothing playing';
+    q('#playerArtist').textContent=t?.artist||'Choose a song to start';
+    q('#playerArt').src=t?.artworkUrl||placeholder(t?.title||'LW');
+    q('.player')?.classList.toggle('android-hidden',!t);
+    updatePlayerLike();
+    updateDjUi();
+    refreshFullPlayer();
   }
   function updatePlayerLike(){
     const liked=S.current&&S.local?.liked?.some(x=>x.videoId===S.current.videoId);q('#likeBtn').textContent=liked?'♥':'♡';q('#likeBtn').classList.toggle('active',Boolean(liked));
@@ -649,8 +721,130 @@
   async function downloadTrack(track){toast('Downloading '+track.title+'…',6000);try{const r=await api.downloads.track(track);await refreshLocal();toast('Saved '+r.name);}catch(e){toast('Download failed: '+e.message);}}
   async function showRelated(track){openRightPanel('Related',track.title,loading('Finding related music'));const list=await api.youtube.related(track.videoId).catch(()=>[]);q('#rightPanelBody').innerHTML=list.length?`<div class="track-list">${list.slice(0,30).map(trackRow).join('')}</div>`:empty('No related tracks returned');}
 
+
+  function fullPlayerRoot(){
+    return document.getElementById('androidFullPlayer');
+  }
+
+  function closeFullPlayer(){
+    const el=fullPlayerRoot();
+    if(el) el.remove();
+  }
+
+  function fullPlayerNowMarkup(){
+    const t=S.current;
+    if(!t) return '';
+    const liked=Boolean(S.local?.liked?.some(function(x){return x.videoId===t.videoId;}));
+    return '<div class="android-now-playing">' +
+      '<img class="android-player-art" src="' + escapeHtml(t.artworkUrl||placeholder(t.title)) + '" alt="">' +
+      '<div class="android-player-meta"><div><h2>' + escapeHtml(t.title||'') + '</h2><p>' + escapeHtml(t.artist||'') + '</p></div>' +
+      '<button class="android-player-heart" id="androidFullLike">' + (liked?'♥':'♡') + '</button></div>' +
+      '<div class="android-player-progress"><input id="androidFullSeek" type="range" min="0" max="1000" value="0"><div class="android-player-times"><span id="androidFullCurrent">0:00</span><span id="androidFullDuration">0:00</span></div></div>' +
+      '<div class="android-player-controls"><button class="side" id="androidFullPrev">⏮</button><button class="main" id="androidFullPlay">' + (audio.paused?'▶':'❚❚') + '</button><button class="side" id="androidFullNext">⏭</button></div>' +
+      '<div class="android-player-extras"><button id="androidFullShuffle">Shuffle</button><button id="androidFullDj">' + (S.local?.settings?.djEnergy?'DJ Energy on':'DJ Energy off') + '</button><button id="androidFullRepeat">Repeat</button></div>' +
+    '</div>';
+  }
+
+  function fullPlayerQueueMarkup(){
+    if(!S.queue.length) return '<div class="android-player-pane">' + empty('Queue is empty') + '</div>';
+    return '<div class="android-player-pane">' + S.queue.map(function(t,i){
+      cacheTrack(t);
+      return '<div class="queue-row ' + (i===S.queueIndex?'playing':'') + '" data-full-queue-index="' + i + '">' +
+        img(t.artworkUrl,t.title) + '<div><strong>' + escapeHtml(t.title) + '</strong><span>' + escapeHtml(t.artist) + '</span></div><span>' + (i===S.queueIndex?'▶':'') + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  async function fullPlayerLyricsMarkup(host){
+    host.innerHTML='<div class="android-player-pane">' + loading('Loading lyrics') + '</div>';
+    try{
+      S.lyrics=await api.lyrics.get(S.current);
+      S.parsedLyrics=parseLrc(S.lyrics.synced);
+      if(S.parsedLyrics.length){
+        host.innerHTML='<div class="android-player-pane lyrics">' + S.parsedLyrics.map(function(x,i){
+          return '<div class="lyric-line" data-full-lyric-index="' + i + '">' + escapeHtml(x.text||'♪') + '</div>';
+        }).join('') + '</div>';
+      }else if(S.lyrics?.plain){
+        host.innerHTML='<div class="android-player-pane plain-lyrics">' + escapeHtml(S.lyrics.plain) + '</div>';
+      }else{
+        host.innerHTML='<div class="android-player-pane">' + empty(S.lyrics?.instrumental?'Instrumental track':'Lyrics not found') + '</div>';
+      }
+    }catch(e){
+      host.innerHTML='<div class="android-player-pane">' + empty('Lyrics not found',e.message||'') + '</div>';
+    }
+  }
+
+  function bindFullPlayer(){
+    q('#androidFullClose')?.addEventListener('click',closeFullPlayer);
+    q('#androidFullPrev')?.addEventListener('click',prev);
+    q('#androidFullNext')?.addEventListener('click',next);
+    q('#androidFullPlay')?.addEventListener('click',async function(){ if(audio.paused) await audio.play(); else audio.pause(); refreshFullPlayer(); });
+    q('#androidFullLike')?.addEventListener('click',async function(){ if(S.current) await toggleLike(S.current); refreshFullPlayer(); });
+    q('#androidFullShuffle')?.addEventListener('click',function(){S.shuffle=!S.shuffle;toast(S.shuffle?'Shuffle on':'Shuffle off');});
+    q('#androidFullRepeat')?.addEventListener('click',function(){S.repeat=!S.repeat;toast(S.repeat?'Repeat on':'Repeat off');});
+    q('#androidFullDj')?.addEventListener('click',async function(){
+      const value=!S.local.settings.djEnergy;
+      S.local.settings=await api.settings.update({djEnergy:value});
+      updateDjUi();configureDjDelay();refreshFullPlayer();
+    });
+    q('#androidFullSeek')?.addEventListener('input',function(e){if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
+    qa('[data-full-queue-index]').forEach(function(el){el.addEventListener('click',function(){playIndex(Number(el.dataset.fullQueueIndex));});});
+    qa('[data-full-lyric-index]').forEach(function(el){el.addEventListener('click',function(){const row=S.parsedLyrics[Number(el.dataset.fullLyricIndex)];if(row)audio.currentTime=row.time+(djLookahead()/1000);});});
+    qa('[data-full-tab]').forEach(function(btn){btn.addEventListener('click',function(){showFullPlayer(btn.dataset.fullTab);});});
+  }
+
+  async function showFullPlayer(tab){
+    if(!S.current) return;
+    tab=tab||'now';
+    closeFullPlayer();
+    const root=document.createElement('div');
+    root.id='androidFullPlayer';
+    root.className='android-full-player';
+    const art=escapeHtml(S.current.artworkUrl||placeholder(S.current.title));
+    root.innerHTML=
+      '<div class="android-player-bg" style="background-image:url(&quot;' + art + '&quot;)"></div><div class="android-player-scrim"></div>' +
+      '<div class="android-player-content"><div class="android-player-top"><button id="androidFullClose">⌄</button>' +
+      '<div class="android-player-tabs"><button data-full-tab="now" class="' + (tab==='now'?'active':'') + '">Now Playing</button><button data-full-tab="lyrics" class="' + (tab==='lyrics'?'active':'') + '">Lyrics</button><button data-full-tab="queue" class="' + (tab==='queue'?'active':'') + '">Queue</button></div>' +
+      '<span></span></div><div id="androidFullBody" class="android-player-body"></div></div>';
+    document.body.appendChild(root);
+    const host=q('#androidFullBody');
+    if(tab==='now') host.innerHTML=fullPlayerNowMarkup();
+    else if(tab==='queue') host.innerHTML=fullPlayerQueueMarkup();
+    else await fullPlayerLyricsMarkup(host);
+    bindFullPlayer();
+    updateFullPlayerProgress();
+  }
+
+  function refreshFullPlayer(){
+    const root=fullPlayerRoot();
+    if(!root||!S.current)return;
+    const active=root.querySelector('[data-full-tab].active')?.dataset.fullTab||'now';
+    if(active==='now'){
+      const host=q('#androidFullBody');
+      if(host)host.innerHTML=fullPlayerNowMarkup();
+      bindFullPlayer();
+      updateFullPlayerProgress();
+    }
+  }
+
+  function updateFullPlayerProgress(){
+    const seek=q('#androidFullSeek');
+    if(seek&&Number.isFinite(audio.duration)&&audio.duration>0){
+      seek.value=String(Math.floor(audio.currentTime/audio.duration*1000));
+      const c=q('#androidFullCurrent'),d=q('#androidFullDuration');
+      if(c)c.textContent=fmtTime(audio.currentTime);if(d)d.textContent=fmtTime(audio.duration);
+    }
+    const play=q('#androidFullPlay');if(play)play.textContent=audio.paused?'▶':'❚❚';
+    if(S.parsedLyrics.length&&fullPlayerRoot()){
+      const t=Math.max(0,audio.currentTime-djLookahead()/1000);
+      let idx=-1;for(let i=0;i<S.parsedLyrics.length;i++){if(S.parsedLyrics[i].time<=t)idx=i;else break;}
+      qa('#androidFullPlayer .lyric-line').forEach(function(el,i){el.classList.toggle('active',i===idx);});
+      const active=q('#androidFullPlayer .lyric-line.active');if(active)active.scrollIntoView({block:'center',behavior:'smooth'});
+    }
+  }
+
   document.addEventListener('click',e=>{
-    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route);return;}
+    const back=e.target.closest('[data-android-back]');if(back){if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;document.body.dataset.route=S.route;renderRoute();}return;}
+    const route=e.target.closest('[data-route]');if(route){const params=route.dataset.query?{query:route.dataset.query}:{};navigate(route.dataset.route,params);return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
     const like=e.target.closest('[data-like]');if(like){e.stopPropagation();const t=findTrack(like.dataset.like);if(t)toggleLike(t);return;}
@@ -665,8 +859,8 @@
     q('#backBtn').addEventListener('click',()=>{if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     q('#forwardBtn').addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     const input=q('#globalSearchInput');let timer;
-    input.addEventListener('input',()=>{clearTimeout(timer);const q=input.value.trim();if(!q){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const s=await api.youtube.suggestions(q).catch(()=>[]);const host=q('#suggestions');host.innerHTML=s.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!s.length);},220);});
-    input.addEventListener('keydown',e=>{if(e.key==='Enter'){const q=input.value.trim();if(q){q('#suggestions').classList.add('hidden');navigate('search',{query:q});}}});
+    input.addEventListener('input',()=>{clearTimeout(timer);const query=input.value.trim();if(!query){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const suggestions=await api.youtube.suggestions(query).catch(()=>[]);const host=q('#suggestions');host.innerHTML=suggestions.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!s.length);},220);});
+    input.addEventListener('keydown',e=>{if(e.key==='Enter'){const query=input.value.trim();if(query){q('#suggestions').classList.add('hidden');navigate('search',{query:query});}}});
     q('#suggestions').addEventListener('click',e=>{const s=e.target.closest('[data-suggest]');if(s){input.value=s.dataset.suggest;q('#suggestions').classList.add('hidden');navigate('search',{query:s.dataset.suggest});}});
   }
 
@@ -678,6 +872,7 @@
     q('#volume').addEventListener('input',e=>{S.volume=Number(e.target.value)/100;audio.volume=S.volume;});
     q('#seek').addEventListener('input',e=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
     q('#likeBtn').addEventListener('click',()=>S.current&&toggleLike(S.current));
+    q('#nowPlayingCard').addEventListener('click',e=>{if(!e.target.closest('#likeBtn')&&S.current)showFullPlayer('now');});
     q('#lyricsBtn').addEventListener('click',showLyrics);q('#queueBtn').addEventListener('click',showQueue);q('#closeRightPanel').addEventListener('click',closeRightPanel);
     q('#djQuickToggle').addEventListener('click',async()=>{const value=!S.local.settings.djEnergy;S.local.settings=await api.settings.update({djEnergy:value});updateDjUi();configureDjDelay();});
     audio.volume=S.volume;
@@ -687,6 +882,7 @@
     audio.addEventListener('timeupdate',async()=>{
       if(Number.isFinite(audio.duration)&&audio.duration>0){q('#seek').value=String(Math.floor(audio.currentTime/audio.duration*1000));q('#currentTime').textContent=fmtTime(audio.currentTime);q('#duration').textContent=fmtTime(audio.duration);}
       syncLyrics();
+      updateFullPlayerProgress();
       if(S.current&&audio.currentTime>5&&S.playedHistoryFor!==S.current.videoId){S.playedHistoryFor=S.current.videoId;api.history.add(S.current,audio.currentTime).catch(()=>{});}
       const threshold=Math.min(240,Math.max(30,(audio.duration||180)*.5));
       if(S.current&&audio.currentTime>=threshold&&S.scrobbledFor!==S.current.videoId){S.scrobbledFor=S.current.videoId;api.lastfm.scrobble(S.current,Math.floor(Date.now()/1000-audio.currentTime)).catch(()=>{});}
