@@ -221,6 +221,18 @@ private:
     float djRelease_{0.0001F};
     float djGain_{1.0F};
     float djTargetGain_{1.0F};
+
+    // Concert-style impact shaper. The processor scans a short amount of
+    // decoded PCM ahead inside each Media3 buffer, dips just before a strong
+    // energy surge, then snaps to the +5 dB ceiling at the detected impact.
+    // No heap allocation or future blocking occurs on the audio thread.
+    float djPerformanceDb_{0.0F};
+    float djPreDuckSmoothing_{0.01F};
+    float djImpactAttackSmoothing_{0.05F};
+    float djImpactReleaseSmoothing_{0.001F};
+    std::int32_t djImpactCountdown_{-1};
+    std::int32_t djImpactHoldFrames_{0};
+    std::int32_t djImpactCooldownFrames_{0};
     std::int32_t djControlCountdown_{0};
     Biquad subBassHighPass_{};
     Biquad bassFoundation_{};
