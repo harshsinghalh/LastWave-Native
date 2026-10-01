@@ -10,7 +10,9 @@
     "dist": "electron-builder --win nsis --x64"
   },
   "dependencies": {
-    "youtubei.js": "18.1.0"
+    "youtubei.js": "18.1.0",
+    "bgutils-js": "4.0.3",
+    "jsdom": "30.1.1"
   },
   "devDependencies": {
     "electron": "44.4.5",
