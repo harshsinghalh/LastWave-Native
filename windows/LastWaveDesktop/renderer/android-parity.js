@@ -66,7 +66,7 @@
   }
   function art(url,label,cls) {
     var src=url||placeholder(label);
-    return '<img class="'+(cls||'')+'" src="'+esc(src)+'" alt="'+esc(label||'')+'" onerror="this.onerror=null;this.src=''+placeholder(label).replace(/'/g,'%27')+''">';
+    return '<img class="'+(cls||'')+'" src="'+esc(src)+'" alt="'+esc(label||'')+'">';
   }
   function cacheTrack(t){if(t&&t.videoId)S.trackCache.set(t.videoId,t);return t}
   function findTrack(id){
