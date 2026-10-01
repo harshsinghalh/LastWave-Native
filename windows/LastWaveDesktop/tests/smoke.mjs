@@ -83,7 +83,7 @@ assert.ok(css.includes('.quick-picks-grid') && css.includes('grid-template-rows:
 
 assert.ok(renderer.includes("['feed','stats','playlists']"), 'only the Android three root tabs may persist');
 assert.ok(renderer.includes('function openFullPlayer') && renderer.includes('function closeFullPlayer'));
-assert.ok(renderer.includes("S.playerTab==='lyrics'"), 'lyrics full-player state is required');
+assert.ok(renderer.includes("function showLyrics") && renderer.includes("S.playerTab!=='lyrics'"), 'lyrics full-player state is required');
 assert.ok(renderer.includes("route !== 'playlists'"), 'Generator FAB must be scoped to Playlists');
 
 console.log('LastWave full desktop smoke tests passed.');
