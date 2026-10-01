@@ -544,6 +544,10 @@ function setupIpc() {
 const networkSmokeMode = process.argv.includes('--network-smoke');
 
 if (networkSmokeMode) {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('no-sandbox');
   // Run the live playback check through the exact same Electron entrypoint as
   // the installed application. A hard watchdog guarantees CI cannot hang
   // forever even if Chromium or YouTube leaves a session request pending.
