@@ -8,6 +8,7 @@ const js = fs.readFileSync(new URL('../renderer/app.js', import.meta.url), 'utf8
 assert.match(html, /android-parity\.css/);
 assert.match(html, /android-feed-parity\.css/);
 assert.match(html, /android-search-parity\.css/);
+assert.match(html, /android-player-parity\.css/);
 
 for (const route of ['feed','stats','playlists','generator']) {
   assert.match(html, new RegExp('data-route="' + route + '"'));
@@ -32,6 +33,9 @@ assert.match(js, /androidQuickPicksColumns/);
 assert.match(js, /android-search-header/);
 assert.match(js, /api\.lastfm\.searchUsers/);
 assert.match(js, /function showFullPlayer/);
+assert.match(js, /dblclick/);
+assert.match(js, /Math\.abs\(dx\)>88/);
+assert.match(js, /androidFullQuality/);
 assert.match(js, /function fullPlayerNowMarkup/);
 assert.match(js, /function fullPlayerLyricsMarkup/);
 assert.match(js, /function fullPlayerQueueMarkup/);
