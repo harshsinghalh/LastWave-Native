@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('lastwave', {
 
   library: {
     toggleLike: track => invoke('library:toggle-like', track),
+    toggleExcluded: track => invoke('library:toggle-excluded', track),
+    clearExcluded: () => invoke('library:clear-excluded'),
     createPlaylist: name => invoke('library:create-playlist', name),
     renamePlaylist: (id, title) => invoke('library:rename-playlist', id, title),
     deletePlaylist: id => invoke('library:delete-playlist', id),
