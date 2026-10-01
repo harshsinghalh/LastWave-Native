@@ -203,6 +203,14 @@
       case 'friends': return renderFriends();
       case 'downloads': return renderDownloads();
       case 'settings': return renderSettings();
+      case 'provider-modules': return renderProviderModules();
+      case 'home-sections': return renderHomeSections();
+      case 'excluded-songs': return renderExcludedSongs();
+      case 'youtube-import': return renderImportScreen('YouTube Music Import','Paste a YouTube Music playlist URL','youtube');
+      case 'external-import': return renderImportScreen('Import Playlist','Paste a YouTube Music, Spotify or Apple Music playlist URL','external');
+      case 'youtube-login': return renderYouTubeLogin();
+      case 'new-releases': return renderNewReleases();
+      case 'friend-profile': return renderFriendProfile(S.routeParams.username);
       case 'entity': return renderEntity(S.routeParams.kind, S.routeParams.id, S.routeParams.title);
       case 'playlist-detail': return renderLocalPlaylist(S.routeParams.id);
       default: return renderFeed();
@@ -454,6 +462,7 @@
     }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead('Friends')}${empty('Could not load Last.fm friends',e.message)}</div>`;}
   }
   async function showFriendProfile(username) {
+    navigate('friend-profile',{username});return;
     openRightPanel(username,'Last.fm profile',loading('Loading profile'));
     try {
       const [user,recent,top]=await Promise.all([api.lastfm.user(username),api.lastfm.recent(username,20),api.lastfm.top(username,'7day',10)]);
@@ -470,66 +479,147 @@
   }
   async function renderSettings() {
     await refreshLocal();
-    const s=S.local.settings, lf=s.lastfm||{};
-    page.innerHTML=`<div class="android-content settings">${pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.',headerAction('⌕','Search settings',''))}<div class="screen-body">` +
-      `<div class="setting-group"><h2>Audio & Playback</h2><div class="setting-card">
-        ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',s.djEnergy)}
-        ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',s.loudnessNormalization)}
+    const settings=S.local.settings, lf=settings.lastfm||{}, tab=S.routeParams.tab||'';
+    const categoryRows=[
+      ['audio','▥','Audio & Playback','Streaming quality, Audio engine, Equalizer, Output & Loudness'],
+      ['appearance','◐','Appearance & Visuals','Themes, Accent colors, Fluid artwork, Canvas, Lyrics'],
+      ['youtube','☁','YouTube & Sync','Account connection, Library sync, Channels, History'],
+      ['lastfm','◉','Last.fm','Account connection, Scrobbling sync & API credentials'],
+      ['library','≡','Library & Content','Home layout, Playlist imports, Downloads, Exclusions'],
+      ['data','⇅','Data & Storage','Backup & Restore, Cache, history and reset'],
+      ['about','✦','About & System','App version, Community, Diagnostics, Source code']
+    ];
+    if(!tab){
+      page.innerHTML=`<div class="android-content settings">
+        ${pageHead('Settings','',headerAction('⌕','Search settings','', 'settingsSearchToggle'))}
+        <div class="screen-body">
+          <div id="settingsSearchWrap" class="field hidden" style="margin-bottom:12px"><input id="settingsSearchInput" placeholder="Search settings…"></div>
+          <div class="settings-category-list">${categoryRows.map((r,i)=>`<button class="settings-category-row" data-settings-tab="${r[0]}"><span class="settings-category-icon tone-${i%3}">${r[1]}</span><span><strong>${r[2]}</strong><small>${r[3]}</small></span><i>›</i></button>`).join('')}</div>
+        </div></div>`;
+      q('#settingsSearchToggle')?.addEventListener('click',()=>{q('#settingsSearchWrap').classList.toggle('hidden');q('#settingsSearchInput')?.focus();});
+      q('#settingsSearchInput')?.addEventListener('input',e=>{const term=e.target.value.trim().toLowerCase();qa('.settings-category-row').forEach(row=>row.classList.toggle('hidden',term&&!row.textContent.toLowerCase().includes(term)));});
+      return;
+    }
+
+    const names={audio:'Audio & Playback',appearance:'Appearance & Visuals',youtube:'YouTube & Sync',lastfm:'Last.fm',library:'Library & Content',data:'Data & Storage',about:'About & System'};
+    let body='';
+    if(tab==='audio'){
+      body=`<div class="setting-group"><h2>Audio</h2><div class="setting-card">
+        ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',settings.djEnergy)}
+        ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',settings.loudnessNormalization)}
+        <div class="setting-row"><div class="setting-copy"><strong>Streaming Quality</strong><span>YouTube Music audio stream preference</span></div><select id="qualitySetting"><option value="best">Best</option><option value="balanced">Balanced</option><option value="data-saver">Data Saver</option></select></div>
         <div class="setting-row"><div class="setting-copy"><strong>Crossfade</strong><span>Fade between tracks</span></div><select id="crossfadeSetting"><option value="0">Off</option><option value="2">2 seconds</option><option value="4">4 seconds</option><option value="6">6 seconds</option></select></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Audio quality</strong><span>Preferred YouTube Music stream quality</span></div><select id="qualitySetting"><option value="best">Best</option><option value="balanced">Balanced</option><option value="data-saver">Data saver</option></select></div>
       </div></div>
-      <div class="setting-group"><h2>Appearance</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Choose dark, light or system</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Accent</strong><span>LastWave highlight color</span></div><input type="color" id="accentSetting" value="${escapeHtml(s.accent||'#c6f100')}"></div>
-      </div></div>
-      <div class="setting-group"><h2>Downloads & Library</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(s.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Import playlist</strong><span>YouTube playlist URL or local CSV/JSON/M3U</span></div><button class="secondary" id="settingsImportBtn">Import</button></div>
-      </div></div>
-      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${s.youtubeCookie ? 'Authenticated session saved' : 'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
-        <div class="field"><label>Advanced: authenticated cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string if browser sign-in is unavailable.">${escapeHtml(s.youtubeCookie||'')}</textarea></div>
-        <div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save manual connection</button></div>
-      </div></div>
-      <div class="setting-group"><h2>Last.fm Integration</h2><div class="setting-card"><div class="form-grid">
+      <div class="setting-group"><h2>Output & Loudness</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Equalizer</strong><span>Desktop WebAudio equalizer is preserved as a platform-adapted control surface</span></div><button class="secondary" id="eqInfoBtn">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Personal DJ profile</strong><span>${escapeHtml(S.profile?.source||'Laya')}</span></div><span class="mini-note">−2 → +5 dB</span></div>
+      </div></div>`;
+    } else if(tab==='appearance'){
+      body=`<div class="setting-group"><h2>Theme</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Dark, Light or System</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Accent Color</strong><span>Material 3 expressive primary color</span></div><input type="color" id="accentSetting" value="${escapeHtml(settings.accent||'#c9f45b')}"></div>
+        ${settingToggle('Liquid Glass','Use translucent floating chrome when supported','liquidGlass',settings.liquidGlass!==false)}
+      </div></div>`;
+    } else if(tab==='youtube'){
+      body=`<div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${settings.youtubeCookie?'Authenticated session saved':'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
+        <div class="setting-row" data-route="youtube-import"><div class="setting-copy"><strong>Import YouTube playlist</strong><span>Match a playlist into LastWave</span></div><span>›</span></div>
+        <div class="field" style="padding:14px 16px"><label>Advanced cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string">${escapeHtml(settings.youtubeCookie||'')}</textarea><button class="secondary" id="saveYouTubeCookie" style="margin-top:8px">Save manual connection</button></div>
+      </div></div>`;
+    } else if(tab==='lastfm'){
+      body=`<div class="setting-group"><h2>Last.fm Account</h2><div class="setting-card" style="padding:16px"><div class="form-grid">
         <div class="field"><label>Username</label><input id="lfUsername" value="${escapeHtml(lf.username||'')}"></div>
         <div class="field"><label>API key</label><input id="lfApiKey" value="${escapeHtml(lf.apiKey||'')}"></div>
         <div class="field"><label>API secret</label><input id="lfApiSecret" type="password" value="${escapeHtml(lf.apiSecret||'')}"></div>
-        <div class="field"><label>Session key (optional)</label><input id="lfSessionKey" type="password" value="${escapeHtml(lf.sessionKey||'')}"></div>
-      </div><div class="page-actions" style="margin-top:14px"><button class="primary" id="saveLastFm">Save Last.fm</button><button class="secondary" id="authLastFm">Web sign-in</button></div></div></div>
-      <div class="setting-group"><h2>Backup</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>Export / restore</strong><span>Playlists, likes, history, settings and friends</span></div><div class="page-actions"><button class="secondary" id="exportBackup">Export</button><button class="secondary" id="importBackup">Restore</button></div></div></div></div>
-      <div class="setting-group"><h2>Personal DJ profile</h2><div class="setting-card"><pre class="mini-note" style="white-space:pre-wrap;padding:16px">${escapeHtml(JSON.stringify(S.profile,null,2))}</pre></div></div></div></div>`;
+        <div class="field"><label>Session key</label><input id="lfSessionKey" type="password" value="${escapeHtml(lf.sessionKey||'')}"></div>
+      </div><div class="page-actions" style="margin-top:14px"><button class="primary" id="saveLastFm">Save</button><button class="secondary" id="authLastFm">Web sign-in</button></div></div></div>`;
+    } else if(tab==='library'){
+      body=`<div class="setting-group"><h2>Library & Content</h2><div class="setting-card">
+        <div class="setting-row" data-route="home-sections"><div class="setting-copy"><strong>Home Sections</strong><span>Choose what appears on Home</span></div><span>›</span></div>
+        <div class="setting-row" data-route="external-import"><div class="setting-copy"><strong>Playlist imports</strong><span>YouTube, Spotify, Apple Music, CSV, JSON and M3U</span></div><span>›</span></div>
+        <div class="setting-row" data-route="downloads"><div class="setting-copy"><strong>Downloads</strong><span>${S.local.downloads?.length||0} songs downloaded</span></div><span>›</span></div>
+        <div class="setting-row" data-route="excluded-songs"><div class="setting-copy"><strong>Excluded Songs</strong><span>${S.local.excluded?.length||0} excluded from generated mixes</span></div><span>›</span></div>
+        <div class="setting-row" data-route="provider-modules"><div class="setting-copy"><strong>Modules & Addons</strong><span>YouTube Music, LRCLIB and Last.fm providers</span></div><span>›</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(settings.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
+      </div></div>`;
+    } else if(tab==='data'){
+      body=`<div class="setting-group"><h2>Backup & Restore</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Export backup</strong><span>Playlists, likes, history, settings and friends</span></div><button class="secondary" id="exportBackup">Export</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Restore backup</strong><span>Restore a LastWave JSON backup</span></div><button class="secondary" id="importBackup">Restore</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Search history</strong><span>${S.local.searchHistory?.length||0} recent searches</span></div><span class="mini-note">Local</span></div>
+      </div></div>`;
+    } else {
+      body=`<div class="setting-group"><h2>LastWave</h2><div class="setting-card">
+        <div class="about-card"><div class="about-mark">LW</div><h2>LastWave</h2><span>Version ${escapeHtml(S.bootstrap?.appVersion||'4.5.0')}</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Android UI parity</strong><span>Windows renderer follows the Android Compose source and Material width classes</span></div><span class="mini-note">v4.5</span></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Source code</strong><span>harshsinghalh/LastWave-Native</span></div><button class="secondary" id="sourceCodeBtn">Open</button></div>
+      </div></div>`;
+    }
 
-    q('#crossfadeSetting').value=String(s.crossfadeSeconds||0);
-    q('#qualitySetting').value=s.audioQuality||'best';
-    q('#themeSetting').value=s.theme||'dark';
+    page.innerHTML=`<div class="android-content settings">${pageHead(names[tab]||'Settings','')}<div class="screen-body">${body}</div></div>`;
 
-    qa('[data-setting-toggle]').forEach(btn=>btn.addEventListener('click',async()=>{
-      const key=btn.dataset.settingToggle, value=!btn.classList.contains('on');
-      S.local.settings=await api.settings.update({[key]:value}); btn.classList.toggle('on',value);
-      if(key==='djEnergy'){updateDjUi();configureDjDelay();}
-    }));
-    q('#crossfadeSetting').addEventListener('change',e=>api.settings.update({crossfadeSeconds:Number(e.target.value)}));
-    q('#qualitySetting').addEventListener('change',e=>api.settings.update({audioQuality:e.target.value}));
-    q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});
-    q('#accentSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
-    q('#chooseDownloadFolder').addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
-    q('#settingsImportBtn').addEventListener('click',importDialog);
-    q('#youtubeLoginBtn').addEventListener('click',async()=>{
-      toast('A YouTube Music sign-in window has opened. Close it after your account is visible.',5000);
-      const result=await api.youtube.login();
-      await refreshLocal();S.home=null;S.explore=null;
-      toast(result?.connected?'YouTube Music account connected':'No authenticated YouTube session was detected');
-      renderSettings();
-    });
-    q('#youtubeLogoutBtn').addEventListener('click',async()=>{
-      await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music account disconnected');renderSettings();
-    });
-    q('#saveYouTubeCookie').addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:q('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
-    q('#saveLastFm').addEventListener('click',saveLastFmSettings);
-    q('#authLastFm').addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);else toast('Add your Last.fm API key first');});
-    q('#exportBackup').addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
-    q('#importBackup').addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    qa('[data-setting-toggle]').forEach(btn=>btn.addEventListener('click',async()=>{const key=btn.dataset.settingToggle,value=!btn.classList.contains('on');S.local.settings=await api.settings.update({[key]:value});btn.classList.toggle('on',value);if(key==='djEnergy'){updateDjUi();configureDjDelay();}}));
+    if(q('#qualitySetting')){q('#qualitySetting').value=settings.audioQuality||'best';q('#qualitySetting').addEventListener('change',e=>api.settings.update({audioQuality:e.target.value}));}
+    if(q('#crossfadeSetting')){q('#crossfadeSetting').value=String(settings.crossfadeSeconds||0);q('#crossfadeSetting').addEventListener('change',e=>api.settings.update({crossfadeSeconds:Number(e.target.value)}));}
+    if(q('#themeSetting')){q('#themeSetting').value=settings.theme||'dark';q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});}
+    q('#accentSetting')?.addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
+    q('#chooseDownloadFolder')?.addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
+    q('#youtubeLoginBtn')?.addEventListener('click',async()=>{toast('Sign in in the YouTube Music window, then close it.',5000);const result=await api.youtube.login();await refreshLocal();S.home=null;S.explore=null;toast(result?.connected?'YouTube Music connected':'No authenticated session detected');renderSettings();});
+    q('#youtubeLogoutBtn')?.addEventListener('click',async()=>{await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music disconnected');renderSettings();});
+    q('#saveYouTubeCookie')?.addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:q('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
+    q('#saveLastFm')?.addEventListener('click',saveLastFmSettings);
+    q('#authLastFm')?.addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);});
+    q('#exportBackup')?.addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
+    q('#importBackup')?.addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    q('#sourceCodeBtn')?.addEventListener('click',()=>api.openExternal('https://github.com/harshsinghalh/LastWave-Native'));
+    q('#eqInfoBtn')?.addEventListener('click',()=>toast('Equalizer remains available through the desktop audio path; detailed 15-band parity is being mapped to WebAudio.'));
+  }
+
+  async function renderProviderModules(){
+    const lf=S.local.settings.lastfm||{};
+    page.innerHTML=`<div class="android-content settings">${pageHead('Modules & Addons','Provider modules used by this Windows build')}<div class="screen-body"><div class="settings-category-list">
+      <div class="settings-category-row static"><span class="settings-category-icon tone-0">▶</span><span><strong>YouTube Music</strong><small>Catalog, search, playback and recommendations</small></span><i>${S.local.settings.youtubeCookie?'Connected':'Ready'}</i></div>
+      <div class="settings-category-row static"><span class="settings-category-icon tone-1">≋</span><span><strong>LRCLIB</strong><small>Synced and plain lyrics with YouTube fallback</small></span><i>Enabled</i></div>
+      <div class="settings-category-row static"><span class="settings-category-icon tone-2">◉</span><span><strong>Last.fm</strong><small>Stats, friends, now-playing and scrobbling</small></span><i>${lf.apiKey?'Configured':'Optional'}</i></div>
+    </div></div></div>`;
+  }
+
+  async function renderHomeSections(){
+    const sections=['Quick picks','Jump back in','Mixes','Top artists','Recent albums','Heavy rotation','Liked songs','New releases','Friends'];
+    const hidden=new Set(S.local.settings.hiddenHomeSections||[]);
+    page.innerHTML=`<div class="android-content settings">${pageHead('Home Sections','Choose what appears on Home')}<div class="screen-body"><div class="setting-card">${sections.map(name=>settingToggle(name,'Show this recommendation section on Home','home:'+name,!hidden.has(name))).join('')}</div></div></div>`;
+    qa('[data-setting-toggle^="home:"]').forEach(btn=>btn.addEventListener('click',async()=>{const name=btn.dataset.settingToggle.slice(5);if(hidden.has(name))hidden.delete(name);else hidden.add(name);S.local.settings=await api.settings.update({hiddenHomeSections:[...hidden]});btn.classList.toggle('on',!hidden.has(name));S.home=null;}));
+  }
+
+  async function renderExcludedSongs(){
+    await refreshLocal();const rows=S.local.excluded||[];rows.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Excluded Songs',`${rows.length} songs excluded`,rows.length?'<button class="section-action" id="clearExcludedBtn">Clear</button>':'')}<div class="screen-body flush">${rows.length?`<div class="track-list">${rows.map(trackRow).join('')}</div>`:empty('No excluded songs','Use a track menu and choose Exclude from recommendations.')}</div></div>`;
+    q('#clearExcludedBtn')?.addEventListener('click',async()=>{await api.library.clearExcluded();await refreshLocal();renderExcludedSongs();});
+  }
+
+  async function renderImportScreen(title,subtitle,kind){
+    page.innerHTML=`<div class="android-content settings">${pageHead(title,subtitle)}<div class="screen-body"><div class="panel-card"><div class="field"><label>Public playlist URL</label><input id="dedicatedImportUrl" placeholder="https://…"></div><p class="mini-note" style="margin-top:10px">YouTube Music, Spotify and Apple Music public playlists are matched into the YouTube Music catalog. CSV, JSON, M3U and text files are also supported.</p><div class="page-actions" style="margin-top:14px"><button class="secondary" id="dedicatedImportFile">Choose file</button><button class="primary" id="dedicatedImportBtn">Import</button></div></div></div></div>`;
+    q('#dedicatedImportFile')?.addEventListener('click',async()=>{toast('Matching imported tracks…',6000);const p=await api.imports.file();if(p){await refreshLocal();navigate('playlist-detail',{id:p.id});}});
+    q('#dedicatedImportBtn')?.addEventListener('click',async()=>{const input=q('#dedicatedImportUrl').value.trim();if(!input)return;toast('Reading and matching playlist…',7000);try{const p=await api.imports.externalUrl(input);await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message,6000);}});
+  }
+
+  async function renderYouTubeLogin(){
+    page.innerHTML=`<div class="android-content settings">${pageHead('YouTube Music','Connect your account')}<div class="screen-body"><div class="panel-card"><h2>Connect YouTube Music</h2><p class="mini-note">The sign-in happens in a dedicated secure browser window. Close that window after your account is visible.</p><button class="primary" id="dedicatedYtLogin" style="margin-top:14px">Sign in with YouTube Music</button></div></div></div>`;
+    q('#dedicatedYtLogin')?.addEventListener('click',async()=>{const result=await api.youtube.login();await refreshLocal();toast(result?.connected?'YouTube Music connected':'No authenticated session detected');if(result?.connected)goBack();});
+  }
+
+  async function renderNewReleases(){
+    page.innerHTML=`<div class="android-content pushed">${pageHead('New Releases','Fresh drops from YouTube Music')}${loading('Loading new releases')}</div>`;
+    const result=await api.youtube.search('new music releases 2026','song').catch(()=>({tracks:[],entities:[]}));
+    result.tracks?.forEach(cacheTrack);
+    page.innerHTML=`<div class="android-content pushed">${pageHead('New Releases','Fresh drops from YouTube Music')}<div class="screen-body flush">${result.entities?.length?`<section class="section"><div class="card-row">${result.entities.slice(0,18).map(entityCard).join('')}</div></section>`:''}${result.tracks?.length?`<div class="track-list">${result.tracks.map(trackRow).join('')}</div>`:empty('No new releases returned')}</div></div>`;
+  }
+
+  async function renderFriendProfile(username){
+    page.innerHTML=`<div class="android-content pushed">${pageHead(username||'Friend','Last.fm profile')}${loading('Loading profile')}</div>`;
+    try{const [user,recent,top]=await Promise.all([api.lastfm.user(username),api.lastfm.recent(username,25),api.lastfm.top(username,'7day',20)]);
+      page.innerHTML=`<div class="android-content pushed">${pageHead(user.realname||user.username,`@${user.username} · ${user.playcount.toLocaleString()} scrobbles`)}<div class="screen-body flush">${recent.length?`<section class="section"><div class="section-head"><div class="section-copy"><h2>Recent</h2></div></div><div class="track-list">${recent.map(x=>`<div class="track-row" style="grid-template-columns:52px minmax(0,1fr) 70px">${img(x.artworkUrl,x.title)}<div class="track-main"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.artist)}</span></div><span class="mini-note">${x.nowPlaying?'Now':''}</span></div>`).join('')}</div></section>`:''}<section class="section"><div class="section-head"><div class="section-copy"><h2>Top this week</h2></div></div><div class="track-list">${top.map(x=>`<div class="track-row" style="grid-template-columns:52px minmax(0,1fr) 70px">${img(x.artworkUrl,x.title)}<div class="track-main"><strong>${escapeHtml(x.title)}</strong><span>${escapeHtml(x.artist)}</span></div><span class="mini-note">${x.plays} plays</span></div>`).join('')}</div></section></div></div>`;
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead(username||'Friend')}${empty('Could not load profile',e.message)}</div>`;}
   }
 
   function settingToggle(title,copy,key,on) {
@@ -790,6 +880,7 @@
   document.addEventListener('click',e=>{
     const back=e.target.closest('[data-history-back]');if(back){goBack();return;}
     const search=e.target.closest('[data-search-query]');if(search){navigate('search',{query:search.dataset.searchQuery});return;}
+    const settingsTab=e.target.closest('[data-settings-tab]');if(settingsTab){navigate('settings',{tab:settingsTab.dataset.settingsTab});return;}
     const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route);return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
