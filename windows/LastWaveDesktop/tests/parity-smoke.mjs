@@ -26,7 +26,7 @@ assert.match(css, /@media\(min-width:840px\)/);
 assert.match(js, /function pageHead/);
 assert.match(js, /document\.body\.dataset\.route = route/);
 assert.match(js, /async function renderFeed/);
-assert.match(js, /class="android-quick-grid"/);
+assert.match(js, /android-quick-surface/);
 assert.match(js, /async function renderSearch/);
 assert.match(js, /android-feed-hero/);
 assert.match(js, /androidQuickPicksColumns/);
@@ -53,7 +53,7 @@ assert.doesNotMatch(js.slice(js.indexOf('async function renderGenerator')), /con
 
 // Regression guard: the visible renderer must not use the old permanent
 // desktop shell as its primary responsive model.
-assert.match(css, /\.topbar\{position:fixed!important;left:-10000px/);
+assert.match(css, /\.topbar\{display:none!important\}/);
 assert.match(css, /\.sidebar\{/);
 assert.match(css, /position:fixed!important;inset:auto 0 var\(--android-dock-bottom\)/);
 
