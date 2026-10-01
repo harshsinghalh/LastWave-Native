@@ -42,7 +42,9 @@
     playedHistoryFor: null,
     scrobbledFor: null,
     activeSearchType: 'all',
-    trackCache: new Map()
+    trackCache: new Map(),
+    fullPlayerOpen: false,
+    playerTab: 'now'
   };
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
@@ -136,10 +138,25 @@
     return null;
   }
 
-  function pageHead(title, subtitle='', actions='') {
-    return `<div class="page-head"><div class="page-title"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="page-actions">${actions}</div></div>`;
+  function androidHeader(title, subtitle='', actions='', options={}) {
+    const pushed = options.pushed ?? !['feed','stats','playlists'].includes(S.route);
+    const back = pushed ? '<button class="header-icon header-back" data-history-back title="Back">←</button>' : '';
+    return `<header class="expressive-header">
+      <div class="header-row">
+        ${back}
+        <div class="header-copy"><h1>${escapeHtml(title)}</h1>${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}</div>
+        <div class="header-actions">${actions}</div>
+      </div>
+    </header>`;
   }
 
+  function headerAction(symbol, label, route, id='') {
+    return `<button class="header-icon" ${route ? `data-route="${route}"` : ''} ${id ? `id="${id}"` : ''} title="${escapeHtml(label)}">${symbol}</button>`;
+  }
+
+  function pageHead(title, subtitle='', actions='') {
+    return androidHeader(title, subtitle, actions);
+  }
   function setConnection(text, kind='online') {
     const el = q('#connectionBadge');
     el.textContent = text;
@@ -161,15 +178,18 @@
       S.history.push({ route, params });
       S.historyIndex = S.history.length - 1;
     }
+    const isRoot = ['feed','stats','playlists'].includes(route);
+    q('#nav')?.classList.toggle('hidden', !isRoot);
+    q('#generatorFab')?.classList.toggle('hidden', route !== 'playlists');
     qa('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.route === route));
     renderRoute().catch(err => {
       console.error(err);
-      page.innerHTML = pageHead('Something went wrong') + empty(err?.message || 'Could not open this screen.');
+      page.innerHTML = `<div class="android-content pushed">${pageHead('Something went wrong')}${empty(err?.message || 'Could not open this screen.')}</div>`;
     });
-    q('#backBtn').disabled = S.historyIndex <= 0;
-    q('#forwardBtn').disabled = S.historyIndex >= S.history.length - 1;
+    const back=q('#backBtn'), forward=q('#forwardBtn');
+    if(back) back.disabled=S.historyIndex<=0;
+    if(forward) forward.disabled=S.historyIndex>=S.history.length-1;
   }
-
   async function renderRoute() {
     switch (S.route) {
       case 'feed': return renderFeed();
