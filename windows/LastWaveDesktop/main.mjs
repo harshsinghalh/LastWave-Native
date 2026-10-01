@@ -430,6 +430,7 @@ function setupIpc() {
   });
 
   ipcMain.handle('state:get', () => store.snapshot());
+  ipcMain.handle('search:clear-history', () => store.clearSearchHistory());
   ipcMain.handle('library:toggle-like', (_e, track) => store.toggleLike(clean(track)));
   ipcMain.handle('library:exclude-track', (_e, track) => store.excludeTrack(clean(track)));
   ipcMain.handle('library:restore-excluded', (_e, videoId) => store.restoreExcluded(String(videoId || '')));
