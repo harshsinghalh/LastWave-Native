@@ -239,7 +239,7 @@
         {title:'Liked songs',subtitle:`${liked.length} tracks`,icon:'♥',route:'playlists',tone:'primary'},
         {title:'Your playlists',subtitle:`${playlists.length} playlists`,icon:'≡',route:'playlists',tone:'secondary'},
         {title:'Discover',subtitle:'Fresh music',icon:'✦',route:'discover',tone:'tertiary'},
-        {title:'New releases',subtitle:'Fresh drops',icon:'●',query:'new music releases 2026',tone:'surface'}
+        {title:'New releases',subtitle:'Fresh drops',icon:'●',route:'new-releases',tone:'surface'}
       ];
       const quickTileHtml=quickTiles.map(t=>`<article class="quick-tile" ${t.route?`data-route="${t.route}"`:`data-search-query="${escapeHtml(t.query)}"`}>
         <div class="quick-tile-art">${t.icon}</div><strong>${escapeHtml(t.title)}</strong><span>${escapeHtml(t.subtitle)}</span>
@@ -554,7 +554,7 @@
       </div></div>`;
     } else if(tab==='youtube'){
       body=`<div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
-        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${settings.youtubeCookie?'Authenticated session saved':'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${settings.youtubeCookie?'Authenticated session saved':'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" data-route="youtube-login">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
         <div class="setting-row" data-route="youtube-import"><div class="setting-copy"><strong>Import YouTube playlist</strong><span>Match a playlist into LastWave</span></div><span>›</span></div>
         <div class="field" style="padding:14px 16px"><label>Advanced cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string">${escapeHtml(settings.youtubeCookie||'')}</textarea><button class="secondary" id="saveYouTubeCookie" style="margin-top:8px">Save manual connection</button></div>
       </div></div>`;
@@ -596,7 +596,6 @@
     if(q('#themeSetting')){q('#themeSetting').value=settings.theme||'dark';q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});}
     q('#accentSetting')?.addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
     q('#chooseDownloadFolder')?.addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
-    q('#youtubeLoginBtn')?.addEventListener('click',async()=>{toast('Sign in in the YouTube Music window, then close it.',5000);const result=await api.youtube.login();await refreshLocal();S.home=null;S.explore=null;toast(result?.connected?'YouTube Music connected':'No authenticated session detected');renderSettings();});
     q('#youtubeLogoutBtn')?.addEventListener('click',async()=>{await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music disconnected');renderSettings();});
     q('#saveYouTubeCookie')?.addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:q('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
     q('#saveLastFm')?.addEventListener('click',saveLastFmSettings);
