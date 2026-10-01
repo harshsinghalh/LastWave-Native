@@ -84,6 +84,9 @@ jobs:
       - name: Verify Android UI parity shell
         run: npm run test:parity
 
+      - name: Run renderer interaction smoke test
+        run: node tests/renderer-smoke.mjs
+
       - name: Run live desktop playback smoke test
         timeout-minutes: 4
         env:
