@@ -1,0 +1,64 @@
+{
+  "name": "lastwave-desktop",
+  "version": "4.4.0",
+  "description": "Full LastWave desktop client for Windows 11",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test:smoke": "node tests/smoke.mjs",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "youtubei.js": "18.1.0",
+    "bgutils-js": "4.0.3",
+    "jsdom": "30.1.1"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.lastwave.desktop",
+    "productName": "LastWave",
+    "artifactName": "LastWave-Setup-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.mjs",
+      "preload.mjs",
+      "services/**/*",
+      "renderer/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../../lastwave_logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LastWave"
+    }
+  }
+}

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* https: data: blob:; img-src 'self' https: data: blob:; media-src 'self' http://127.0.0.1:* https: blob:; connect-src 'self' http://127.0.0.1:* https:; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LastWave</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">LW</div>
+        <div><strong>LastWave</strong><span>Windows</span></div>
+      </div>
+      <nav id="nav">
+        <button data-route="feed" class="nav-item active"><span>⌂</span> Feed</button>
+        <button data-route="stats" class="nav-item"><span>◫</span> Stats</button>
+        <button data-route="playlists" class="nav-item"><span>☷</span> Playlists</button>
+        <div class="nav-separator"></div>
+        <button data-route="discover" class="nav-item"><span>✦</span> Discover</button>
+        <button data-route="genres" class="nav-item"><span>◉</span> Genres</button>
+        <button data-route="search" class="nav-item"><span>⌕</span> Search</button>
+        <button data-route="generator" class="nav-item"><span>✧</span> Generator</button>
+        <button data-route="friends" class="nav-item"><span>♧</span> Friends</button>
+        <button data-route="downloads" class="nav-item"><span>⇩</span> Downloads</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button data-route="settings" class="nav-item"><span>⚙</span> Settings</button>
+        <div id="connectionBadge" class="connection-badge">Starting…</div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="history-controls">
+          <button id="backBtn" class="icon-btn" title="Back">‹</button>
+          <button id="forwardBtn" class="icon-btn" title="Forward">›</button>
+        </div>
+        <div class="global-search">
+          <span>⌕</span>
+          <input id="globalSearchInput" placeholder="Search songs, artists, albums, playlists" autocomplete="off" />
+          <div id="suggestions" class="suggestions hidden"></div>
+        </div>
+        <button id="djQuickToggle" class="pill active">DJ Energy</button>
+        <button id="openSettingsBtn" class="avatar-btn" title="Settings">⚙</button>
+      </header>
+
+      <section id="page" class="page"></section>
+    </main>
+
+    <aside id="rightPanel" class="right-panel hidden">
+      <div class="panel-header">
+        <div>
+          <strong id="rightPanelTitle">Queue</strong>
+          <small id="rightPanelSubtitle"></small>
+        </div>
+        <button id="closeRightPanel" class="icon-btn">×</button>
+      </div>
+      <div id="rightPanelBody" class="panel-body"></div>
+    </aside>
+
+    <footer class="player">
+      <div class="now-playing" id="nowPlayingCard">
+        <img id="playerArt" alt="" />
+        <div class="track-meta">
+          <strong id="playerTitle">Nothing playing</strong>
+          <span id="playerArtist">Choose a song to start</span>
+        </div>
+        <button id="likeBtn" class="icon-btn" title="Like">♡</button>
+      </div>
+
+      <div class="transport">
+        <div class="transport-buttons">
+          <button id="shuffleBtn" class="icon-btn" title="Shuffle">⤨</button>
+          <button id="prevBtn" class="icon-btn">⏮</button>
+          <button id="playBtn" class="play-btn">▶</button>
+          <button id="nextBtn" class="icon-btn">⏭</button>
+          <button id="repeatBtn" class="icon-btn" title="Repeat">↻</button>
+        </div>
+        <div class="progress-row">
+          <span id="currentTime">0:00</span>
+          <input id="seek" type="range" min="0" max="1000" value="0" />
+          <span id="duration">0:00</span>
+        </div>
+      </div>
+
+      <div class="player-actions">
+        <button id="lyricsBtn" class="icon-btn" title="Lyrics">≋</button>
+        <button id="queueBtn" class="icon-btn" title="Queue">☷</button>
+        <span id="qualityBadge" class="quality-badge">AUTO</span>
+        <span id="djMeter" class="dj-meter" title="Personal DJ gain"><i></i><b>0.0 dB</b></span>
+        <span class="volume-icon">◖</span>
+        <input id="volume" type="range" min="0" max="100" value="85" />
+      </div>
+    </footer>
+  </div>
+
+  <audio id="audio" crossorigin="anonymous"></audio>
+  <div id="contextMenu" class="context-menu hidden"></div>
+  <div id="toastHost" class="toast-host"></div>
+  <div id="modalHost"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

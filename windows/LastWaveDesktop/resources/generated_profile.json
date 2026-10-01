@@ -1,0 +1,15 @@
+{
+  "minimum_db": -2,
+  "maximum_db": 5,
+  "pre_drop_db": -2,
+  "impact_db": 5,
+  "lookahead_ms": 80,
+  "impact_hold_ms": 70,
+  "cooldown_ms": 420,
+  "strong_surge_db": 4.5,
+  "loud_surge_db": 2.5,
+  "pre_duck_ms": 22,
+  "impact_attack_ms": 6,
+  "impact_release_ms": 180,
+  "source": "pinned-harsh-concert"
+}

@@ -1,17 +1,17 @@
-name: Build Windows EXE
+name: Build Full Windows App
 
 on:
   pull_request:
     branches: [ main, master ]
     paths:
-      - 'windows/**'
+      - 'windows/LastWaveDesktop/**'
       - 'tools/generate_laya_profile.py'
       - 'personalization/**'
       - '.github/workflows/windows.yml'
   push:
     branches: [ main, master ]
     paths:
-      - 'windows/**'
+      - 'windows/LastWaveDesktop/**'
       - 'tools/generate_laya_profile.py'
       - 'personalization/**'
       - '.github/workflows/windows.yml'
@@ -21,72 +21,115 @@ permissions:
   contents: write
 
 jobs:
-  windows:
+  windows-full:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows/LastWaveDesktop
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
         with:
-          dotnet-version: '8.0.x'
+          node-version: '22'
 
-      - name: Setup Python for Laya personalizer
+      - name: Setup Python for Laya
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Run Laya preference decision layer
+      - name: Generate Personal DJ profile with Laya
         shell: pwsh
+        working-directory: .
         run: |
           python -m pip install --upgrade pip
           python -m pip install "laya==0.3.4"
           if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Laya install failed. The generator will use its pinned safe fallback."
+            Write-Warning "Laya install failed; generator will use the pinned safe fallback."
           }
-          python tools/generate_laya_profile.py --use-laya --emit-cs windows/LastWaveWindows/GeneratedPersonalDjProfile.cs
-          Get-Content personalization/generated_profile.json
+          python tools/generate_laya_profile.py --use-laya
+          Copy-Item personalization/generated_profile.json windows/LastWaveDesktop/resources/generated_profile.json -Force
+          Get-Content windows/LastWaveDesktop/resources/generated_profile.json
 
-      - name: Build and run Windows DSP self-test
-        run: dotnet run --project windows/LastWaveWindows/LastWaveWindows.csproj -c Release -- --self-test
+      - name: Install desktop dependencies
+        run: npm install --no-audit --no-fund
 
-      - name: Publish self-contained Windows EXE
-        run: dotnet publish windows/LastWaveWindows/LastWaveWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
-
-      - name: Smoke check EXE
+      - name: Syntax checks
         shell: pwsh
         run: |
-          if (-not (Test-Path 'dist/windows/LastWaveWindows.exe')) { throw 'Windows EXE was not produced' }
-          Get-Item 'dist/windows/LastWaveWindows.exe' | Format-List Name,Length,VersionInfo
-          Get-FileHash 'dist/windows/LastWaveWindows.exe' -Algorithm SHA256 | Format-List
+          $files = @(
+            'main.mjs',
+            'preload.mjs',
+            'services/store.mjs',
+            'services/ytmusic.mjs',
+            'services/lastfm.mjs',
+            'services/browserstream.mjs',
+            'services/potoken.mjs',
+            'renderer/app.js',
+            'tests/smoke.mjs',
+            'tests/network-smoke.mjs'
+          )
+          foreach ($file in $files) {
+            node --check $file
+            if ($LASTEXITCODE -ne 0) { throw "Syntax check failed: $file" }
+          }
 
-      - name: Package Windows build
+      - name: Run full desktop smoke tests
+        run: npm run test:smoke
+
+      - name: Run live desktop playback smoke test
+        timeout-minutes: 4
+        env:
+          LASTWAVE_NETWORK_SMOKE: '1'
+        run: npx electron . --network-smoke
+
+      - name: Build Windows installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist
+
+      - name: Verify packaged Windows app
         shell: pwsh
         run: |
-          Copy-Item personalization/harsh_dj_preference.txt dist/windows/
-          Copy-Item personalization/generated_profile.json dist/windows/
-          Compress-Archive -Path dist/windows/* -DestinationPath LastWave-Windows-v4.3.0.zip -Force
+          $installer = Get-ChildItem dist -Filter 'LastWave-Setup-4.4.0-x64.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'LastWave installer was not produced' }
+          $appExe = Get-ChildItem dist/win-unpacked -Filter 'LastWave.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $appExe) { throw 'Packaged LastWave.exe was not produced' }
+          Get-Item $installer.FullName | Format-List Name,Length,VersionInfo
+          Get-Item $appExe.FullName | Format-List Name,Length,VersionInfo
+          Get-FileHash $installer.FullName -Algorithm SHA256 | Format-List
+          Get-FileHash $appExe.FullName -Algorithm SHA256 | Format-List
+          Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/LastWave-Windows-Portable-4.4.0.zip -Force
 
-      - name: Upload Windows artifact
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-Windows-v4.3.0
+          name: LastWave-Windows-Full-v4.4.0
           path: |
-            dist/windows/LastWaveWindows.exe
-            LastWave-Windows-v4.3.0.zip
+            windows/LastWaveDesktop/dist/LastWave-Setup-4.4.0-x64.exe
+            windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.4.0.zip
+            windows/LastWaveDesktop/resources/generated_profile.json
+            windows/LastWaveDesktop/tests/network-smoke-report.json
           if-no-files-found: error
 
-      - name: Publish Windows assets to GitHub Release
+      - name: Publish full Windows release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
+        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $currentMain = (git ls-remote origin refs/heads/main).Split([char]9)[0]
-          if ($currentMain -ne $env:GITHUB_SHA) { Write-Host 'Newer main commit exists; skipping release publication.'; exit 0 }
-          $tag = 'v4.3.0'
+          if ($currentMain -ne $env:GITHUB_SHA) {
+            Write-Host 'A newer main commit exists; skipping stale release publication.'
+            exit 0
+          }
+          $tag = 'v4.4.0'
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'LastWave v4.3.0 - Android + Windows Personal DJ' --notes 'Multi-platform release: Windows 11 EXE plus Android APKs. The Personal DJ profile keeps the requested -2 dB to +5 dB window, predictive pre-drop and impact spike, and limiter protection. Laya is used as a build-time preference decision layer, not in the realtime PCM loop.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'LastWave v4.4.0 - Full Windows Desktop App' --notes 'Full Windows 11 LastWave desktop client. Includes YouTube Music feed/search/playback, playlists/library, smart generator, genres/discovery, synced lyrics, downloads, Last.fm friends/scrobbling, imports/backups/settings, Windows media-session controls, and the Laya-personalized predictive DJ Energy mode. Android remains available from v4.3.0.'
           }
-          gh release upload $tag dist/windows/LastWaveWindows.exe LastWave-Windows-v4.3.0.zip --clobber
+          gh release upload $tag windows/LastWaveDesktop/dist/LastWave-Setup-4.4.0-x64.exe windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.4.0.zip windows/LastWaveDesktop/resources/generated_profile.json --clobber
