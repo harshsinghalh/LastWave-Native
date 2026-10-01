@@ -451,49 +451,179 @@
     }));
   }
 
+  function androidSearchTopResult(item, type) {
+    if (!item) return '';
+    const isTrack = type === 'song';
+    const isUser = type === 'user';
+    const title = item.title || item.name || item.username || 'Result';
+    const subtitle = item.artist || item.subtitle || item.realname || (isUser ? item.username : '');
+    const art = item.artworkUrl || '';
+    const badge = type === 'artist' ? 'TOP ARTIST'
+      : type === 'album' ? 'TOP ALBUM'
+      : type === 'playlist' ? 'TOP PLAYLIST'
+      : type === 'user' ? 'USER'
+      : 'TOP SONG';
+    const actionAttrs = isTrack
+      ? 'data-play="' + escapeHtml(item.videoId || '') + '"'
+      : isUser
+        ? 'data-user-result="' + escapeHtml(item.username || '') + '"'
+        : 'data-entity-kind="' + escapeHtml(item.kind || type) + '" data-entity-id="' + escapeHtml(item.browseId || '') + '"';
+    if (isTrack) cacheTrack(item);
+    return '<article class="android-top-result" ' + actionAttrs + '>' +
+      '<div class="android-top-art ' + (type === 'artist' || type === 'user' ? 'round' : '') + '">' + img(art,title) + '</div>' +
+      '<div class="android-top-copy"><span>' + badge + '</span><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+      '<button class="android-top-action">' + (type === 'playlist' || type === 'artist' || type === 'album' || type === 'user' ? '→' : '▶') + '</button>' +
+    '</article>';
+  }
+
+  function androidRecentSearchRow(text) {
+    return '<button class="android-search-row" data-recent-query="' + escapeHtml(text) + '"><span class="android-search-row-icon">↻</span><strong>' + escapeHtml(text) + '</strong><span class="android-search-row-tail">↗</span></button>';
+  }
+
   async function renderSearch(query='') {
-    S.activeSearchType = S.routeParams.type || 'all';
+    S.activeSearchType = S.routeParams.type || 'song';
+
+    const tabs = [
+      ['song','Tracks'],
+      ['artist','Artists'],
+      ['album','Albums'],
+      ['playlist','Playlists'],
+      ['user','Users']
+    ];
+
     page.innerHTML =
-      pageHead('Search','Find songs, artists, albums and playlists.') +
-      '<div class="android-search-wrap"><div class="android-search-field"><span>⌕</span><input id="pageSearchInput" value="' + escapeHtml(query) + '" placeholder="Search music" autocomplete="off"><button class="tiny-btn" id="pageSearchSubmit">→</button></div></div>' +
-      '<div class="search-tabs">' +
-        ['all','song','album','artist','playlist'].map(function(t){
-          const label = t === 'song' ? 'Songs' : t.charAt(0).toUpperCase() + t.slice(1);
-          return '<button class="chip ' + (S.activeSearchType===t?'active':'') + '" data-search-type="' + t + '">' + label + '</button>';
-        }).join('') +
-      '</div><div id="searchBody">' + (query ? loading('Searching') : empty('Search LastWave','Type a song, artist, album or playlist.')) + '</div>';
+      '<div class="android-search-header">' +
+        '<div class="android-search-top-row">' +
+          '<button class="header-back" data-android-back="1" title="Back">‹</button>' +
+          '<div class="android-search-pill"><span>⌕</span><input id="pageSearchInput" value="' + escapeHtml(query) + '" placeholder="' + (S.activeSearchType === 'user' ? 'Search Last.fm users…' : 'Search YouTube Music…') + '" autocomplete="off">' +
+          (query ? '<button class="android-search-clear" id="pageSearchClear">×</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="android-search-tabs">' +
+          tabs.map(function(pair){
+            const selected = S.activeSearchType === pair[0];
+            return '<button class="' + (selected ? 'active' : '') + '" data-search-type="' + pair[0] + '">' + pair[1] + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div id="androidSearchSuggestions" class="android-search-suggestions hidden"></div>' +
+      '<div id="searchBody">' +
+        (query ? loading('Searching') : '') +
+      '</div>';
 
     const input = q('#pageSearchInput');
-    const submit = function(){
-      const value = input.value.trim();
-      if (value) navigate('search',{query:value,type:S.activeSearchType},false);
+    let suggestionTimer;
+
+    const submit = function(value){
+      const finalValue = String(value ?? input?.value ?? '').trim();
+      if (finalValue) navigate('search',{query:finalValue,type:S.activeSearchType},false);
     };
-    q('#pageSearchSubmit')?.addEventListener('click',submit);
-    input?.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+
+    input?.addEventListener('keydown',function(e){
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') {
+        q('#androidSearchSuggestions')?.classList.add('hidden');
+        input.blur();
+      }
+    });
+
+    input?.addEventListener('input',function(){
+      clearTimeout(suggestionTimer);
+      const value = input.value.trim();
+      const host = q('#androidSearchSuggestions');
+      if (!value || S.activeSearchType === 'user') {
+        host.classList.add('hidden');
+        host.innerHTML = '';
+        return;
+      }
+      suggestionTimer = setTimeout(async function(){
+        const suggestions = await api.youtube.suggestions(value).catch(function(){ return []; });
+        if (!suggestions.length) {
+          host.classList.add('hidden');
+          host.innerHTML = '';
+          return;
+        }
+        host.innerHTML = suggestions.slice(0,8).map(function(text){
+          return '<button class="android-search-row" data-suggest="' + escapeHtml(text) + '"><span class="android-search-row-icon">⌕</span><strong>' + escapeHtml(text) + '</strong><span class="android-search-row-tail">↗</span></button>';
+        }).join('');
+        host.classList.remove('hidden');
+      },180);
+    });
+
+    q('#pageSearchClear')?.addEventListener('click',function(){
+      navigate('search',{query:'',type:S.activeSearchType},false);
+    });
+
     qa('[data-search-type]').forEach(function(btn){
       btn.addEventListener('click',function(){
-        navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
+        navigate('search',{query:input?.value?.trim() || query,type:btn.dataset.searchType},false);
       });
     });
 
+    q('#androidSearchSuggestions')?.addEventListener('click',function(e){
+      const row = e.target.closest('[data-suggest]');
+      if (row) submit(row.dataset.suggest);
+    });
+
+    const body = q('#searchBody');
+
     if (!query) {
+      const recent = (S.local?.searchHistory || []).slice(0,8);
+      body.innerHTML =
+        (recent.length ? '<section class="android-search-section"><div class="android-search-section-head"><strong>Recent searches</strong><button id="searchRecentClear">Clear all</button></div><div class="android-search-list">' + recent.map(androidRecentSearchRow).join('') + '</div></section>' : '') +
+        '<section class="android-search-section"><div class="android-search-explore-title"><span>✦</span><strong>Explore genres & moods</strong></div><div class="android-search-explore">' +
+          ['Pop','Rock','Hip-Hop','Lo-Fi','Electronic','Indie','R&B','Bollywood','Jazz','Metal','Acoustic','Chill','Anime','Classical','Synthwave'].map(function(g){
+            return '<button class="chip" data-explore-query="' + escapeHtml(g) + '">' + escapeHtml(g) + '</button>';
+          }).join('') +
+        '</div></section>';
+
+      qa('[data-recent-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.recentQuery); }); });
+      qa('[data-explore-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.exploreQuery); }); });
+      q('#searchRecentClear')?.addEventListener('click',async function(){
+        S.local.searchHistory = [];
+        await api.settings.update({ searchHistory: [] }).catch(function(){});
+        renderSearch('');
+      });
       input?.focus();
       return;
     }
 
-    const body = q('#searchBody');
     try {
-      const result = await api.youtube.search(query, S.activeSearchType);
+      if (S.activeSearchType === 'user') {
+        const users = await api.lastfm.searchUsers(query,30);
+        if (!users.length) {
+          body.innerHTML = empty('No users found','Try another Last.fm username.');
+          return;
+        }
+        body.innerHTML =
+          '<section class="android-search-section"><div class="android-search-section-head"><strong>Top result</strong></div>' +
+          androidSearchTopResult(users[0],'user') + '</section>' +
+          '<section class="android-search-section"><div class="android-search-section-head"><strong>Users</strong></div><div class="android-user-results">' +
+          users.slice(1).map(function(u){
+            return '<button class="android-user-row" data-user-result="' + escapeHtml(u.username) + '">' +
+              '<div class="android-user-avatar">' + img(u.artworkUrl,u.username) + '</div><div><strong>' + escapeHtml(u.realname || u.username) + '</strong><span>@' + escapeHtml(u.username) + (u.playcount ? ' · ' + u.playcount.toLocaleString() + ' scrobbles' : '') + '</span></div><b>›</b></button>';
+          }).join('') + '</div></section>';
+        qa('[data-user-result]').forEach(function(row){ row.addEventListener('click',function(){ showFriendProfile(row.dataset.userResult); }); });
+        return;
+      }
+
+      const result = await api.youtube.search(query,S.activeSearchType);
+      const tracks = result.tracks || [];
+      const entities = result.entities || [];
+      const top = S.activeSearchType === 'song' ? tracks[0] : entities[0];
       let html = '';
-      if (result.entities && result.entities.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
-        html += '<section class="section"><div class="section-head"><h2>Top results</h2></div><div class="card-row">' +
-          result.entities.slice(0,20).map(entityCard).join('') + '</div></section>';
+
+      if (top) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>Top result</strong></div>' + androidSearchTopResult(top,S.activeSearchType) + '</section>';
       }
-      if (result.tracks && result.tracks.length) {
-        html += '<section class="section"><div class="section-head"><h2>Songs</h2><small>' + result.tracks.length + ' results</small></div><div class="track-list">' +
-          result.tracks.map(trackRow).join('') + '</div></section>';
+
+      if (S.activeSearchType === 'song' && tracks.length) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>Songs</strong><span>' + tracks.length + ' results</span></div><div class="track-list">' + tracks.map(trackRow).join('') + '</div></section>';
+      } else if (entities.length) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>' + (S.activeSearchType === 'artist' ? 'Artists' : S.activeSearchType === 'album' ? 'Albums' : 'Playlists') + '</strong></div><div class="card-row">' + entities.map(entityCard).join('') + '</div></section>';
       }
-      body.innerHTML = html || empty('No results found','Try a different title, artist or album.');
+
+      body.innerHTML = html || empty('No results found','Try a different search.');
     } catch(e) {
       body.innerHTML = empty('Search failed',e.message || 'Please try again.');
     }
