@@ -392,34 +392,61 @@
     }));
   }
   async function renderSearch(query='') {
-    S.activeSearchType=S.routeParams.type||'all';
-    const tabs=[['all','All'],['song','Tracks'],['album','Albums'],['artist','Artists'],['playlist','Playlists']];
+    S.activeSearchType=S.routeParams.type||'song';
+    const tabs=[['song','Tracks'],['artist','Artists'],['album','Albums'],['playlist','Playlists'],['users','Users']];
     const header=`<div class="search-header"><div class="search-input-row"><button class="header-icon header-back" data-history-back>←</button><div class="search-pill"><span>⌕</span><input id="screenSearchInput" value="${escapeHtml(query)}" placeholder="${S.activeSearchType==='users'?'Search Last.fm users…':'Search YouTube Music…'}" autocomplete="off"><button id="screenSearchClear" class="round-icon ${query?'':'hidden'}">×</button></div></div><div class="search-filters">${tabs.map(([v,l])=>`<button class="chip ${S.activeSearchType===v?'active':''}" data-search-type="${v}">${l}</button>`).join('')}</div></div>`;
     page.innerHTML=`<div class="android-content pushed">${header}<div id="searchBody" class="screen-body flush">${query?loading('Searching'):`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>${(S.local?.searchHistory||[]).length?`<section class="section"><div class="section-head"><div class="section-copy"><h2>Recent searches</h2></div></div><div class="track-list">${S.local.searchHistory.slice(0,8).map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">↺</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div></section>`:''}`}</div></div>`;
+
     const input=q('#screenSearchInput');
     let suggestTimer;
     input?.focus();
     input?.addEventListener('input',()=>{
-      clearTimeout(suggestTimer);const v=input.value.trim();q('#screenSearchClear')?.classList.toggle('hidden',!v);
-      if(!v){q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>`;return;}
+      clearTimeout(suggestTimer);
+      const v=input.value.trim();
+      q('#screenSearchClear')?.classList.toggle('hidden',!v);
+      if(!v){
+        q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Explore genres & moods</h2></div></div><div class="genre-cloud">${GENRES.slice(0,15).map(g=>`<button class="chip" data-search-query="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('')}</div></section>`;
+        return;
+      }
+      if(S.activeSearchType==='users'){
+        q('#searchBody').innerHTML=`<div class="track-list" style="margin-top:10px"><div class="track-row" style="grid-template-columns:40px 1fr 40px" data-user-query="${escapeHtml(v)}"><div style="font-size:18px;text-align:center">♙</div><div class="track-main"><strong>${escapeHtml(v)}</strong><span>Find exact Last.fm user</span></div><span>↗</span></div></div>`;
+        return;
+      }
       suggestTimer=setTimeout(async()=>{
         const suggestions=await api.youtube.suggestions(v).catch(()=>[]);
         if(input.value.trim()!==v)return;
         q('#searchBody').innerHTML=suggestions.length?`<div class="track-list" style="margin-top:10px">${suggestions.map(x=>`<div class="track-row" style="grid-template-columns:40px 1fr 40px" data-search-query="${escapeHtml(x)}"><div style="font-size:18px;text-align:center">⌕</div><div class="track-main"><strong>${escapeHtml(x)}</strong></div><span>↗</span></div>`).join('')}</div>`:empty('No suggestions');
       },180);
     });
-    input?.addEventListener('keydown',e=>{if(e.key==='Enter'){const v=input.value.trim();if(v)navigate('search',{query:v,type:S.activeSearchType},false);}});
+
+    const execute=()=>{const v=input?.value.trim();if(v)navigate('search',{query:v,type:S.activeSearchType},false);};
+    input?.addEventListener('keydown',e=>{if(e.key==='Enter')execute();});
     q('#screenSearchClear')?.addEventListener('click',()=>navigate('search',{query:'',type:S.activeSearchType},false));
     qa('[data-search-type]').forEach(btn=>btn.addEventListener('click',()=>navigate('search',{query:input?.value.trim()||query,type:btn.dataset.searchType},false)));
     if(!query)return;
+
     try{
+      if(S.activeSearchType==='users'){
+        const user=await api.lastfm.user(query);
+        q('#searchBody').innerHTML=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Users</h2><p>Exact Last.fm user</p></div></div><div class="settings-category-list" style="padding:0 16px"><button class="settings-category-row" data-route="friend-profile" data-username="${escapeHtml(user.username)}"><span class="settings-category-icon tone-0">${escapeHtml((user.realname||user.username||'?').slice(0,1).toUpperCase())}</span><span><strong>${escapeHtml(user.realname||user.username)}</strong><small>@${escapeHtml(user.username)} · ${Number(user.playcount||0).toLocaleString()} scrobbles</small></span><i>›</i></button></div></section>`;
+        const row=q('[data-route="friend-profile"][data-username]');
+        row?.addEventListener('click',e=>{e.stopPropagation();navigate('friend-profile',{username:row.dataset.username});});
+        return;
+      }
+
       const result=await api.youtube.search(query,S.activeSearchType);
       result.tracks?.forEach(cacheTrack);
       let html='';
-      if(result.entities?.length&&['all','album','artist','playlist'].includes(S.activeSearchType))html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Top results</h2></div></div><div class="card-row">${result.entities.slice(0,18).map(entityCard).join('')}</div></section>`;
-      if(result.tracks?.length)html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>${result.tracks.length} results</p></div></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
-      q('#searchBody').innerHTML=html||empty('No results found','Try another title, artist or album.');
-    }catch(e){q('#searchBody').innerHTML=empty('Search failed',e.message);}
+      if(result.entities?.length&&['album','artist','playlist'].includes(S.activeSearchType)){
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>${S.activeSearchType==='artist'?'Artists':S.activeSearchType==='album'?'Albums':'Playlists'}</h2><p>${result.entities.length} results</p></div></div><div class="card-row">${result.entities.slice(0,24).map(entityCard).join('')}</div></section>`;
+      }
+      if(result.tracks?.length){
+        html+=`<section class="section"><div class="section-head"><div class="section-copy"><h2>Tracks</h2><p>${result.tracks.length} results</p></div></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
+      }
+      q('#searchBody').innerHTML=html||empty('No results found','Try another title, artist, album or playlist.');
+    }catch(e){
+      q('#searchBody').innerHTML=empty(S.activeSearchType==='users'?'Last.fm user not found':'Search failed',e.message);
+    }
   }
   async function renderGenerator() {
     const modes=[
@@ -886,7 +913,7 @@
     const back=e.target.closest('[data-history-back]');if(back){goBack();return;}
     const search=e.target.closest('[data-search-query]');if(search){navigate('search',{query:search.dataset.searchQuery});return;}
     const settingsTab=e.target.closest('[data-settings-tab]');if(settingsTab){navigate('settings',{tab:settingsTab.dataset.settingsTab});return;}
-    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route);return;}
+    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route,route.dataset.username?{username:route.dataset.username}:{});return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
     const like=e.target.closest('[data-like]');if(like){e.stopPropagation();const t=findTrack(like.dataset.like);if(t)toggleLike(t);return;}
