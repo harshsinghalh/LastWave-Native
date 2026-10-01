@@ -549,7 +549,30 @@
   async function renderSettings() {
     await refreshLocal();
     const s=S.local.settings, lf=s.lastfm||{};
-    page.innerHTML=pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.') +
+    const tab=S.routeParams?.tab || '';
+    const tabMeta={
+      audio:['Audio & Playback','Streaming quality, Audio engine, Equalizer, Output & Loudness','◉'],
+      appearance:['Appearance & Visuals','Themes, Accent colors, Fluid artwork, Canvas, Lyrics','◐'],
+      youtube:['YouTube & Sync','Account connection, Library sync, Channels, History','◫'],
+      lastfm:['Last.fm','Account connection, Scrobbling sync & API credentials','◌'],
+      library:['Library & Content','Home layout, Playlist imports, Downloads, Exclusions','♫'],
+      data:['Data & Storage','Backup & Restore, Cache, history and local data','⇄'],
+      about:['About & System','App version, community, diagnostics and source code','✦']
+    };
+    if(!tab){
+      page.innerHTML=pageHead('Settings','') +
+        '<div class="android-settings-tabs">' +
+        Object.entries(tabMeta).map(function(entry){
+          const key=entry[0],meta=entry[1];
+          return '<button class="android-settings-tab" data-settings-tab="' + key + '"><span class="android-settings-icon">' + meta[2] + '</span><span><strong>' + escapeHtml(meta[0]) + '</strong><small>' + escapeHtml(meta[1]) + '</small></span><b>›</b></button>';
+        }).join('') + '</div>';
+      qa('[data-settings-tab]').forEach(function(btn){
+        btn.addEventListener('click',function(){navigate('settings',{tab:btn.dataset.settingsTab},false);});
+      });
+      return;
+    }
+    const tabTitle=tabMeta[tab]?.[0] || 'Settings';
+    page.innerHTML=pageHead(tabTitle,'') +
       `<div class="setting-group"><h2>Audio & Playback</h2><div class="setting-card">
         ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',s.djEnergy)}
         ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',s.loudnessNormalization)}
@@ -614,6 +637,23 @@
     q('#authLastFm').addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);else toast('Add your Last.fm API key first');});
     q('#exportBackup').addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
     q('#importBackup').addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    const keep={
+      audio:['Audio & Playback','Personal DJ profile'],
+      appearance:['Appearance'],
+      youtube:['YouTube & Sync'],
+      lastfm:['Last.fm Integration'],
+      library:['Library & Content'],
+      data:['Backup'],
+      about:[]
+    }[tab] || [];
+    qa('.setting-group').forEach(function(group){
+      const heading=group.querySelector('h2')?.textContent?.trim() || '';
+      group.classList.toggle('hidden',!keep.some(function(name){return heading===name || heading.startsWith(name);}));
+    });
+    if(tab==='about'){
+      page.insertAdjacentHTML('beforeend','<div class="setting-group"><h2>About & System</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>LastWave for Windows</strong><span>Android-parity desktop build v4.5.0</span></div></div><div class="setting-row"><div class="setting-copy"><strong>Source code</strong><span>github.com/harshsinghalh/LastWave-Native</span></div><button class="secondary" id="openSourceRepo">Open</button></div></div></div>');
+      q('#openSourceRepo')?.addEventListener('click',()=>api.openExternal('https://github.com/harshsinghalh/LastWave-Native'));
+    }
   }
 
   function settingToggle(title,copy,key,on) {
@@ -955,7 +995,7 @@
   }
 
   document.addEventListener('click',e=>{
-    const back=e.target.closest('[data-android-back]');if(back){if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;document.body.dataset.route=S.route;renderRoute();}return;}
+    const back=e.target.closest('[data-android-back]');if(back){if(S.route==='settings'&&S.routeParams?.tab){S.routeParams={};renderSettings();return;}if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;document.body.dataset.route=S.route;renderRoute();}return;}
     const route=e.target.closest('[data-route]');if(route){const params=route.dataset.query?{query:route.dataset.query}:{};navigate(route.dataset.route,params);return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
