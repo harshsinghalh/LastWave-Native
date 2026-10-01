@@ -3,7 +3,7 @@
 
   const api = window.lastwave;
   const $ = s => document.querySelector(s);
-  const $$ = s => [...document.querySelectorAll(s)];
+  const $ = (s, root = document) => [...root.querySelectorAll(s)];
   const page = $('#page');
   const audio = $('#audio');
 
@@ -41,7 +41,8 @@
     parsedLyrics: [],
     playedHistoryFor: null,
     scrobbledFor: null,
-    activeSearchType: 'all'
+    activeSearchType: 'all',
+    trackCache: new Map()
   };
 
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({
@@ -78,7 +79,13 @@
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" onerror="this.onerror=null;this.src='${placeholder(alt).replace(/'/g, '%27')}'">`;
   }
 
+  function cacheTrack(track) {
+    if (track?.videoId) S.trackCache.set(track.videoId, track);
+    return track;
+  }
+
   function card(track) {
+    cacheTrack(track);
     const id = escapeHtml(track.videoId || '');
     return `<article class="music-card" data-play="${id}">
       <div class="card-overlay">${img(track.artworkUrl, track.title)}<button class="card-play" data-play="${id}">▶</button></div>
@@ -96,6 +103,7 @@
   }
 
   function trackRow(track, index = 0, options = {}) {
+    cacheTrack(track);
     const liked = S.local?.liked?.some(x => x.videoId === track.videoId);
     return `<div class="track-row" data-play="${escapeHtml(track.videoId || '')}">
       ${img(track.artworkUrl, track.title)}
@@ -111,6 +119,8 @@
 
   function findTrack(videoId) {
     if (!videoId) return null;
+    const cached = S.trackCache.get(videoId);
+    if (cached) return cached;
     const pools = [
       S.queue,
       S.home?.flatMap?.(x => x.tracks || []) || [],
