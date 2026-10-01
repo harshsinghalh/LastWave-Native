@@ -639,9 +639,9 @@
       <section id="generatedMix" class="section">${empty('Your generated mix will appear here')}</section>`;
     q('#generateBtn').addEventListener('click', async () => {
       const mood=q('#genMood').value, genre=q('#genGenre').value, seed=q('#genSeed').value.trim();
-      const q=[mood,genre,seed,'music'].filter(Boolean).join(' ');
+      const searchQuery=[mood,genre,seed,'music'].filter(Boolean).join(' ');
       q('#generatedMix').innerHTML=loading('Generating');
-      const result=await api.youtube.search(q,'song').catch(()=>({tracks:[]}));
+      const result=await api.youtube.search(searchQuery,'song').catch(()=>({tracks:[]}));
       showGenerated(result.tracks.slice(0,35),`${mood} ${genre || 'mix'}`);
     });
     q('#localMixBtn').addEventListener('click', async () => {
