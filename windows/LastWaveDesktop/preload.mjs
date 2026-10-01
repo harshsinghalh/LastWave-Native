@@ -5,6 +5,9 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('lastwave', {
   bootstrap: () => invoke('app:bootstrap'),
   state: () => invoke('state:get'),
+  search: {
+    clearHistory: () => invoke('search:clear-history')
+  },
   openExternal: url => invoke('app:open-external', url),
   showFile: file => invoke('app:show-file', file),
   openDownloads: () => invoke('app:open-downloads'),
