@@ -166,8 +166,9 @@
   function setTheme() {
     const theme = S.local?.settings?.theme || 'dark';
     document.body.classList.toggle('light', theme === 'light');
-    const accent = S.local?.settings?.accent || '#c6f100';
+    const accent = S.local?.settings?.accent || '#c9f45b';
     document.documentElement.style.setProperty('--accent', accent);
+    document.documentElement.style.setProperty('--primary', accent);
   }
 
   function navigate(route, params = {}, push = true) {
@@ -497,7 +498,7 @@
         <div class="field"><label>Session key (optional)</label><input id="lfSessionKey" type="password" value="${escapeHtml(lf.sessionKey||'')}"></div>
       </div><div class="page-actions" style="margin-top:14px"><button class="primary" id="saveLastFm">Save Last.fm</button><button class="secondary" id="authLastFm">Web sign-in</button></div></div></div>
       <div class="setting-group"><h2>Backup</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>Export / restore</strong><span>Playlists, likes, history, settings and friends</span></div><div class="page-actions"><button class="secondary" id="exportBackup">Export</button><button class="secondary" id="importBackup">Restore</button></div></div></div></div>
-      <div class="setting-group"><h2>Personal DJ profile</h2><div class="setting-card"><pre class="mini-note" style="white-space:pre-wrap">${escapeHtml(JSON.stringify(S.profile,null,2))}</pre></div></div>`;
+      <div class="setting-group"><h2>Personal DJ profile</h2><div class="setting-card"><pre class="mini-note" style="white-space:pre-wrap;padding:16px">${escapeHtml(JSON.stringify(S.profile,null,2))}</pre></div></div></div></div>`;
 
     q('#crossfadeSetting').value=String(s.crossfadeSeconds||0);
     q('#qualitySetting').value=s.audioQuality||'best';
@@ -808,8 +809,6 @@
   }
 
   function installTopbar(){
-    q('#nav')?.addEventListener('click',e=>{const b=e.target.closest('[data-route]');if(b)navigate(b.dataset.route);});
-    q('#generatorFab')?.addEventListener('click',()=>navigate('generator'));
     q('#backBtn')?.addEventListener('click',goBack);
     q('#forwardBtn')?.addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];navigate(h.route,h.params,false);}});
   }
