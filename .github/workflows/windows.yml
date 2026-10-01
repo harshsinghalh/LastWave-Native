@@ -108,6 +108,7 @@ jobs:
             windows/LastWaveDesktop/dist/LastWave-Setup-4.4.0-x64.exe
             windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.4.0.zip
             windows/LastWaveDesktop/resources/generated_profile.json
+            windows/LastWaveDesktop/tests/network-smoke-report.json
           if-no-files-found: error
 
       - name: Publish full Windows release
