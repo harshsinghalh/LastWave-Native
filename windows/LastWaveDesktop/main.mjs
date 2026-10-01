@@ -431,6 +431,8 @@ function setupIpc() {
 
   ipcMain.handle('state:get', () => store.snapshot());
   ipcMain.handle('library:toggle-like', (_e, track) => store.toggleLike(clean(track)));
+  ipcMain.handle('library:toggle-excluded', (_e, track) => store.toggleExcluded(clean(track)));
+  ipcMain.handle('library:clear-excluded', () => store.clearExcluded());
   ipcMain.handle('library:create-playlist', (_e, name) => store.createPlaylist(name));
   ipcMain.handle('library:rename-playlist', (_e, id, title) => store.renamePlaylist(id, title));
   ipcMain.handle('library:delete-playlist', (_e, id) => store.deletePlaylist(id));
