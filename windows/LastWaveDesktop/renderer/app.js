@@ -243,9 +243,9 @@
   }
 
   async function renderStats() {
-    page.innerHTML = pageHead('Listening stats','Your LastWave history and Last.fm activity.') + loading('Calculating stats');
+    page.innerHTML = pageHead('Statistics','', '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button><button class="secondary header-circle" data-route="search" title="Search">⌕</button><button class="secondary header-circle" data-route="settings" title="Settings">●</button>') + loading('Loading your listening history');
     const stats = await api.library.stats();
-    let html = pageHead('Listening stats','Your LastWave history and Last.fm activity.');
+    let html = pageHead('Statistics','', '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button><button class="secondary header-circle" data-route="search" title="Search">⌕</button><button class="secondary header-circle" data-route="settings" title="Settings">●</button>');
     html += `<div class="wide-grid">
       <div class="stat-card"><b>${stats.totalPlays}</b><span>Local plays</span></div>
       <div class="stat-card"><b>${stats.uniqueTracks}</b><span>Unique tracks</span></div>
@@ -276,8 +276,8 @@
 
   async function renderPlaylists() {
     await refreshLocal();
-    page.innerHTML = pageHead('Playlists','Your local LastWave library and imported playlists.',
-      `<button class="secondary" id="importPlaylistBtn">Import</button><button class="primary" id="createPlaylistBtn">New playlist</button>`) +
+    page.innerHTML = pageHead('Playlist', S.local.playlists.length + ' Playlists · ' + S.local.playlists.reduce((n,p)=>n+(p.tracks?.length||0),0) + ' Tracks',
+      `<button class="secondary header-circle" id="importPlaylistBtn" title="Import">⇩</button><button class="primary header-circle" id="createPlaylistBtn" title="Create playlist">＋</button>`) +
       `<section class="section"><div class="section-head"><h2>Liked songs</h2><small>${S.local.liked.length} tracks</small></div>${S.local.liked.length ? `<div class="track-list">${S.local.liked.slice(0,30).map(trackRow).join('')}</div>` : empty('No liked songs yet','Tap the heart while listening.')}</section>
       <section class="section"><div class="section-head"><h2>Your playlists</h2></div>${S.local.playlists.length ? `<div class="grid">${S.local.playlists.map(playlistCard).join('')}</div>` : empty('No playlists yet','Create one or import a playlist.')}</section>`;
     q('#createPlaylistBtn')?.addEventListener('click', createPlaylistDialog);
@@ -859,7 +859,7 @@
     q('#backBtn').addEventListener('click',()=>{if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     q('#forwardBtn').addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     const input=q('#globalSearchInput');let timer;
-    input.addEventListener('input',()=>{clearTimeout(timer);const query=input.value.trim();if(!query){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const suggestions=await api.youtube.suggestions(query).catch(()=>[]);const host=q('#suggestions');host.innerHTML=suggestions.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!s.length);},220);});
+    input.addEventListener('input',()=>{clearTimeout(timer);const query=input.value.trim();if(!query){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const suggestions=await api.youtube.suggestions(query).catch(()=>[]);const host=q('#suggestions');host.innerHTML=suggestions.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!suggestions.length);},220);});
     input.addEventListener('keydown',e=>{if(e.key==='Enter'){const query=input.value.trim();if(query){q('#suggestions').classList.add('hidden');navigate('search',{query:query});}}});
     q('#suggestions').addEventListener('click',e=>{const s=e.target.closest('[data-suggest]');if(s){input.value=s.dataset.suggest;q('#suggestions').classList.add('hidden');navigate('search',{query:s.dataset.suggest});}});
   }
