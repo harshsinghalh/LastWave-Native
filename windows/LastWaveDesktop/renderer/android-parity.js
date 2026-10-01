@@ -565,8 +565,7 @@
       var play=e.target.closest('[data-play]');if(play){var t=findTrack(play.dataset.play);if(t){var group=play.closest('.track-group');var q=group?$$('[data-play]',group).map(function(x){return findTrack(x.dataset.play)}).filter(Boolean):null;playTrack(t,q)}return}
       if(!e.target.closest('#contextMenu'))$('#contextMenu').classList.add('hidden');
     });
-    $('#nav').addEventListener('click',function(e){var b=e.target.closest('[data-route]');if(b)navigate(b.dataset.route,{})});
-    $('#generatorFab').addEventListener('click',function(){navigate('generator',{})});
+
   }
   api.onLastFmAuth(async function(result){if(result.ok){await refreshLocal();toast('Last.fm connected as '+result.value.username);if(S.route==='settings-detail')renderSettingsDetail()}else toast(result.message||'Last.fm sign-in failed')});
   async function init(){
