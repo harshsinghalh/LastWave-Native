@@ -347,8 +347,8 @@ export class YouTubeMusicService {
     // official TV/Android clients. This mirrors the Android app's philosophy:
     // one rejected extractor must never make the track globally unplayable.
     const clients = this.cookie
-      ? ['YTMUSIC', 'YTMUSIC_ANDROID', 'ANDROID', 'TV_EMBEDDED', 'WEB']
-      : ['TV_EMBEDDED', 'ANDROID', 'YTMUSIC_ANDROID', 'YTMUSIC', 'WEB'];
+      ? ['MUSIC', 'ANDROID_MUSIC', 'TV', 'WEB_EMBEDDED', 'ANDROID_VR', 'ANDROID', 'WEB']
+      : ['TV', 'ANDROID_VR', 'WEB_EMBEDDED', 'ANDROID_MUSIC', 'MUSIC', 'ANDROID', 'WEB'];
     const failures = [];
 
     for (const client of clients) {
@@ -408,7 +408,7 @@ export class YouTubeMusicService {
 
   async rawInfo(videoId) {
     const yt = await this.init(this.cookie);
-    const info = await yt.getBasicInfo(videoId, { client: 'YTMUSIC' });
+    const info = await yt.getBasicInfo(videoId, { client: 'MUSIC' });
     return safeObject(info);
   }
 }
