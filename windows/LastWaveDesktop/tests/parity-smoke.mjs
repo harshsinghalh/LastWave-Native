@@ -45,6 +45,7 @@ assert.match(js, /renderImportPage/);
 assert.match(js, /android-settings-tabs/);
 assert.match(js, /homeHiddenSections/);
 assert.match(js, /excludeTrack/);
+assert.doesNotMatch(js.slice(js.indexOf('async function renderGenerator')), /const\s+q\s*=/);
 
 // Regression guard: the visible renderer must not use the old permanent
 // desktop shell as its primary responsive model.
