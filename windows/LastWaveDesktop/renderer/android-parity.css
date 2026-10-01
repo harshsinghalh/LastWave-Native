@@ -335,3 +335,8 @@ body[data-route="stats"] .page,
 body[data-route="playlists"] .page,
 body[data-route="genres"] .page,
 body[data-route="downloads"] .page{width:min(100%,860px)}
+
+
+/* Android MiniPlayer has artwork + metadata + play + next; Like lives in full player. */
+.player #likeBtn{display:none!important}
+.player .now-playing{grid-template-columns:56px minmax(0,1fr)!important}
