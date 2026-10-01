@@ -297,3 +297,22 @@ body:not([data-route="feed"]):not([data-route="stats"]):not([data-route="playlis
   .android-now-playing{width:min(100%,620px)}
   .android-player-art{width:min(48vh,460px)}
 }
+
+
+/* Text actions keep Android filled-tonal pill proportions. */
+.page-actions .secondary:not(.header-circle),
+.page-actions .primary:not(.header-circle){
+  width:auto;min-width:44px;padding:0 15px;border-radius:999px;font-size:13px;white-space:nowrap
+}
+
+/* Android context menu is a sheet, never a desktop right-click popup. */
+.context-menu{
+  position:fixed!important;left:50%!important;right:auto!important;top:auto!important;bottom:0!important;
+  transform:translateX(-50%)!important;width:min(640px,100vw)!important;min-width:0!important;
+  padding:18px 14px 28px!important;border:0!important;border-radius:30px 30px 0 0!important;
+  background:var(--m3-surface-container-high)!important;box-shadow:0 -18px 60px rgba(0,0,0,.38)!important;
+  z-index:118!important
+}
+.context-menu:before{content:"";display:block;width:32px;height:4px;border-radius:99px;background:var(--m3-outline);margin:-9px auto 12px}
+.context-menu button{min-height:48px;border-radius:16px!important;padding:0 14px!important;font-size:14px!important}
+.context-menu button:hover{background:var(--m3-surface-container-highest)!important}
