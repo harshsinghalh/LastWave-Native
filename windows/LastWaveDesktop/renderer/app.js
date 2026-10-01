@@ -42,6 +42,7 @@
     playedHistoryFor: null,
     scrobbledFor: null,
     activeSearchType: 'all',
+    playlistSort: 'date_desc',
     trackCache: new Map()
   };
 
@@ -431,9 +432,78 @@
     });
   }
 
-  function playlistCard(p) {
+  function androidPlaylistRow(p, position, total) {
     const cover = p.tracks?.[0]?.artworkUrl || '';
-    return `<article class="music-card" data-local-playlist="${escapeHtml(p.id)}"><div class="card-overlay">${img(cover,p.title)}</div><h3>${escapeHtml(p.title)}</h3><p>${p.tracks?.length || 0} tracks</p></article>`;
+    const count = p.tracks?.length || 0;
+    const created = p.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
+    const posClass = total <= 1 ? 'single' : position === 0 ? 'first' : position === total - 1 ? 'last' : 'middle';
+    return '<article class="android-playlist-row ' + posClass + '" data-local-playlist="' + escapeHtml(p.id) + '">' +
+      '<div class="android-playlist-cover">' + img(cover,p.title) + '</div>' +
+      '<div class="android-playlist-copy"><strong>' + escapeHtml(p.title) + '</strong><span>' + count + ' tracks' + (created ? ' · ' + escapeHtml(created) : '') + (p.source && p.source !== 'local' ? ' · ' + escapeHtml(p.source) : '') + '</span></div>' +
+      '<button class="android-playlist-play" data-playlist-play="' + escapeHtml(p.id) + '" title="Play playlist">▶</button>' +
+      '<button class="tiny-btn android-playlist-more" data-playlist-menu="' + escapeHtml(p.id) + '" title="Playlist options">⋮</button>' +
+    '</article>';
+  }
+
+  function sortedPlaylists() {
+    const list = [...(S.local?.playlists || [])];
+    switch (S.playlistSort) {
+      case 'date_asc': return list.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      case 'name': return list.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));
+      case 'track_count': return list.sort((a,b)=>(b.tracks?.length||0)-(a.tracks?.length||0));
+      default: return list.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    }
+  }
+
+  function playlistSortDialog() {
+    const options = [
+      ['date_desc','Newest first'],
+      ['date_asc','Oldest first'],
+      ['name','Name'],
+      ['track_count','Track count']
+    ];
+    modal('Sort playlists',
+      '<div class="android-sort-options">' + options.map(function(pair){
+        return '<button class="android-sort-option ' + (S.playlistSort===pair[0]?'active':'') + '" data-playlist-sort="' + pair[0] + '"><span>' + escapeHtml(pair[1]) + '</span><b>' + (S.playlistSort===pair[0]?'✓':'') + '</b></button>';
+      }).join('') + '</div>',
+      '<button class="secondary" data-close-modal>Cancel</button>');
+    qa('[data-playlist-sort]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        S.playlistSort=btn.dataset.playlistSort;
+        q('#modalHost').innerHTML='';
+        renderPlaylists();
+      });
+    });
+  }
+
+  function playlistOptionsDialog(p) {
+    modal(p.title,
+      '<div class="android-sort-options">' +
+        '<button class="android-sort-option" id="playlistRenameAction"><span>Rename</span><b>›</b></button>' +
+        '<button class="android-sort-option" id="playlistDownloadAction"><span>Download playlist</span><b>⇩</b></button>' +
+        '<button class="android-sort-option danger" id="playlistDeleteAction"><span>Delete playlist</span><b>×</b></button>' +
+      '</div>',
+      '<button class="secondary" data-close-modal>Cancel</button>');
+    q('#playlistRenameAction')?.addEventListener('click',function(){q('#modalHost').innerHTML='';renamePlaylistDialog(p);});
+    q('#playlistDownloadAction')?.addEventListener('click',async function(){
+      q('#modalHost').innerHTML='';
+      if(!p.tracks?.length)return toast('This playlist is empty');
+      toast('Downloading ' + p.tracks.length + ' tracks…',6000);
+      let ok=0;
+      for(const track of p.tracks){
+        try{await api.downloads.track(track);ok++;}catch{}
+      }
+      await refreshLocal();
+      toast('Downloaded ' + ok + ' of ' + p.tracks.length + ' tracks',5000);
+    });
+    q('#playlistDeleteAction')?.addEventListener('click',async function(){
+      q('#modalHost').innerHTML='';
+      if(confirm('Delete "'+p.title+'"? This cannot be undone.')){
+        await api.library.deletePlaylist(p.id);
+        await refreshLocal();
+        renderPlaylists();
+      }
+    });
   }
 
   async function refreshLocal() {
@@ -444,12 +514,65 @@
 
   async function renderPlaylists() {
     await refreshLocal();
-    page.innerHTML = pageHead('Playlist', S.local.playlists.length + ' Playlists · ' + S.local.playlists.reduce((n,p)=>n+(p.tracks?.length||0),0) + ' Tracks',
-      `<button class="secondary header-circle" id="importPlaylistBtn" title="Import">⇩</button><button class="primary header-circle" id="createPlaylistBtn" title="Create playlist">＋</button>`) +
-      `<section class="section"><div class="section-head"><h2>Liked songs</h2><small>${S.local.liked.length} tracks</small></div>${S.local.liked.length ? `<div class="track-list">${S.local.liked.slice(0,30).map(trackRow).join('')}</div>` : empty('No liked songs yet','Tap the heart while listening.')}</section>
-      <section class="section"><div class="section-head"><h2>Your playlists</h2></div>${S.local.playlists.length ? `<div class="grid">${S.local.playlists.map(playlistCard).join('')}</div>` : empty('No playlists yet','Create one or import a playlist.')}</section>`;
-    q('#createPlaylistBtn')?.addEventListener('click', createPlaylistDialog);
-    q('#importPlaylistBtn')?.addEventListener('click', importDialog);
+    const playlists = sortedPlaylists();
+    const totalTracks = playlists.reduce(function(n,p){return n+(p.tracks?.length||0);},0);
+    const sortLabel = {
+      date_desc:'Newest first',
+      date_asc:'Oldest first',
+      name:'Name',
+      track_count:'Track count'
+    }[S.playlistSort] || 'Newest first';
+
+    const actions =
+      '<button class="primary header-circle" id="createPlaylistBtn" title="Create custom playlist">＋</button>' +
+      '<button class="secondary header-wide" id="playlistSortBtn" title="Sort playlists">↕ <span>Sort</span></button>';
+
+    let html = pageHead('Playlist', playlists.length + ' Playlists · ' + totalTracks + ' Tracks', actions);
+
+    if (S.local.liked?.length) {
+      const cover = S.local.liked.find(function(t){return t.artworkUrl;})?.artworkUrl || '';
+      html += '<section class="android-playlist-special" data-liked-playlist="1">' +
+        '<div class="android-playlist-cover android-liked-cover">' + (cover ? img(cover,'Liked songs') : '<span>♥</span>') + '</div>' +
+        '<div class="android-playlist-copy"><strong>Liked songs</strong><span>' + S.local.liked.length + ' tracks · LastWave</span></div>' +
+        '<button class="android-playlist-play" id="playLikedSongs">▶</button>' +
+        '<button class="tiny-btn" data-route="settings" title="Liked songs settings">⋮</button>' +
+      '</section>';
+    }
+
+    html += '<div class="android-playlist-sort-caption"><span>' + escapeHtml(sortLabel) + '</span><button id="importPlaylistBtn">Import</button></div>';
+
+    if (playlists.length) {
+      html += '<section class="android-playlist-group">' +
+        playlists.map(function(p,index){return androidPlaylistRow(p,index,playlists.length);}).join('') +
+      '</section>';
+    } else {
+      html += '<div class="android-playlist-empty"><div>♫</div><h2>No playlists yet</h2><p>Head to Create to build your first mix, or import an existing playlist.</p><button class="primary" id="emptyCreatePlaylist">Create playlist</button></div>';
+    }
+
+    page.innerHTML = html;
+
+    q('#createPlaylistBtn')?.addEventListener('click',createPlaylistDialog);
+    q('#emptyCreatePlaylist')?.addEventListener('click',createPlaylistDialog);
+    q('#playlistSortBtn')?.addEventListener('click',playlistSortDialog);
+    q('#importPlaylistBtn')?.addEventListener('click',importDialog);
+    q('#playLikedSongs')?.addEventListener('click',function(){
+      if(S.local.liked?.[0]) playTrack(S.local.liked[0],S.local.liked);
+    });
+
+    qa('[data-playlist-play]').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        const p=S.local.playlists.find(function(x){return String(x.id)===String(btn.dataset.playlistPlay);});
+        if(p?.tracks?.[0]) playTrack(p.tracks[0],p.tracks);
+      });
+    });
+    qa('[data-playlist-menu]').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        const p=S.local.playlists.find(function(x){return String(x.id)===String(btn.dataset.playlistMenu);});
+        if(p) playlistOptionsDialog(p);
+      });
+    });
   }
 
   async function renderLocalPlaylist(id) {
