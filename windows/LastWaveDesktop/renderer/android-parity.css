@@ -438,3 +438,8 @@ textarea.form-control{min-height:82px;resize:vertical}
   .control-small{width:44px;height:44px}.control-medium{width:52px;height:52px}.control-primary{width:70px;height:70px}
   .generator-grid{grid-template-columns:1fr}
 }
+
+.lastwave-shell.pushed .floating-dock{display:none}
+.lastwave-shell.pushed .mini-player{bottom:14px}
+.lastwave-shell.pushed.has-player .page{padding-bottom:112px}
+.art-card{background:transparent;color:inherit;border:0;text-align:left;padding:0}
