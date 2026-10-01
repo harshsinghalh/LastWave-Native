@@ -52,6 +52,7 @@ jobs:
           }
           python tools/generate_laya_profile.py --use-laya
           Copy-Item personalization/generated_profile.json windows/LastWaveDesktop/resources/generated_profile.json -Force
+          Copy-Item app/src/main/res/font/google_sans_flex.ttf windows/LastWaveDesktop/resources/google_sans_flex.ttf -Force
           Get-Content windows/LastWaveDesktop/resources/generated_profile.json
 
       - name: Install desktop dependencies
@@ -80,6 +81,12 @@ jobs:
       - name: Run full desktop smoke tests
         run: npm run test:smoke
 
+      - name: Verify Android UI parity shell
+        run: npm run test:parity
+
+      - name: Run renderer interaction smoke test
+        run: node tests/renderer-smoke.mjs
+
       - name: Run live desktop playback smoke test
         timeout-minutes: 4
         env:
@@ -94,7 +101,7 @@ jobs:
       - name: Verify packaged Windows app
         shell: pwsh
         run: |
-          $installer = Get-ChildItem dist -Filter 'LastWave-Setup-4.4.0-x64.exe' | Select-Object -First 1
+          $installer = Get-ChildItem dist -Filter 'LastWave-Setup-4.5.0-x64.exe' | Select-Object -First 1
           if (-not $installer) { throw 'LastWave installer was not produced' }
           $appExe = Get-ChildItem dist/win-unpacked -Filter 'LastWave.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $appExe) { throw 'Packaged LastWave.exe was not produced' }
@@ -102,15 +109,15 @@ jobs:
           Get-Item $appExe.FullName | Format-List Name,Length,VersionInfo
           Get-FileHash $installer.FullName -Algorithm SHA256 | Format-List
           Get-FileHash $appExe.FullName -Algorithm SHA256 | Format-List
-          Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/LastWave-Windows-Portable-4.4.0.zip -Force
+          Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/LastWave-Windows-Portable-4.5.0.zip -Force
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-Windows-Full-v4.4.0
+          name: LastWave-Windows-Full-v4.5.0
           path: |
-            windows/LastWaveDesktop/dist/LastWave-Setup-4.4.0-x64.exe
-            windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.4.0.zip
+            windows/LastWaveDesktop/dist/LastWave-Setup-4.5.0-x64.exe
+            windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.5.0.zip
             windows/LastWaveDesktop/resources/generated_profile.json
             windows/LastWaveDesktop/tests/network-smoke-report.json
           if-no-files-found: error
@@ -127,9 +134,9 @@ jobs:
             Write-Host 'A newer main commit exists; skipping stale release publication.'
             exit 0
           }
-          $tag = 'v4.4.0'
+          $tag = 'v4.5.0'
           gh release view $tag 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target $env:GITHUB_SHA --title 'LastWave v4.4.0 - Full Windows Desktop App' --notes 'Full Windows 11 LastWave desktop client. Includes YouTube Music feed/search/playback, playlists/library, smart generator, genres/discovery, synced lyrics, downloads, Last.fm friends/scrobbling, imports/backups/settings, Windows media-session controls, and the Laya-personalized predictive DJ Energy mode. Android remains available from v4.3.0.'
+            gh release create $tag --target $env:GITHUB_SHA --title 'LastWave v4.5.0 - Android UI Parity Windows App' --notes 'Windows 11 build rebuilt against the Android app as the visual and interaction source of truth. Restores the Android expressive header, centered adaptive widths, floating bottom dock, grouped Material 3 surfaces, floating mini-player, immersive Now Playing/Lyrics/Queue player, responsive compact/medium/expanded behavior, while retaining the desktop catalog/library/Last.fm/download/import/backup features and Laya-personalized DJ Energy mode.'
           }
-          gh release upload $tag windows/LastWaveDesktop/dist/LastWave-Setup-4.4.0-x64.exe windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.4.0.zip windows/LastWaveDesktop/resources/generated_profile.json --clobber
+          gh release upload $tag windows/LastWaveDesktop/dist/LastWave-Setup-4.5.0-x64.exe windows/LastWaveDesktop/dist/LastWave-Windows-Portable-4.5.0.zip windows/LastWaveDesktop/resources/generated_profile.json --clobber

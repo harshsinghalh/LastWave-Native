@@ -42,6 +42,9 @@
     playedHistoryFor: null,
     scrobbledFor: null,
     activeSearchType: 'all',
+    playlistSort: 'date_desc',
+    generatorMode: null,
+    generatorTrackCount: 25,
     trackCache: new Map()
   };
 
@@ -117,6 +120,70 @@
     </div>`;
   }
 
+  function androidGreeting() {
+    const hour = new Date().getHours();
+    const greeting = hour >= 5 && hour <= 11 ? 'Good morning'
+      : hour >= 12 && hour <= 16 ? 'Good afternoon'
+      : hour >= 17 && hour <= 21 ? 'Good evening'
+      : 'Good night';
+    const date = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric'
+    }).format(new Date());
+    return { greeting, date };
+  }
+
+  function androidFeedHero(tracks) {
+    const first = tracks?.find?.(x => x?.artworkUrl) || tracks?.[0] || null;
+    if (first) cacheTrack(first);
+    const art = first?.artworkUrl || '';
+    return '<div class="android-feed-hero">' +
+      (art ? '<div class="android-feed-hero-art" style="background-image:url(&quot;' + escapeHtml(art) + '&quot;)"></div>' : '') +
+      '<div class="android-feed-hero-gradient"></div>' +
+      '<div class="android-feed-hero-content">' +
+        '<div class="android-made-for-you">✦ <span>MADE FOR YOU</span></div>' +
+        '<h2>Infinite Radio</h2>' +
+        '<p>An endless station shaped by your listening</p>' +
+        '<button class="android-hero-play" data-infinite-radio="1" ' + (!tracks?.length ? 'disabled' : '') + '>▶ <span>Play</span></button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function androidQuickAccessTile({title, subtitle, artworkUrl, kind, action}) {
+    const art = artworkUrl
+      ? img(artworkUrl, title)
+      : '<div class="android-quick-fallback">' + (kind === 'liked' ? '♥' : kind === 'recent' ? '↻' : kind === 'release' ? '◌' : '✦') + '</div>';
+    return '<button class="android-quick-card android-quick-' + escapeHtml(kind || 'default') + '" data-quick-action="' + escapeHtml(action || '') + '">' +
+      '<div class="android-quick-art">' + art + '</div>' +
+      '<strong>' + escapeHtml(title) + '</strong>' +
+      '<span>' + escapeHtml(subtitle || '') + '</span>' +
+    '</button>';
+  }
+
+  function androidQuickPicksColumns(tracks) {
+    if (!tracks?.length) return '';
+    tracks.forEach(cacheTrack);
+    const columns = [];
+    for (let i = 0; i < tracks.length; i += 3) columns.push(tracks.slice(i, i + 3));
+    return '<div class="android-picks-strip">' + columns.map(function(column){
+      return '<div class="android-picks-column">' + column.map(function(track){
+        const isCurrent = S.current?.videoId && S.current.videoId === track.videoId;
+        return '<div class="android-pick-row ' + (isCurrent ? 'current' : '') + '" data-play="' + escapeHtml(track.videoId || '') + '">' +
+          '<div class="android-pick-art">' + img(track.artworkUrl, track.title) + (isCurrent && !audio.paused ? '<span class="android-playing-bars">▮▮▮</span>' : '') + '</div>' +
+          '<div class="android-pick-copy"><strong>' + escapeHtml(track.title || 'Untitled') + '</strong><span>' + escapeHtml(track.artist || 'Unknown artist') + '</span></div>' +
+          '<button class="tiny-btn" data-context="' + escapeHtml(track.videoId || '') + '" title="More">⋮</button>' +
+        '</div>';
+      }).join('') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function androidTasteStrip() {
+    const tags = ['Chill','Focus','Energy','Bollywood','Indie','Workout','Nostalgia','Late night'];
+    return '<section class="android-taste-section"><div class="section-head"><div><h2>Your sound</h2><small>Tap a vibe to start instant radio</small></div></div>' +
+      '<div class="android-taste-strip">' +
+        tags.map(tag => '<button class="android-taste-chip" data-taste-query="' + escapeHtml(tag) + '"><i></i><span>' + escapeHtml(tag) + '</span></button>').join('') +
+      '</div></section>';
+  }
+
   function findTrack(videoId) {
     if (!videoId) return null;
     const cached = S.trackCache.get(videoId);
@@ -137,7 +204,14 @@
   }
 
   function pageHead(title, subtitle='', actions='') {
-    return `<div class="page-head"><div class="page-title"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><div class="page-actions">${actions}</div></div>`;
+    const roots = new Set(['feed','stats','playlists']);
+    const back = roots.has(S.route) ? '' : '<button class="header-back" data-android-back="1" title="Back">‹</button>';
+    const sub = subtitle ? '<p>' + escapeHtml(subtitle) + '</p>' : '';
+    return '<div class="page-head">' +
+      back +
+      '<div class="page-title"><h1>' + escapeHtml(title) + '</h1>' + sub + '</div>' +
+      '<div class="page-actions">' + actions + '</div>' +
+    '</div>';
   }
 
   function setConnection(text, kind='online') {
@@ -156,6 +230,7 @@
   function navigate(route, params = {}, push = true) {
     S.route = route;
     S.routeParams = params || {};
+    document.body.dataset.route = route;
     if (push) {
       S.history = S.history.slice(0, S.historyIndex + 1);
       S.history.push({ route, params });
@@ -181,6 +256,13 @@
       case 'generator': return renderGenerator();
       case 'friends': return renderFriends();
       case 'downloads': return renderDownloads();
+      case 'new-releases': return renderNewReleases();
+      case 'provider-modules': return renderProviderModules();
+      case 'home-sections': return renderHomeSections();
+      case 'excluded-songs': return renderExcludedSongs();
+      case 'youtube-login': return renderYouTubeLoginPage();
+      case 'youtube-import': return renderImportPage('youtube');
+      case 'external-import': return renderImportPage('external');
       case 'settings': return renderSettings();
       case 'entity': return renderEntity(S.routeParams.kind, S.routeParams.id, S.routeParams.title);
       case 'playlist-detail': return renderLocalPlaylist(S.routeParams.id);
@@ -189,43 +271,241 @@
   }
 
   async function renderFeed() {
-    page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Your music, now native to your Windows workflow.</h1><p>Ad-free YouTube Music catalog access, synced lyrics, smart playlists, Last.fm, downloads and your Laya-personalized DJ Energy profile.</p><button class="primary" data-route="discover">Discover music</button></div></section>${loading('Loading your music feed')}`;
+    const actions =
+      '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button>' +
+      '<button class="secondary header-circle" data-route="search" title="Search">⌕</button>' +
+      '<button class="secondary header-circle android-profile-action" data-route="settings" title="Settings"><span>●</span></button>';
+
+    const greeting = androidGreeting();
+    const heroIntro =
+      '<div class="android-greeting"><h2>' + escapeHtml(greeting.greeting) + '</h2><p>' + escapeHtml(greeting.date) + '</p></div>';
+
+    page.innerHTML = pageHead('Home','',actions) + heroIntro + loading('Loading your music');
+
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections = (S.home || []).filter(x => x?.tracks?.length);
-      page.innerHTML = `<section class="hero"><div class="hero-content"><span class="eyebrow">LastWave Desktop</span><h1>Listen your way.</h1><p>Full music client with smart discovery, local playlists, Last.fm and predictive Personal DJ dynamics.</p><div class="page-actions"><button class="primary" data-route="discover">Discover music</button><button class="secondary" data-route="generator">Generate a mix</button></div></div></section>` +
-        (sections.length ? sections.map(s => `<section class="section"><div class="section-head"><h2>${escapeHtml(s.title || 'For you')}</h2><small>${s.tracks.length} picks</small></div><div class="card-row">${s.tracks.map(card).join('')}</div></section>`).join('') : empty('Your feed is empty','Try Search or Discover.'));
+
+      const hiddenSections = new Set((S.local?.settings?.homeHiddenSections || []).map(function(x){ return String(x).toLowerCase(); }));
+      const excludedIds = new Set((S.local?.excluded || []).map(function(x){ return x.videoId; }));
+      const sections = (S.home || [])
+        .filter(function(x){ return x && x.tracks && x.tracks.length && !hiddenSections.has(String(x.title || '').toLowerCase()); })
+        .map(function(x){ return { ...x, tracks: x.tracks.filter(function(t){ return !excludedIds.has(t.videoId); }) }; })
+        .filter(function(x){ return x.tracks.length; });
+
+      const allTracks = sections.flatMap(function(x){ return x.tracks; });
+      const quickPicks = sections[0]?.tracks?.slice(0,18) || allTracks.slice(0,18);
+      const firstLiked = S.local?.liked?.find?.(x => x?.artworkUrl) || S.local?.liked?.[0];
+      const firstRecent = S.local?.history?.find?.(x => x?.artworkUrl) || S.local?.history?.[0];
+      const firstFeed = allTracks.find(x => x?.artworkUrl) || allTracks[0];
+
+      const quickTiles =
+        '<section class="android-quick-surface">' +
+          '<div class="section-head"><div><h2>Quick access</h2></div></div>' +
+          '<div class="android-quick-strip">' +
+            androidQuickAccessTile({title:'Liked songs',subtitle:(S.local?.liked?.length || 0) + ' tracks',artworkUrl:firstLiked?.artworkUrl,kind:'liked',action:'liked'}) +
+            androidQuickAccessTile({title:'Recently played',subtitle:'Jump back in',artworkUrl:firstRecent?.artworkUrl,kind:'recent',action:'recent'}) +
+            androidQuickAccessTile({title:'Discover',subtitle:'Radio & mixes',artworkUrl:firstFeed?.artworkUrl,kind:'mix',action:'discover'}) +
+            androidQuickAccessTile({title:'New releases',subtitle:'Fresh drops',artworkUrl:sections[1]?.tracks?.[0]?.artworkUrl,kind:'release',action:'new-releases'}) +
+          '</div>' +
+        '</section>';
+
+      let html = pageHead('Home','',actions) +
+        heroIntro +
+        androidFeedHero(quickPicks) +
+        quickTiles +
+        androidTasteStrip();
+
+      if (quickPicks.length) {
+        html += '<section class="android-picks-surface"><div class="section-head android-section-actions"><div><h2>Picked for you</h2><small>From your listening · refreshed for you</small></div><div class="android-header-pills"><button class="chip" data-shuffle-picks="1">Shuffle</button><button class="chip active" data-play-picks="1">▶ Play all</button></div></div>' +
+          androidQuickPicksColumns(quickPicks) + '</section>';
+      }
+
+      sections.slice(1).forEach(function(section){
+        html += '<section class="section"><div class="section-head"><div><h2>' + escapeHtml(section.title || 'For you') + '</h2></div></div>' +
+          '<div class="card-row">' + section.tracks.slice(0,18).map(card).join('') + '</div></section>';
+      });
+
+      if (!sections.length) {
+        html += empty('Your feed is empty','Search for a favorite or explore something new.');
+      }
+
+      html += '<div class="android-feed-footer">Made for you from your taste</div>';
+      page.innerHTML = html;
+
+      q('[data-infinite-radio]')?.addEventListener('click', function(){
+        if (quickPicks[0]) playTrack(quickPicks[0], quickPicks);
+      });
+      q('[data-play-picks]')?.addEventListener('click', function(){
+        if (quickPicks[0]) playTrack(quickPicks[0], quickPicks);
+      });
+      q('[data-shuffle-picks]')?.addEventListener('click', function(){
+        if (!quickPicks.length) return;
+        const shuffled = [...quickPicks].sort(() => Math.random() - .5);
+        playTrack(shuffled[0], shuffled);
+      });
+      qa('[data-quick-action]').forEach(function(button){
+        button.addEventListener('click', function(){
+          const action = button.dataset.quickAction;
+          if (action === 'liked') navigate('playlists');
+          else if (action === 'recent') navigate('stats');
+          else if (action === 'discover') navigate('discover');
+          else if (action === 'new-releases') navigate('new-releases');
+        });
+      });
+      qa('[data-taste-query]').forEach(function(button){
+        button.addEventListener('click', function(){
+          navigate('search',{query:button.dataset.tasteQuery + ' music',type:'song'});
+        });
+      });
     } catch (e) {
       setConnection('Catalog unavailable','error');
-      page.innerHTML += empty('Could not load the feed', e.message);
+      page.innerHTML = pageHead('Home','',actions) + heroIntro + empty('Could not load your music', e.message || 'Try again.');
     }
   }
 
   async function renderStats() {
-    page.innerHTML = pageHead('Listening stats','Your LastWave history and Last.fm activity.') + loading('Calculating stats');
+    const actions =
+      '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button>' +
+      '<button class="secondary header-circle" data-route="search" title="Search">⌕</button>' +
+      '<button class="secondary header-circle android-profile-action" data-route="settings" title="Settings"><span>●</span></button>';
+
+    page.innerHTML = pageHead('Statistics','',actions) + loading('Loading your listening history');
+    await refreshLocal();
     const stats = await api.library.stats();
-    let html = pageHead('Listening stats','Your LastWave history and Last.fm activity.');
-    html += `<div class="wide-grid">
-      <div class="stat-card"><b>${stats.totalPlays}</b><span>Local plays</span></div>
-      <div class="stat-card"><b>${stats.uniqueTracks}</b><span>Unique tracks</span></div>
-      <div class="stat-card"><b>${stats.activeDays}</b><span>Active listening days</span></div>
-    </div>`;
-    if (stats.topTracks.length) html += `<section class="section"><div class="section-head"><h2>Top tracks</h2></div><div class="track-list">${stats.topTracks.map(trackRow).join('')}</div></section>`;
-    if (stats.topArtists.length) html += `<section class="section"><div class="section-head"><h2>Top artists</h2></div><div class="wide-grid">${stats.topArtists.map(x => `<div class="panel-card"><strong>${escapeHtml(x.artist)}</strong><div class="mini-note">${x.plays} plays</div></div>`).join('')}</div></section>`;
-    const username = S.local.settings.lastfm?.username;
-    if (username && S.local.settings.lastfm?.apiKey) {
-      try {
-        const user = await api.lastfm.user(username);
-        html += `<section class="section"><div class="section-head"><h2>Last.fm</h2></div><div class="wide-grid"><div class="stat-card"><b>${user.playcount.toLocaleString()}</b><span>Total scrobbles</span></div><div class="stat-card"><b>${escapeHtml(user.username)}</b><span>Connected profile</span></div></div></section>`;
-      } catch {}
+
+    const history = S.local?.history || [];
+    const uniqueAlbums = new Set(history.map(function(x){return String(x.album || '').trim();}).filter(Boolean)).size;
+    const username = S.local?.settings?.lastfm?.username || 'Guest';
+    const headline = S.local?.settings?.lastfm?.sessionKey ? 'Scrobbles' : 'Plays';
+    const currentLabel = S.current ? ('Listening to ' + S.current.title) : 'Local listening history';
+
+    let html = pageHead('Statistics','',actions) +
+      '<div class="android-stats-user-row">' +
+        '<button class="android-user-pill" data-route="friends"><span class="android-user-pill-avatar">●</span><strong>' + escapeHtml(username) + '</strong></button>' +
+        '<div class="android-listen-pill"><span>◷</span><strong>' + escapeHtml(currentLabel) + '</strong></div>' +
+      '</div>';
+
+    if (!S.local?.settings?.lastfm?.username) {
+      html += '<div class="android-local-stats-banner"><span>◉</span><div><strong>Local statistics</strong><small>Connect Last.fm in Settings for global scrobbles and friends.</small></div><button data-route="settings">Settings</button></div>';
     }
+
+    html += '<section class="android-stats-hero">' +
+      '<div class="android-stats-main">' +
+        '<div><strong>' + (stats.totalPlays ? stats.totalPlays.toLocaleString() : '—') + '</strong><span>' + headline + '</span></div>' +
+        '<button data-route="genres" title="View genres">→</button>' +
+      '</div>' +
+      '<div class="android-stat-pills">' +
+        '<div><strong>' + (stats.uniqueTracks || '—') + '</strong><span>Tracks</span></div>' +
+        '<div><strong>' + (stats.topArtists?.length || '—') + '</strong><span>Artists</span></div>' +
+        '<div><strong>' + (uniqueAlbums || '—') + '</strong><span>Albums</span></div>' +
+      '</div>' +
+    '</section>';
+
+    const rows = stats.topTracks || [];
+    html += '<section class="android-stats-list">' +
+      '<div class="android-mix-header"><div><strong>List</strong><span>' + rows.length + ' tracks</span></div><button id="statsSortBtn">↕ <span>Recent</span></button></div>' +
+      (rows.length ? '<div class="android-stats-rows">' + rows.map(function(track,index){
+        cacheTrack(track);
+        return '<div class="android-stat-track ' + (S.current?.videoId===track.videoId?'current':'') + '" data-play="' + escapeHtml(track.videoId || '') + '">' +
+          '<div class="android-stat-index">' + (index + 1) + '</div>' +
+          '<div class="android-stat-art">' + img(track.artworkUrl,track.title) + '</div>' +
+          '<div class="android-stat-copy"><strong>' + escapeHtml(track.title || '') + '</strong><span>' + escapeHtml(track.artist || '') + '</span></div>' +
+          '<div class="android-stat-plays">' + escapeHtml(String(track.plays || '')) + '</div>' +
+          '<button class="tiny-btn" data-context="' + escapeHtml(track.videoId || '') + '">⋮</button>' +
+        '</div>';
+      }).join('') + '</div>' : empty('No listening history yet','Play some music and your statistics will build here.')) +
+    '</section>';
+
+    if (stats.topArtists?.length) {
+      html += '<section class="section"><div class="section-head"><div><h2>Top artists</h2></div></div><div class="android-artist-strip">' +
+        stats.topArtists.slice(0,12).map(function(x,index){
+          return '<button class="android-artist-pill" data-search-artist="' + escapeHtml(x.artist) + '"><span>' + (index+1) + '</span><strong>' + escapeHtml(x.artist) + '</strong><small>' + x.plays + ' plays</small></button>';
+        }).join('') + '</div></section>';
+    }
+
     page.innerHTML = html;
+
+    q('#statsSortBtn')?.addEventListener('click',function(){
+      toast('The Android app exposes Recent / Most Played / 7 Days / 30 Days. Local Windows history currently uses the same Recent ordering.');
+    });
+    qa('[data-search-artist]').forEach(function(btn){
+      btn.addEventListener('click',function(){ navigate('search',{query:btn.dataset.searchArtist,type:'artist'}); });
+    });
   }
 
-  function playlistCard(p) {
+  function androidPlaylistRow(p, position, total) {
     const cover = p.tracks?.[0]?.artworkUrl || '';
-    return `<article class="music-card" data-local-playlist="${escapeHtml(p.id)}"><div class="card-overlay">${img(cover,p.title)}</div><h3>${escapeHtml(p.title)}</h3><p>${p.tracks?.length || 0} tracks</p></article>`;
+    const count = p.tracks?.length || 0;
+    const created = p.createdAt ? new Date(p.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
+    const posClass = total <= 1 ? 'single' : position === 0 ? 'first' : position === total - 1 ? 'last' : 'middle';
+    return '<article class="android-playlist-row ' + posClass + '" data-local-playlist="' + escapeHtml(p.id) + '">' +
+      '<div class="android-playlist-cover">' + img(cover,p.title) + '</div>' +
+      '<div class="android-playlist-copy"><strong>' + escapeHtml(p.title) + '</strong><span>' + count + ' tracks' + (created ? ' · ' + escapeHtml(created) : '') + (p.source && p.source !== 'local' ? ' · ' + escapeHtml(p.source) : '') + '</span></div>' +
+      '<button class="android-playlist-play" data-playlist-play="' + escapeHtml(p.id) + '" title="Play playlist">▶</button>' +
+      '<button class="tiny-btn android-playlist-more" data-playlist-menu="' + escapeHtml(p.id) + '" title="Playlist options">⋮</button>' +
+    '</article>';
+  }
+
+  function sortedPlaylists() {
+    const list = [...(S.local?.playlists || [])];
+    switch (S.playlistSort) {
+      case 'date_asc': return list.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      case 'name': return list.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));
+      case 'track_count': return list.sort((a,b)=>(b.tracks?.length||0)-(a.tracks?.length||0));
+      default: return list.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    }
+  }
+
+  function playlistSortDialog() {
+    const options = [
+      ['date_desc','Newest first'],
+      ['date_asc','Oldest first'],
+      ['name','Name'],
+      ['track_count','Track count']
+    ];
+    modal('Sort playlists',
+      '<div class="android-sort-options">' + options.map(function(pair){
+        return '<button class="android-sort-option ' + (S.playlistSort===pair[0]?'active':'') + '" data-playlist-sort="' + pair[0] + '"><span>' + escapeHtml(pair[1]) + '</span><b>' + (S.playlistSort===pair[0]?'✓':'') + '</b></button>';
+      }).join('') + '</div>',
+      '<button class="secondary" data-close-modal>Cancel</button>');
+    qa('[data-playlist-sort]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        S.playlistSort=btn.dataset.playlistSort;
+        q('#modalHost').innerHTML='';
+        renderPlaylists();
+      });
+    });
+  }
+
+  function playlistOptionsDialog(p) {
+    modal(p.title,
+      '<div class="android-sort-options">' +
+        '<button class="android-sort-option" id="playlistRenameAction"><span>Rename</span><b>›</b></button>' +
+        '<button class="android-sort-option" id="playlistDownloadAction"><span>Download playlist</span><b>⇩</b></button>' +
+        '<button class="android-sort-option danger" id="playlistDeleteAction"><span>Delete playlist</span><b>×</b></button>' +
+      '</div>',
+      '<button class="secondary" data-close-modal>Cancel</button>');
+    q('#playlistRenameAction')?.addEventListener('click',function(){q('#modalHost').innerHTML='';renamePlaylistDialog(p);});
+    q('#playlistDownloadAction')?.addEventListener('click',async function(){
+      q('#modalHost').innerHTML='';
+      if(!p.tracks?.length)return toast('This playlist is empty');
+      toast('Downloading ' + p.tracks.length + ' tracks…',6000);
+      let ok=0;
+      for(const track of p.tracks){
+        try{await api.downloads.track(track);ok++;}catch{}
+      }
+      await refreshLocal();
+      toast('Downloaded ' + ok + ' of ' + p.tracks.length + ' tracks',5000);
+    });
+    q('#playlistDeleteAction')?.addEventListener('click',async function(){
+      q('#modalHost').innerHTML='';
+      if(confirm('Delete "'+p.title+'"? This cannot be undone.')){
+        await api.library.deletePlaylist(p.id);
+        await refreshLocal();
+        renderPlaylists();
+      }
+    });
   }
 
   async function refreshLocal() {
@@ -236,12 +516,65 @@
 
   async function renderPlaylists() {
     await refreshLocal();
-    page.innerHTML = pageHead('Playlists','Your local LastWave library and imported playlists.',
-      `<button class="secondary" id="importPlaylistBtn">Import</button><button class="primary" id="createPlaylistBtn">New playlist</button>`) +
-      `<section class="section"><div class="section-head"><h2>Liked songs</h2><small>${S.local.liked.length} tracks</small></div>${S.local.liked.length ? `<div class="track-list">${S.local.liked.slice(0,30).map(trackRow).join('')}</div>` : empty('No liked songs yet','Tap the heart while listening.')}</section>
-      <section class="section"><div class="section-head"><h2>Your playlists</h2></div>${S.local.playlists.length ? `<div class="grid">${S.local.playlists.map(playlistCard).join('')}</div>` : empty('No playlists yet','Create one or import a playlist.')}</section>`;
-    q('#createPlaylistBtn')?.addEventListener('click', createPlaylistDialog);
-    q('#importPlaylistBtn')?.addEventListener('click', importDialog);
+    const playlists = sortedPlaylists();
+    const totalTracks = playlists.reduce(function(n,p){return n+(p.tracks?.length||0);},0);
+    const sortLabel = {
+      date_desc:'Newest first',
+      date_asc:'Oldest first',
+      name:'Name',
+      track_count:'Track count'
+    }[S.playlistSort] || 'Newest first';
+
+    const actions =
+      '<button class="primary header-circle" id="createPlaylistBtn" title="Create custom playlist">＋</button>' +
+      '<button class="secondary header-wide" id="playlistSortBtn" title="Sort playlists">↕ <span>Sort</span></button>';
+
+    let html = pageHead('Playlist', playlists.length + ' Playlists · ' + totalTracks + ' Tracks', actions);
+
+    if (S.local.liked?.length) {
+      const cover = S.local.liked.find(function(t){return t.artworkUrl;})?.artworkUrl || '';
+      html += '<section class="android-playlist-special" data-liked-playlist="1">' +
+        '<div class="android-playlist-cover android-liked-cover">' + (cover ? img(cover,'Liked songs') : '<span>♥</span>') + '</div>' +
+        '<div class="android-playlist-copy"><strong>Liked songs</strong><span>' + S.local.liked.length + ' tracks · LastWave</span></div>' +
+        '<button class="android-playlist-play" id="playLikedSongs">▶</button>' +
+        '<button class="tiny-btn" data-route="settings" title="Liked songs settings">⋮</button>' +
+      '</section>';
+    }
+
+    html += '<div class="android-playlist-sort-caption"><span>' + escapeHtml(sortLabel) + '</span><button id="importPlaylistBtn">Import</button></div>';
+
+    if (playlists.length) {
+      html += '<section class="android-playlist-group">' +
+        playlists.map(function(p,index){return androidPlaylistRow(p,index,playlists.length);}).join('') +
+      '</section>';
+    } else {
+      html += '<div class="android-playlist-empty"><div>♫</div><h2>No playlists yet</h2><p>Head to Create to build your first mix, or import an existing playlist.</p><button class="primary" id="emptyCreatePlaylist">Create playlist</button></div>';
+    }
+
+    page.innerHTML = html;
+
+    q('#createPlaylistBtn')?.addEventListener('click',createPlaylistDialog);
+    q('#emptyCreatePlaylist')?.addEventListener('click',createPlaylistDialog);
+    q('#playlistSortBtn')?.addEventListener('click',playlistSortDialog);
+    q('#importPlaylistBtn')?.addEventListener('click',importDialog);
+    q('#playLikedSongs')?.addEventListener('click',function(){
+      if(S.local.liked?.[0]) playTrack(S.local.liked[0],S.local.liked);
+    });
+
+    qa('[data-playlist-play]').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        const p=S.local.playlists.find(function(x){return String(x.id)===String(btn.dataset.playlistPlay);});
+        if(p?.tracks?.[0]) playTrack(p.tracks[0],p.tracks);
+      });
+    });
+    qa('[data-playlist-menu]').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation();
+        const p=S.local.playlists.find(function(x){return String(x.id)===String(btn.dataset.playlistMenu);});
+        if(p) playlistOptionsDialog(p);
+      });
+    });
   }
 
   async function renderLocalPlaylist(id) {
@@ -292,47 +625,303 @@
     }));
   }
 
+  function androidSearchTopResult(item, type) {
+    if (!item) return '';
+    const isTrack = type === 'song';
+    const isUser = type === 'user';
+    const title = item.title || item.name || item.username || 'Result';
+    const subtitle = item.artist || item.subtitle || item.realname || (isUser ? item.username : '');
+    const art = item.artworkUrl || '';
+    const badge = type === 'artist' ? 'TOP ARTIST'
+      : type === 'album' ? 'TOP ALBUM'
+      : type === 'playlist' ? 'TOP PLAYLIST'
+      : type === 'user' ? 'USER'
+      : 'TOP SONG';
+    const actionAttrs = isTrack
+      ? 'data-play="' + escapeHtml(item.videoId || '') + '"'
+      : isUser
+        ? 'data-user-result="' + escapeHtml(item.username || '') + '"'
+        : 'data-entity-kind="' + escapeHtml(item.kind || type) + '" data-entity-id="' + escapeHtml(item.browseId || '') + '"';
+    if (isTrack) cacheTrack(item);
+    return '<article class="android-top-result" ' + actionAttrs + '>' +
+      '<div class="android-top-art ' + (type === 'artist' || type === 'user' ? 'round' : '') + '">' + img(art,title) + '</div>' +
+      '<div class="android-top-copy"><span>' + badge + '</span><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(subtitle) + '</small></div>' +
+      '<button class="android-top-action">' + (type === 'playlist' || type === 'artist' || type === 'album' || type === 'user' ? '→' : '▶') + '</button>' +
+    '</article>';
+  }
+
+  function androidRecentSearchRow(text) {
+    return '<button class="android-search-row" data-recent-query="' + escapeHtml(text) + '"><span class="android-search-row-icon">↻</span><strong>' + escapeHtml(text) + '</strong><span class="android-search-row-tail">↗</span></button>';
+  }
+
   async function renderSearch(query='') {
-    S.activeSearchType = S.routeParams.type || 'all';
-    page.innerHTML = pageHead('Search', query ? `Results for “${query}”` : 'Find songs, artists, albums and playlists.') +
-      `<div class="search-tabs">${['all','song','album','artist','playlist'].map(t => `<button class="chip ${S.activeSearchType===t?'active':''}" data-search-type="${t}">${t==='song'?'Songs':t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>
-       <div id="searchBody">${query ? loading('Searching') : empty('Start typing above','Use the search box in the top bar.')}</div>`;
-    qa('[data-search-type]').forEach(btn => btn.addEventListener('click', () => {
-      navigate('search',{query:S.routeParams.query || query,type:btn.dataset.searchType},false);
-    }));
-    if (!query) return;
-    const body = q('#searchBody');
-    try {
-      const result = await api.youtube.search(query, S.activeSearchType);
-      let html = '';
-      if (result.entities?.length && ['all','album','artist','playlist'].includes(S.activeSearchType)) {
-        html += `<section class="section"><div class="section-head"><h2>Artists, albums & playlists</h2></div><div class="card-row">${result.entities.slice(0,20).map(entityCard).join('')}</div></section>`;
+    S.activeSearchType = S.routeParams.type || 'song';
+
+    const tabs = [
+      ['song','Tracks'],
+      ['artist','Artists'],
+      ['album','Albums'],
+      ['playlist','Playlists'],
+      ['user','Users']
+    ];
+
+    page.innerHTML =
+      '<div class="android-search-header">' +
+        '<div class="android-search-top-row">' +
+          '<button class="header-back" data-android-back="1" title="Back">‹</button>' +
+          '<div class="android-search-pill"><span>⌕</span><input id="pageSearchInput" value="' + escapeHtml(query) + '" placeholder="' + (S.activeSearchType === 'user' ? 'Search Last.fm users…' : 'Search YouTube Music…') + '" autocomplete="off">' +
+          (query ? '<button class="android-search-clear" id="pageSearchClear">×</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="android-search-tabs">' +
+          tabs.map(function(pair){
+            const selected = S.activeSearchType === pair[0];
+            return '<button class="' + (selected ? 'active' : '') + '" data-search-type="' + pair[0] + '">' + pair[1] + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div id="androidSearchSuggestions" class="android-search-suggestions hidden"></div>' +
+      '<div id="searchBody">' +
+        (query ? loading('Searching') : '') +
+      '</div>';
+
+    const input = q('#pageSearchInput');
+    let suggestionTimer;
+
+    const submit = function(value){
+      const finalValue = String(value ?? input?.value ?? '').trim();
+      if (finalValue) navigate('search',{query:finalValue,type:S.activeSearchType},false);
+    };
+
+    input?.addEventListener('keydown',function(e){
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') {
+        q('#androidSearchSuggestions')?.classList.add('hidden');
+        input.blur();
       }
-      if (result.tracks?.length) html += `<section class="section"><div class="section-head"><h2>Songs</h2><small>${result.tracks.length} results</small></div><div class="track-list">${result.tracks.map(trackRow).join('')}</div></section>`;
-      body.innerHTML = html || empty('No results found','Try a different title, artist or album.');
+    });
+
+    input?.addEventListener('input',function(){
+      clearTimeout(suggestionTimer);
+      const value = input.value.trim();
+      const host = q('#androidSearchSuggestions');
+      if (!value || S.activeSearchType === 'user') {
+        host.classList.add('hidden');
+        host.innerHTML = '';
+        return;
+      }
+      suggestionTimer = setTimeout(async function(){
+        const suggestions = await api.youtube.suggestions(value).catch(function(){ return []; });
+        if (!suggestions.length) {
+          host.classList.add('hidden');
+          host.innerHTML = '';
+          return;
+        }
+        host.innerHTML = suggestions.slice(0,8).map(function(text){
+          return '<button class="android-search-row" data-suggest="' + escapeHtml(text) + '"><span class="android-search-row-icon">⌕</span><strong>' + escapeHtml(text) + '</strong><span class="android-search-row-tail">↗</span></button>';
+        }).join('');
+        host.classList.remove('hidden');
+      },180);
+    });
+
+    q('#pageSearchClear')?.addEventListener('click',function(){
+      navigate('search',{query:'',type:S.activeSearchType},false);
+    });
+
+    qa('[data-search-type]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        navigate('search',{query:input?.value?.trim() || query,type:btn.dataset.searchType},false);
+      });
+    });
+
+    q('#androidSearchSuggestions')?.addEventListener('click',function(e){
+      const row = e.target.closest('[data-suggest]');
+      if (row) submit(row.dataset.suggest);
+    });
+
+    const body = q('#searchBody');
+
+    if (!query) {
+      const recent = (S.local?.searchHistory || []).slice(0,8);
+      body.innerHTML =
+        (recent.length ? '<section class="android-search-section"><div class="android-search-section-head"><strong>Recent searches</strong><button id="searchRecentClear">Clear all</button></div><div class="android-search-list">' + recent.map(androidRecentSearchRow).join('') + '</div></section>' : '') +
+        '<section class="android-search-section"><div class="android-search-explore-title"><span>✦</span><strong>Explore genres & moods</strong></div><div class="android-search-explore">' +
+          ['Pop','Rock','Hip-Hop','Lo-Fi','Electronic','Indie','R&B','Bollywood','Jazz','Metal','Acoustic','Chill','Anime','Classical','Synthwave'].map(function(g){
+            return '<button class="chip" data-explore-query="' + escapeHtml(g) + '">' + escapeHtml(g) + '</button>';
+          }).join('') +
+        '</div></section>';
+
+      qa('[data-recent-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.recentQuery); }); });
+      qa('[data-explore-query]').forEach(function(row){ row.addEventListener('click',function(){ submit(row.dataset.exploreQuery); }); });
+      q('#searchRecentClear')?.addEventListener('click',async function(){
+        await api.search.clearHistory();
+        await refreshLocal();
+        renderSearch('');
+      });
+      input?.focus();
+      return;
+    }
+
+    try {
+      if (S.activeSearchType === 'user') {
+        const users = await api.lastfm.searchUsers(query,30);
+        if (!users.length) {
+          body.innerHTML = empty('No users found','Try another Last.fm username.');
+          return;
+        }
+        body.innerHTML =
+          '<section class="android-search-section"><div class="android-search-section-head"><strong>Top result</strong></div>' +
+          androidSearchTopResult(users[0],'user') + '</section>' +
+          '<section class="android-search-section"><div class="android-search-section-head"><strong>Users</strong></div><div class="android-user-results">' +
+          users.slice(1).map(function(u){
+            return '<button class="android-user-row" data-user-result="' + escapeHtml(u.username) + '">' +
+              '<div class="android-user-avatar">' + img(u.artworkUrl,u.username) + '</div><div><strong>' + escapeHtml(u.realname || u.username) + '</strong><span>@' + escapeHtml(u.username) + (u.playcount ? ' · ' + u.playcount.toLocaleString() + ' scrobbles' : '') + '</span></div><b>›</b></button>';
+          }).join('') + '</div></section>';
+        qa('[data-user-result]').forEach(function(row){ row.addEventListener('click',function(){ showFriendProfile(row.dataset.userResult); }); });
+        return;
+      }
+
+      const result = await api.youtube.search(query,S.activeSearchType);
+      const tracks = result.tracks || [];
+      const entities = result.entities || [];
+      const top = S.activeSearchType === 'song' ? tracks[0] : entities[0];
+      let html = '';
+
+      if (top) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>Top result</strong></div>' + androidSearchTopResult(top,S.activeSearchType) + '</section>';
+      }
+
+      if (S.activeSearchType === 'song' && tracks.length) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>Songs</strong><span>' + tracks.length + ' results</span></div><div class="track-list">' + tracks.map(trackRow).join('') + '</div></section>';
+      } else if (entities.length) {
+        html += '<section class="android-search-section"><div class="android-search-section-head"><strong>' + (S.activeSearchType === 'artist' ? 'Artists' : S.activeSearchType === 'album' ? 'Albums' : 'Playlists') + '</strong></div><div class="card-row">' + entities.map(entityCard).join('') + '</div></section>';
+      }
+
+      body.innerHTML = html || empty('No results found','Try a different search.');
     } catch(e) {
-      body.innerHTML = empty('Search failed',e.message);
+      body.innerHTML = empty('Search failed',e.message || 'Please try again.');
     }
   }
 
   async function renderGenerator() {
-    page.innerHTML = pageHead('Smart Playlist Generator','Build a mix from mood, genre and your local listening signals.') +
-      `<div class="panel-card"><div class="form-grid">
-        <div class="field"><label>Mood</label><select id="genMood"><option>Energetic</option><option>Chill</option><option>Focus</option><option>Happy</option><option>Melancholic</option><option>Workout</option><option>Party</option><option>Sleep</option></select></div>
-        <div class="field"><label>Genre</label><select id="genGenre"><option value="">Any genre</option>${GENRES.slice(0,18).map(x=>`<option>${x}</option>`).join('')}</select></div>
-        <div class="field full"><label>Seed artist / track / idea</label><input id="genSeed" placeholder="e.g. Hans Zimmer, Arijit Singh, cinematic bass, 2000s nostalgia"></div>
-      </div><div class="page-actions" style="margin-top:16px"><button class="primary" id="generateBtn">Generate mix</button><button class="secondary" id="localMixBtn">Use my listening history</button></div></div>
-      <section id="generatedMix" class="section">${empty('Your generated mix will appear here')}</section>`;
-    q('#generateBtn').addEventListener('click', async () => {
-      const mood=q('#genMood').value, genre=q('#genGenre').value, seed=q('#genSeed').value.trim();
-      const q=[mood,genre,seed,'music'].filter(Boolean).join(' ');
-      q('#generatedMix').innerHTML=loading('Generating');
-      const result=await api.youtube.search(q,'song').catch(()=>({tracks:[]}));
-      showGenerated(result.tracks.slice(0,35),`${mood} ${genre || 'mix'}`);
+    const modes = [
+      ['top','Top Tracks','Your most played tracks of all time','★'],
+      ['recent','Recent Tracks',"What you've been listening to lately",'↻'],
+      ['similar-tracks','Song Radio','YouTube Music radio from any song','◉'],
+      ['similar-artists','Similar Artists','YouTube-first artist discovery','♧'],
+      ['tag','By Tag / Genre','YouTube-first genre picks','#'],
+      ['mix','My Mix','Your taste, mixes & local favorites','✦'],
+      ['recommendations','My Recommendation','35 YouTube-first discoveries','☼'],
+      ['never-heard','Never Heard',"Fresh discoveries you've never listened to before",'◇'],
+      ['library','My Library','Re-discover the sounds of your past','♫']
+    ];
+
+    const selected = modes.find(function(x){ return x[0] === S.generatorMode; });
+    let html = pageHead('Generator','Choose a mode to generate a playlist');
+
+    html += '<section class="android-generator-group">' +
+      modes.map(function(mode,index){
+        const posClass = modes.length===1?'single':index===0?'first':index===modes.length-1?'last':'middle';
+        return '<button class="android-generator-mode ' + posClass + ' ' + (S.generatorMode===mode[0]?'selected':'') + '" data-generator-mode="' + mode[0] + '">' +
+          '<span class="android-generator-badge">' + mode[3] + '</span>' +
+          '<span class="android-generator-copy"><strong>' + escapeHtml(mode[1]) + '</strong><small>' + escapeHtml(mode[2]) + '</small></span>' +
+          '<b>' + (S.generatorMode===mode[0]?'✓':'›') + '</b>' +
+        '</button>';
+      }).join('') +
+    '</section>';
+
+    if (selected) {
+      html += '<section class="android-generator-options"><div class="android-generator-option-head"><span>' + selected[3] + '</span><div><strong>' + escapeHtml(selected[1]) + '</strong><small>' + escapeHtml(selected[2]) + '</small></div></div>';
+
+      if (['top','library'].includes(S.generatorMode)) {
+        html += '<label class="android-field-label">Time Period</label><div class="android-generator-chips">' +
+          ['All Time','12 Months','6 Months','3 Months','1 Month','7 Days'].map(function(x,i){
+            return '<button class="chip ' + (i===0?'active':'') + '" data-generator-period="' + escapeHtml(x) + '">' + escapeHtml(x) + '</button>';
+          }).join('') + '</div>';
+      }
+      if (S.generatorMode === 'tag') {
+        html += '<label class="android-field-label">Genre or Tag</label><input class="android-generator-input" id="generatorTag" placeholder="e.g. rock, lofi, jazz…">' +
+          '<div class="android-generator-chips">' + ['pop','rock','hip-hop','electronic','jazz','lofi','metal','indie','classical','r&b','ambient','punk'].map(function(x){
+            return '<button class="chip" data-generator-tag="' + escapeHtml(x) + '">' + escapeHtml(x) + '</button>';
+          }).join('') + '</div>';
+      }
+      if (S.generatorMode === 'similar-tracks') {
+        html += '<label class="android-field-label">Seed Track</label><p class="mini-note">Pick any song; LastWave builds a YouTube Music radio around it.</p>' +
+          '<input class="android-generator-input" id="generatorSeedTrack" placeholder="Track name…">' +
+          '<label class="android-field-label">Seed Artist</label><input class="android-generator-input" id="generatorSeedArtist" placeholder="Artist name…">';
+      }
+      if (S.generatorMode === 'similar-artists') {
+        html += '<label class="android-field-label">Seed Artist</label><input class="android-generator-input" id="generatorSeedArtist" placeholder="Artist name…">';
+      }
+
+      html += '<div class="android-track-count"><div><strong>Track count</strong><small>' + S.generatorTrackCount + ' tracks</small></div><input id="generatorTrackCount" type="range" min="5" max="35" value="' + S.generatorTrackCount + '"></div>' +
+        '<button class="android-generate-button" id="generateBtn">✦ Generate playlist</button></section>';
+    }
+
+    html += '<section id="generatedMix" class="android-generated-results">' + (selected ? '' : empty('Choose a generation mode','Select one of the Android generator modes above.')) + '</section>';
+    page.innerHTML = html;
+
+    qa('[data-generator-mode]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        S.generatorMode = S.generatorMode === btn.dataset.generatorMode ? null : btn.dataset.generatorMode;
+        renderGenerator();
+      });
     });
-    q('#localMixBtn').addEventListener('click', async () => {
-      const tracks=await api.library.smartMix({limit:35});
-      showGenerated(tracks,'Your LastWave mix');
+    qa('[data-generator-tag]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        const input=q('#generatorTag');if(input)input.value=btn.dataset.generatorTag;
+        qa('[data-generator-tag]').forEach(function(x){x.classList.toggle('active',x===btn);});
+      });
+    });
+    q('#generatorTrackCount')?.addEventListener('input',function(e){
+      S.generatorTrackCount=Number(e.target.value);
+      q('.android-track-count small').textContent=S.generatorTrackCount+' tracks';
+    });
+    q('#generateBtn')?.addEventListener('click',async function(){
+      q('#generatedMix').innerHTML=loading('Generating playlist');
+      try{
+        let tracks=[];
+        const limit=S.generatorTrackCount;
+        if(S.generatorMode==='top'){
+          const stats=await api.library.stats();
+          tracks=(stats.topTracks||[]).slice(0,limit);
+        }else if(S.generatorMode==='recent'){
+          tracks=(S.local?.history||[]).filter(function(t,i,a){return t?.videoId&&a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+        }else if(S.generatorMode==='mix'){
+          tracks=await api.library.smartMix({limit:limit});
+        }else if(S.generatorMode==='library'){
+          const seen=new Set();
+          tracks=[...(S.local?.liked||[]),...(S.local?.history||[])].filter(function(t){return t?.videoId&&!seen.has(t.videoId)&&seen.add(t.videoId);}).slice(0,limit);
+        }else if(S.generatorMode==='tag'){
+          const tag=q('#generatorTag')?.value?.trim();
+          if(!tag)throw new Error('Enter a genre or tag');
+          tracks=(await api.youtube.search(tag+' music','song')).tracks.slice(0,limit);
+        }else if(S.generatorMode==='similar-tracks'){
+          const song=q('#generatorSeedTrack')?.value?.trim(),artist=q('#generatorSeedArtist')?.value?.trim();
+          if(!song||!artist)throw new Error('Enter a seed track and artist');
+          const seed=(await api.youtube.search(artist+' '+song,'song')).tracks[0];
+          if(!seed)throw new Error('Seed track was not found');
+          tracks=(await api.youtube.related(seed.videoId)).slice(0,limit);
+        }else if(S.generatorMode==='similar-artists'){
+          const artist=q('#generatorSeedArtist')?.value?.trim();
+          if(!artist)throw new Error('Enter a seed artist');
+          tracks=(await api.youtube.search('similar to '+artist+' music','song')).tracks.slice(0,limit);
+        }else if(S.generatorMode==='never-heard'){
+          const known=new Set([...(S.local?.history||[]),...(S.local?.liked||[])].map(function(t){return t.videoId;}));
+          const explore=await api.youtube.explore();
+          tracks=(explore.tracks||[]).filter(function(t){return t.videoId&&!known.has(t.videoId);}).slice(0,limit);
+          if(tracks.length<limit){
+            const more=(await api.youtube.search('new music discoveries','song')).tracks.filter(function(t){return !known.has(t.videoId);});
+            tracks=[...tracks,...more].filter(function(t,i,a){return a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+          }
+        }else if(S.generatorMode==='recommendations'){
+          const home=await api.youtube.home();
+          tracks=(home||[]).flatMap(function(x){return x.tracks||[];}).filter(function(t,i,a){return t.videoId&&a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+        }
+        showGenerated(tracks,selected?.[1]||'Generated playlist');
+      }catch(e){
+        q('#generatedMix').innerHTML=empty('Could not generate playlist',e.message||'Try another mode.');
+      }
     });
   }
 
@@ -375,10 +964,127 @@
     qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
   }
 
+
+  async function renderNewReleases() {
+    page.innerHTML = pageHead('New releases','Fresh music from YouTube Music.') + loading('Loading new releases');
+    try {
+      const result = await api.youtube.search('new music releases 2026','album');
+      let html = pageHead('New releases','Fresh music from YouTube Music.');
+      if(result.entities?.length) html += '<section class="section"><div class="card-row">' + result.entities.slice(0,30).map(entityCard).join('') + '</div></section>';
+      if(result.tracks?.length) html += '<section class="section"><div class="section-head"><h2>New tracks</h2></div><div class="track-list">' + result.tracks.slice(0,50).map(trackRow).join('') + '</div></section>';
+      page.innerHTML = html || empty('No releases found');
+    } catch(e) {
+      page.innerHTML = pageHead('New releases') + empty('Could not load new releases',e.message||'');
+    }
+  }
+
+  async function renderProviderModules() {
+    page.innerHTML = pageHead('Modules & Addons','Streaming and metadata providers available on Windows.') +
+      '<div class="setting-group"><h2>Installed providers</h2><div class="setting-card">' +
+        '<div class="setting-row"><div class="setting-copy"><strong>YouTube Music</strong><span>Catalog, search, playback, albums, artists and playlists</span></div><span class="chip active">Built in</span></div>' +
+        '<div class="setting-row"><div class="setting-copy"><strong>LRCLIB</strong><span>Synced and plain lyrics provider</span></div><span class="chip active">Built in</span></div>' +
+        '<div class="setting-row"><div class="setting-copy"><strong>Last.fm</strong><span>Scrobbling, statistics and friends</span></div><span class="chip active">Built in</span></div>' +
+      '</div></div>' +
+      '<div class="setting-group"><h2>Windows note</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>Remote lossless modules</strong><span>The Android provider-module ABI depends on Android services. The Windows app exposes equivalent desktop providers here rather than loading Android binaries.</span></div></div></div></div>';
+  }
+
+  async function renderHomeSections() {
+    if(!S.home) {
+      try { S.home = await api.youtube.home(); } catch {}
+    }
+    const titles = (S.home || []).map(function(x){return x.title||'Untitled section';}).filter(Boolean);
+    const unique = [...new Set(titles)];
+    const hidden = new Set(S.local?.settings?.homeHiddenSections || []);
+    page.innerHTML = pageHead('Home sections','Choose what appears on the Home feed.') +
+      '<div class="setting-group"><div class="setting-card">' +
+      (unique.length ? unique.map(function(title){
+        return '<div class="setting-row"><div class="setting-copy"><strong>' + escapeHtml(title) + '</strong><span>Show this section on Home</span></div><button class="toggle ' + (!hidden.has(title)?'on':'') + '" data-home-section="' + escapeHtml(title) + '"></button></div>';
+      }).join('') : '<div class="setting-row"><div class="setting-copy"><strong>No sections loaded</strong><span>Open Home once, then return here.</span></div></div>') +
+      '</div></div>';
+    qa('[data-home-section]').forEach(function(btn){
+      btn.addEventListener('click',async function(){
+        const title=btn.dataset.homeSection;
+        const next=new Set(S.local?.settings?.homeHiddenSections || []);
+        if(next.has(title))next.delete(title);else next.add(title);
+        S.local.settings=await api.settings.update({homeHiddenSections:[...next]});
+        renderHomeSections();
+      });
+    });
+  }
+
+  async function renderExcludedSongs() {
+    await refreshLocal();
+    const rows=S.local.excluded||[];
+    page.innerHTML=pageHead('Excluded songs','Tracks removed from Home recommendations.') +
+      (rows.length ? '<div class="track-list">' + rows.map(function(track){
+        cacheTrack(track);
+        return '<div class="track-row">' + img(track.artworkUrl,track.title) +
+          '<div class="track-main"><strong>' + escapeHtml(track.title||'Untitled') + '</strong><span>' + escapeHtml(track.artist||'Unknown artist') + '</span></div><div class="track-album"></div><div class="track-duration"></div>' +
+          '<div class="track-actions"><button class="secondary header-wide" data-restore-excluded="' + escapeHtml(track.videoId) + '">Restore</button></div></div>';
+      }).join('') + '</div>' : empty('No excluded songs','Use a track menu and choose Exclude from recommendations.'));
+    qa('[data-restore-excluded]').forEach(function(btn){
+      btn.addEventListener('click',async function(){await api.library.restoreExcluded(btn.dataset.restoreExcluded);await refreshLocal();renderExcludedSongs();});
+    });
+  }
+
+  async function renderYouTubeLoginPage() {
+    const connected=Boolean(S.local?.settings?.youtubeCookie);
+    page.innerHTML=pageHead('YouTube Music','Connect your account to personalize library surfaces.') +
+      '<div class="setting-group"><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>' + (connected?'Connected':'Not connected') + '</strong><span>' + (connected?'Authenticated session is saved on this PC.':'Guest catalog mode is active.') + '</span></div>' +
+      '<div class="page-actions"><button class="primary" id="routeYoutubeLogin">Sign in</button><button class="secondary" id="routeYoutubeLogout">Sign out</button></div></div></div></div>';
+    q('#routeYoutubeLogin')?.addEventListener('click',async function(){
+      toast('Complete sign-in in the YouTube Music window, then close it.',5000);
+      const result=await api.youtube.login();await refreshLocal();S.home=null;S.explore=null;
+      toast(result?.connected?'YouTube Music connected':'No authenticated session detected');renderYouTubeLoginPage();
+    });
+    q('#routeYoutubeLogout')?.addEventListener('click',async function(){await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;renderYouTubeLoginPage();});
+  }
+
+  async function renderImportPage(kind) {
+    const youtube = kind==='youtube';
+    const title = youtube ? 'YouTube playlist import' : 'External playlist import';
+    const subtitle = youtube ? 'Import a YouTube or YouTube Music playlist.' : 'Import a public Spotify or Apple Music playlist.';
+    const placeholderText = youtube ? 'https://music.youtube.com/playlist?list=…' : 'Spotify or Apple Music playlist URL';
+    page.innerHTML=pageHead(title,subtitle) +
+      '<div class="setting-group"><div class="setting-card" style="padding:16px"><div class="field"><label>Playlist URL</label><input id="routeImportUrl" placeholder="' + placeholderText + '"></div>' +
+      '<div class="page-actions" style="margin-top:14px"><button class="primary" id="routeImportGo">Import</button><button class="secondary" id="routeImportFile">Choose file</button></div></div></div>';
+    q('#routeImportGo')?.addEventListener('click',async function(){
+      const value=q('#routeImportUrl').value.trim();if(!value)return;
+      toast('Reading and matching playlist…',7000);
+      try{const p=await api.imports.externalUrl(value);await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message||'Import failed',6000);}
+    });
+    q('#routeImportFile')?.addEventListener('click',async function(){
+      toast('Matching imported tracks…',6000);const p=await api.imports.file();if(p){await refreshLocal();navigate('playlist-detail',{id:p.id});}
+    });
+  }
+
   async function renderSettings() {
     await refreshLocal();
     const s=S.local.settings, lf=s.lastfm||{};
-    page.innerHTML=pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.') +
+    const tab=S.routeParams?.tab || '';
+    const tabMeta={
+      audio:['Audio & Playback','Streaming quality, Audio engine, Equalizer, Output & Loudness','◉'],
+      appearance:['Appearance & Visuals','Themes, Accent colors, Fluid artwork, Canvas, Lyrics','◐'],
+      youtube:['YouTube & Sync','Account connection, Library sync, Channels, History','◫'],
+      lastfm:['Last.fm','Account connection, Scrobbling sync & API credentials','◌'],
+      library:['Library & Content','Home layout, Playlist imports, Downloads, Exclusions','♫'],
+      data:['Data & Storage','Backup & Restore, Cache, history and local data','⇄'],
+      about:['About & System','App version, community, diagnostics and source code','✦']
+    };
+    if(!tab){
+      page.innerHTML=pageHead('Settings','') +
+        '<div class="android-settings-tabs">' +
+        Object.entries(tabMeta).map(function(entry){
+          const key=entry[0],meta=entry[1];
+          return '<button class="android-settings-tab" data-settings-tab="' + key + '"><span class="android-settings-icon">' + meta[2] + '</span><span><strong>' + escapeHtml(meta[0]) + '</strong><small>' + escapeHtml(meta[1]) + '</small></span><b>›</b></button>';
+        }).join('') + '</div>';
+      qa('[data-settings-tab]').forEach(function(btn){
+        btn.addEventListener('click',function(){navigate('settings',{tab:btn.dataset.settingsTab},false);});
+      });
+      return;
+    }
+    const tabTitle=tabMeta[tab]?.[0] || 'Settings';
+    page.innerHTML=pageHead(tabTitle,'') +
       `<div class="setting-group"><h2>Audio & Playback</h2><div class="setting-card">
         ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',s.djEnergy)}
         ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',s.loudnessNormalization)}
@@ -389,11 +1095,17 @@
         <div class="setting-row"><div class="setting-copy"><strong>Theme</strong><span>Choose dark, light or system</span></div><select id="themeSetting"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
         <div class="setting-row"><div class="setting-copy"><strong>Accent</strong><span>LastWave highlight color</span></div><input type="color" id="accentSetting" value="${escapeHtml(s.accent||'#c6f100')}"></div>
       </div></div>
-      <div class="setting-group"><h2>Downloads & Library</h2><div class="setting-card">
+      <div class="setting-group"><h2>Library & Content</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Home sections</strong><span>Choose which recommendation rows appear on Home</span></div><button class="secondary" data-route="home-sections">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Excluded songs</strong><span>Restore songs hidden from recommendations</span></div><button class="secondary" data-route="excluded-songs">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Modules & Addons</strong><span>Streaming and metadata provider modules</span></div><button class="secondary" data-route="provider-modules">Open</button></div>
         <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(s.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
-        <div class="setting-row"><div class="setting-copy"><strong>Import playlist</strong><span>YouTube playlist URL or local CSV/JSON/M3U</span></div><button class="secondary" id="settingsImportBtn">Import</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>YouTube playlist import</strong><span>Import YouTube and YouTube Music playlists</span></div><button class="secondary" data-route="youtube-import">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>External playlist import</strong><span>Spotify, Apple Music, CSV, JSON and M3U</span></div><button class="secondary" data-route="external-import">Open</button></div>
+        <div class="setting-row"><div class="setting-copy"><strong>Downloads</strong><span>Open the downloaded-music manager</span></div><button class="secondary" data-route="downloads">Open</button></div>
       </div></div>
-      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
+      <div class="setting-group"><h2>YouTube & Sync</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>YouTube Music account</strong><span>Dedicated Android-parity connection screen</span></div><button class="secondary" data-route="youtube-login">Open</button></div>
         <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${s.youtubeCookie ? 'Authenticated session saved' : 'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
         <div class="field"><label>Advanced: authenticated cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string if browser sign-in is unavailable.">${escapeHtml(s.youtubeCookie||'')}</textarea></div>
         <div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save manual connection</button></div>
@@ -421,7 +1133,7 @@
     q('#themeSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({theme:e.target.value});setTheme();});
     q('#accentSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
     q('#chooseDownloadFolder').addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
-    q('#settingsImportBtn').addEventListener('click',importDialog);
+    q('#settingsImportBtn')?.addEventListener('click',importDialog);
     q('#youtubeLoginBtn').addEventListener('click',async()=>{
       toast('A YouTube Music sign-in window has opened. Close it after your account is visible.',5000);
       const result=await api.youtube.login();
@@ -437,6 +1149,23 @@
     q('#authLastFm').addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);else toast('Add your Last.fm API key first');});
     q('#exportBackup').addEventListener('click',async()=>{const file=await api.backup.export();if(file)toast('Backup exported');});
     q('#importBackup').addEventListener('click',async()=>{const data=await api.backup.import();if(data){S.local=data;setTheme();toast('Backup restored');renderSettings();}});
+    const keep={
+      audio:['Audio & Playback','Personal DJ profile'],
+      appearance:['Appearance'],
+      youtube:['YouTube & Sync'],
+      lastfm:['Last.fm Integration'],
+      library:['Library & Content'],
+      data:['Backup'],
+      about:[]
+    }[tab] || [];
+    qa('.setting-group').forEach(function(group){
+      const heading=group.querySelector('h2')?.textContent?.trim() || '';
+      group.classList.toggle('hidden',!keep.some(function(name){return heading===name || heading.startsWith(name);}));
+    });
+    if(tab==='about'){
+      page.insertAdjacentHTML('beforeend','<div class="setting-group"><h2>About & System</h2><div class="setting-card"><div class="setting-row"><div class="setting-copy"><strong>LastWave for Windows</strong><span>Android-parity desktop build v4.5.0</span></div></div><div class="setting-row"><div class="setting-copy"><strong>Source code</strong><span>github.com/harshsinghalh/LastWave-Native</span></div><button class="secondary" id="openSourceRepo">Open</button></div></div></div>');
+      q('#openSourceRepo')?.addEventListener('click',()=>api.openExternal('https://github.com/harshsinghalh/LastWave-Native'));
+    }
   }
 
   function settingToggle(title,copy,key,on) {
@@ -616,7 +1345,14 @@
   function updateDjUi(){const enabled=Boolean(S.local?.settings?.djEnergy);q('#djQuickToggle').classList.toggle('active',enabled);q('#djQuickToggle').textContent=enabled?'DJ Energy':'DJ Off';updateDjMeter();}
 
   function updatePlayerUi(){
-    const t=S.current;q('#playerTitle').textContent=t?.title||'Nothing playing';q('#playerArtist').textContent=t?.artist||'Choose a song to start';q('#playerArt').src=t?.artworkUrl||placeholder(t?.title||'LW');updatePlayerLike();updateDjUi();
+    const t=S.current;
+    q('#playerTitle').textContent=t?.title||'Nothing playing';
+    q('#playerArtist').textContent=t?.artist||'Choose a song to start';
+    q('#playerArt').src=t?.artworkUrl||placeholder(t?.title||'LW');
+    q('.player')?.classList.toggle('android-hidden',!t);
+    updatePlayerLike();
+    updateDjUi();
+    refreshFullPlayer();
   }
   function updatePlayerLike(){
     const liked=S.current&&S.local?.liked?.some(x=>x.videoId===S.current.videoId);q('#likeBtn').textContent=liked?'♥':'♡';q('#likeBtn').classList.toggle('active',Boolean(liked));
@@ -634,9 +1370,9 @@
   function contextMenu(track,x,y){
     if(!track)return;
     const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);
-    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button>`;
+    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button><button data-cm="exclude">Exclude from recommendations</button>`;
     menu.style.left=Math.min(x,innerWidth-240)+'px';menu.style.top=Math.min(y,innerHeight-280)+'px';menu.classList.remove('hidden');
-    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;}}));
+    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;case'exclude':await api.library.excludeTrack(track);await refreshLocal();toast('Excluded from recommendations');if(S.route==='feed')renderFeed();break;}}));
   }
 
   async function toggleLike(track){const liked=await api.library.toggleLike(track);await refreshLocal();toast(liked?'Added to liked songs':'Removed from liked songs');updatePlayerLike();}
@@ -649,8 +1385,210 @@
   async function downloadTrack(track){toast('Downloading '+track.title+'…',6000);try{const r=await api.downloads.track(track);await refreshLocal();toast('Saved '+r.name);}catch(e){toast('Download failed: '+e.message);}}
   async function showRelated(track){openRightPanel('Related',track.title,loading('Finding related music'));const list=await api.youtube.related(track.videoId).catch(()=>[]);q('#rightPanelBody').innerHTML=list.length?`<div class="track-list">${list.slice(0,30).map(trackRow).join('')}</div>`:empty('No related tracks returned');}
 
+
+  function fullPlayerRoot(){
+    return document.getElementById('androidFullPlayer');
+  }
+
+  function closeFullPlayer(){
+    const el=fullPlayerRoot();
+    if(el) el.remove();
+  }
+
+  function fullPlayerNowMarkup(){
+    const t=S.current;
+    if(!t) return '';
+    const liked=Boolean(S.local?.liked?.some(function(x){return x.videoId===t.videoId;}));
+    return '<div class="android-now-playing">' +
+      '<img class="android-player-art" src="' + escapeHtml(t.artworkUrl||placeholder(t.title)) + '" alt="">' +
+      '<div class="android-player-meta"><div><h2>' + escapeHtml(t.title||'') + '</h2><p>' + escapeHtml(t.artist||'') + '</p></div>' +
+      '<button class="android-player-heart" id="androidFullLike">' + (liked?'♥':'♡') + '</button></div>' +
+      '<div class="android-player-progress"><input id="androidFullSeek" type="range" min="0" max="1000" value="0"><div class="android-player-times"><span id="androidFullCurrent">0:00</span><span id="androidFullDuration">0:00</span></div></div>' +
+      '<div class="android-player-controls"><button class="side" id="androidFullPrev">⏮</button><button class="main" id="androidFullPlay">' + (audio.paused?'▶':'❚❚') + '</button><button class="side" id="androidFullNext">⏭</button></div>' +
+      '<div class="android-player-extras"><button class="android-player-mode" id="androidFullShuffle" title="Shuffle">⤨</button><button class="android-player-quality" id="androidFullQuality"><span>♫</span><b>' + escapeHtml(q('#qualityBadge')?.textContent || 'AUTO') + '</b></button><button class="android-player-mode" id="androidFullRepeat" title="Repeat">↻</button></div>' +
+      '<button class="android-player-dj-chip" id="androidFullDj">⚡ ' + (S.local?.settings?.djEnergy?'DJ Energy on':'DJ Energy off') + '</button>' +
+    '</div>';
+  }
+
+  function fullPlayerQueueMarkup(){
+    if(!S.queue.length) return '<div class="android-player-pane">' + empty('Queue is empty') + '</div>';
+    return '<div class="android-player-pane">' + S.queue.map(function(t,i){
+      cacheTrack(t);
+      return '<div class="queue-row ' + (i===S.queueIndex?'playing':'') + '" data-full-queue-index="' + i + '">' +
+        img(t.artworkUrl,t.title) + '<div><strong>' + escapeHtml(t.title) + '</strong><span>' + escapeHtml(t.artist) + '</span></div><span>' + (i===S.queueIndex?'▶':'') + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  async function fullPlayerLyricsMarkup(host){
+    host.innerHTML='<div class="android-player-pane">' + loading('Loading lyrics') + '</div>';
+    try{
+      S.lyrics=await api.lyrics.get(S.current);
+      S.parsedLyrics=parseLrc(S.lyrics.synced);
+      if(S.parsedLyrics.length){
+        host.innerHTML='<div class="android-player-pane lyrics">' + S.parsedLyrics.map(function(x,i){
+          return '<div class="lyric-line" data-full-lyric-index="' + i + '">' + escapeHtml(x.text||'♪') + '</div>';
+        }).join('') + '</div>';
+      }else if(S.lyrics?.plain){
+        host.innerHTML='<div class="android-player-pane plain-lyrics">' + escapeHtml(S.lyrics.plain) + '</div>';
+      }else{
+        host.innerHTML='<div class="android-player-pane">' + empty(S.lyrics?.instrumental?'Instrumental track':'Lyrics not found') + '</div>';
+      }
+    }catch(e){
+      host.innerHTML='<div class="android-player-pane">' + empty('Lyrics not found',e.message||'') + '</div>';
+    }
+  }
+
+  function bindFullPlayer(){
+    q('#androidFullClose')?.addEventListener('click',closeFullPlayer);
+    q('#androidFullPrev')?.addEventListener('click',prev);
+    q('#androidFullNext')?.addEventListener('click',next);
+    q('#androidFullPlay')?.addEventListener('click',async function(){ if(audio.paused) await audio.play(); else audio.pause(); refreshFullPlayer(); });
+    q('#androidFullLike')?.addEventListener('click',async function(){ if(S.current) await toggleLike(S.current); refreshFullPlayer(); });
+    q('#androidFullShuffle')?.addEventListener('click',function(){
+      S.shuffle=!S.shuffle;
+      q('#androidFullShuffle')?.classList.toggle('active',S.shuffle);
+      toast(S.shuffle?'Shuffle on':'Shuffle off');
+    });
+    q('#androidFullRepeat')?.addEventListener('click',function(){
+      S.repeat=!S.repeat;
+      q('#androidFullRepeat')?.classList.toggle('active',S.repeat);
+      toast(S.repeat?'Repeat on':'Repeat off');
+    });
+    q('#androidFullQuality')?.addEventListener('click',function(){
+      toast('Playback quality: ' + (q('#qualityBadge')?.textContent || 'AUTO'));
+    });
+    q('#androidFullDj')?.addEventListener('click',async function(){
+      const value=!S.local.settings.djEnergy;
+      S.local.settings=await api.settings.update({djEnergy:value});
+      updateDjUi();configureDjDelay();refreshFullPlayer();
+    });
+    q('#androidFullSeek')?.addEventListener('input',function(e){if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
+    qa('[data-full-queue-index]').forEach(function(el){el.addEventListener('click',function(){playIndex(Number(el.dataset.fullQueueIndex));});});
+    qa('[data-full-lyric-index]').forEach(function(el){el.addEventListener('click',function(){const row=S.parsedLyrics[Number(el.dataset.fullLyricIndex)];if(row)audio.currentTime=row.time+(djLookahead()/1000);});});
+    qa('[data-full-tab]').forEach(function(btn){btn.addEventListener('click',function(){showFullPlayer(btn.dataset.fullTab);});});
+
+    const root=fullPlayerRoot();
+    const art=q('#androidFullPlayer .android-player-art');
+    if(art){
+      let dragStart=null;
+      art.addEventListener('pointerdown',function(e){
+        if(e.button!==0)return;
+        dragStart={x:e.clientX,y:e.clientY};
+        art.setPointerCapture?.(e.pointerId);
+        art.classList.add('dragging');
+      });
+      art.addEventListener('pointermove',function(e){
+        if(!dragStart)return;
+        const dx=e.clientX-dragStart.x;
+        const dy=e.clientY-dragStart.y;
+        if(Math.abs(dx)>Math.abs(dy)) art.style.transform='translateX('+clamp(dx,-140,140)+'px) rotate('+(dx/45)+'deg)';
+      });
+      art.addEventListener('pointerup',function(e){
+        if(!dragStart)return;
+        const dx=e.clientX-dragStart.x;
+        const dy=e.clientY-dragStart.y;
+        dragStart=null;
+        art.classList.remove('dragging');
+        art.style.transform='';
+        if(Math.abs(dx)>88&&Math.abs(dx)>Math.abs(dy)){
+          if(dx<0) next(); else prev();
+        }
+      });
+      art.addEventListener('pointercancel',function(){dragStart=null;art.classList.remove('dragging');art.style.transform='';});
+      art.addEventListener('dblclick',async function(e){
+        const box=art.getBoundingClientRect();
+        const ratio=(e.clientX-box.left)/Math.max(box.width,1);
+        if(ratio<.34){
+          audio.currentTime=Math.max(0,audio.currentTime-5);
+          toast('Rewind 5 seconds');
+        }else if(ratio>.66){
+          audio.currentTime=Math.min(Number.isFinite(audio.duration)?audio.duration:audio.currentTime+5,audio.currentTime+5);
+          toast('Forward 5 seconds');
+        }else if(S.current){
+          await toggleLike(S.current);
+          refreshFullPlayer();
+        }
+      });
+    }
+
+    if(root){
+      let gesture=null;
+      root.addEventListener('pointerdown',function(e){
+        if(e.target.closest('button,input,.android-player-art,.lyric-line,.queue-row'))return;
+        gesture={x:e.clientX,y:e.clientY};
+      });
+      root.addEventListener('pointerup',function(e){
+        if(!gesture)return;
+        const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+        gesture=null;
+        if(Math.abs(dy)<88||Math.abs(dy)<Math.abs(dx))return;
+        const active=root.querySelector('[data-full-tab].active')?.dataset.fullTab||'now';
+        if(dy>0){
+          if(active==='now') closeFullPlayer();
+          else showFullPlayer('now');
+        }else if(active==='now'){
+          showFullPlayer('queue');
+        }
+      });
+    }
+
+    q('#androidFullShuffle')?.classList.toggle('active',S.shuffle);
+    q('#androidFullRepeat')?.classList.toggle('active',S.repeat);
+  }
+
+  async function showFullPlayer(tab){
+    if(!S.current) return;
+    tab=tab||'now';
+    closeFullPlayer();
+    const root=document.createElement('div');
+    root.id='androidFullPlayer';
+    root.className='android-full-player';
+    const art=escapeHtml(S.current.artworkUrl||placeholder(S.current.title));
+    root.innerHTML=
+      '<div class="android-player-bg" style="background-image:url(&quot;' + art + '&quot;)"></div><div class="android-player-scrim"></div>' +
+      '<div class="android-player-content"><div class="android-player-top"><button id="androidFullClose">⌄</button>' +
+      '<div class="android-player-tabs"><button data-full-tab="now" class="' + (tab==='now'?'active':'') + '">Now Playing</button><button data-full-tab="lyrics" class="' + (tab==='lyrics'?'active':'') + '">Lyrics</button><button data-full-tab="queue" class="' + (tab==='queue'?'active':'') + '">Queue</button></div>' +
+      '<span></span></div><div id="androidFullBody" class="android-player-body"></div></div>';
+    document.body.appendChild(root);
+    const host=q('#androidFullBody');
+    if(tab==='now') host.innerHTML=fullPlayerNowMarkup();
+    else if(tab==='queue') host.innerHTML=fullPlayerQueueMarkup();
+    else await fullPlayerLyricsMarkup(host);
+    bindFullPlayer();
+    updateFullPlayerProgress();
+  }
+
+  function refreshFullPlayer(){
+    const root=fullPlayerRoot();
+    if(!root||!S.current)return;
+    const active=root.querySelector('[data-full-tab].active')?.dataset.fullTab||'now';
+    if(active==='now'){
+      const host=q('#androidFullBody');
+      if(host)host.innerHTML=fullPlayerNowMarkup();
+      bindFullPlayer();
+      updateFullPlayerProgress();
+    }
+  }
+
+  function updateFullPlayerProgress(){
+    const seek=q('#androidFullSeek');
+    if(seek&&Number.isFinite(audio.duration)&&audio.duration>0){
+      seek.value=String(Math.floor(audio.currentTime/audio.duration*1000));
+      const c=q('#androidFullCurrent'),d=q('#androidFullDuration');
+      if(c)c.textContent=fmtTime(audio.currentTime);if(d)d.textContent=fmtTime(audio.duration);
+    }
+    const play=q('#androidFullPlay');if(play)play.textContent=audio.paused?'▶':'❚❚';
+    if(S.parsedLyrics.length&&fullPlayerRoot()){
+      const t=Math.max(0,audio.currentTime-djLookahead()/1000);
+      let idx=-1;for(let i=0;i<S.parsedLyrics.length;i++){if(S.parsedLyrics[i].time<=t)idx=i;else break;}
+      qa('#androidFullPlayer .lyric-line').forEach(function(el,i){el.classList.toggle('active',i===idx);});
+      const active=q('#androidFullPlayer .lyric-line.active');if(active)active.scrollIntoView({block:'center',behavior:'smooth'});
+    }
+  }
+
   document.addEventListener('click',e=>{
-    const route=e.target.closest('[data-route]');if(route){navigate(route.dataset.route);return;}
+    const back=e.target.closest('[data-android-back]');if(back){if(S.route==='settings'&&S.routeParams?.tab){S.routeParams={};renderSettings();return;}if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;document.body.dataset.route=S.route;renderRoute();}return;}
+    const route=e.target.closest('[data-route]');if(route){const params=route.dataset.query?{query:route.dataset.query}:{};navigate(route.dataset.route,params);return;}
     const local=e.target.closest('[data-local-playlist]');if(local){navigate('playlist-detail',{id:local.dataset.localPlaylist});return;}
     const entity=e.target.closest('[data-entity-id]');if(entity){navigate('entity',{kind:entity.dataset.entityKind,id:entity.dataset.entityId,title:entity.querySelector('h3')?.textContent||''});return;}
     const like=e.target.closest('[data-like]');if(like){e.stopPropagation();const t=findTrack(like.dataset.like);if(t)toggleLike(t);return;}
@@ -665,8 +1603,8 @@
     q('#backBtn').addEventListener('click',()=>{if(S.historyIndex>0){S.historyIndex--;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     q('#forwardBtn').addEventListener('click',()=>{if(S.historyIndex<S.history.length-1){S.historyIndex++;const h=S.history[S.historyIndex];S.route=h.route;S.routeParams=h.params;renderRoute();}});
     const input=q('#globalSearchInput');let timer;
-    input.addEventListener('input',()=>{clearTimeout(timer);const q=input.value.trim();if(!q){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const s=await api.youtube.suggestions(q).catch(()=>[]);const host=q('#suggestions');host.innerHTML=s.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!s.length);},220);});
-    input.addEventListener('keydown',e=>{if(e.key==='Enter'){const q=input.value.trim();if(q){q('#suggestions').classList.add('hidden');navigate('search',{query:q});}}});
+    input.addEventListener('input',()=>{clearTimeout(timer);const query=input.value.trim();if(!query){q('#suggestions').classList.add('hidden');return;}timer=setTimeout(async()=>{const suggestions=await api.youtube.suggestions(query).catch(()=>[]);const host=q('#suggestions');host.innerHTML=suggestions.map(x=>`<div class="suggestion" data-suggest="${escapeHtml(x)}">${escapeHtml(x)}</div>`).join('');host.classList.toggle('hidden',!suggestions.length);},220);});
+    input.addEventListener('keydown',e=>{if(e.key==='Enter'){const query=input.value.trim();if(query){q('#suggestions').classList.add('hidden');navigate('search',{query:query});}}});
     q('#suggestions').addEventListener('click',e=>{const s=e.target.closest('[data-suggest]');if(s){input.value=s.dataset.suggest;q('#suggestions').classList.add('hidden');navigate('search',{query:s.dataset.suggest});}});
   }
 
@@ -678,6 +1616,7 @@
     q('#volume').addEventListener('input',e=>{S.volume=Number(e.target.value)/100;audio.volume=S.volume;});
     q('#seek').addEventListener('input',e=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=Number(e.target.value)/1000*audio.duration;});
     q('#likeBtn').addEventListener('click',()=>S.current&&toggleLike(S.current));
+    q('#nowPlayingCard').addEventListener('click',e=>{if(!e.target.closest('#likeBtn')&&S.current)showFullPlayer('now');});
     q('#lyricsBtn').addEventListener('click',showLyrics);q('#queueBtn').addEventListener('click',showQueue);q('#closeRightPanel').addEventListener('click',closeRightPanel);
     q('#djQuickToggle').addEventListener('click',async()=>{const value=!S.local.settings.djEnergy;S.local.settings=await api.settings.update({djEnergy:value});updateDjUi();configureDjDelay();});
     audio.volume=S.volume;
@@ -687,6 +1626,7 @@
     audio.addEventListener('timeupdate',async()=>{
       if(Number.isFinite(audio.duration)&&audio.duration>0){q('#seek').value=String(Math.floor(audio.currentTime/audio.duration*1000));q('#currentTime').textContent=fmtTime(audio.currentTime);q('#duration').textContent=fmtTime(audio.duration);}
       syncLyrics();
+      updateFullPlayerProgress();
       if(S.current&&audio.currentTime>5&&S.playedHistoryFor!==S.current.videoId){S.playedHistoryFor=S.current.videoId;api.history.add(S.current,audio.currentTime).catch(()=>{});}
       const threshold=Math.min(240,Math.max(30,(audio.duration||180)*.5));
       if(S.current&&audio.currentTime>=threshold&&S.scrobbledFor!==S.current.videoId){S.scrobbledFor=S.current.videoId;api.lastfm.scrobble(S.current,Math.floor(Date.now()/1000-audio.currentTime)).catch(()=>{});}

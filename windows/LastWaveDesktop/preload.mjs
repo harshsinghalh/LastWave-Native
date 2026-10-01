@@ -5,6 +5,9 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('lastwave', {
   bootstrap: () => invoke('app:bootstrap'),
   state: () => invoke('state:get'),
+  search: {
+    clearHistory: () => invoke('search:clear-history')
+  },
   openExternal: url => invoke('app:open-external', url),
   showFile: file => invoke('app:show-file', file),
   openDownloads: () => invoke('app:open-downloads'),
@@ -16,6 +19,8 @@ contextBridge.exposeInMainWorld('lastwave', {
 
   library: {
     toggleLike: track => invoke('library:toggle-like', track),
+    excludeTrack: track => invoke('library:exclude-track', track),
+    restoreExcluded: videoId => invoke('library:restore-excluded', videoId),
     createPlaylist: name => invoke('library:create-playlist', name),
     renamePlaylist: (id, title) => invoke('library:rename-playlist', id, title),
     deletePlaylist: id => invoke('library:delete-playlist', id),
@@ -65,6 +70,7 @@ contextBridge.exposeInMainWorld('lastwave', {
     save: patch => invoke('lastfm:save', patch),
     authUrl: () => invoke('lastfm:auth-url'),
     user: username => invoke('lastfm:user', username),
+    searchUsers: (query, limit = 30) => invoke('lastfm:search-users', query, limit),
     recent: (username, limit = 50) => invoke('lastfm:recent', username, limit),
     top: (username, period = '7day', limit = 50) => invoke('lastfm:top', username, period, limit),
     friends: username => invoke('lastfm:friends', username),

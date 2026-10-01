@@ -430,7 +430,10 @@ function setupIpc() {
   });
 
   ipcMain.handle('state:get', () => store.snapshot());
+  ipcMain.handle('search:clear-history', () => store.clearSearchHistory());
   ipcMain.handle('library:toggle-like', (_e, track) => store.toggleLike(clean(track)));
+  ipcMain.handle('library:exclude-track', (_e, track) => store.excludeTrack(clean(track)));
+  ipcMain.handle('library:restore-excluded', (_e, videoId) => store.restoreExcluded(String(videoId || '')));
   ipcMain.handle('library:create-playlist', (_e, name) => store.createPlaylist(name));
   ipcMain.handle('library:rename-playlist', (_e, id, title) => store.renamePlaylist(id, title));
   ipcMain.handle('library:delete-playlist', (_e, id) => store.deletePlaylist(id));
@@ -533,6 +536,7 @@ function setupIpc() {
   ipcMain.handle('lastfm:save', (_e, patch) => store.updateSettings({ lastfm: clean(patch) }).lastfm);
   ipcMain.handle('lastfm:auth-url', () => lastfm.authUrl());
   ipcMain.handle('lastfm:user', (_e, username) => lastfm.userInfo(username));
+  ipcMain.handle('lastfm:search-users', (_e, query, limit) => lastfm.searchUsers(query, limit));
   ipcMain.handle('lastfm:recent', (_e, username, limit) => lastfm.recentTracks(username, limit));
   ipcMain.handle('lastfm:top', (_e, username, period, limit) => lastfm.topTracks(username, period, limit));
   ipcMain.handle('lastfm:friends', (_e, username) => lastfm.friends(username));

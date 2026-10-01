@@ -135,6 +135,20 @@ export class LastFmService {
     }));
   }
 
+  async searchUsers(query, limit = 30) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const d = await this.get('user.search', { user: q, limit: String(limit) });
+    const rows = d?.results?.usermatches?.user || [];
+    return (Array.isArray(rows) ? rows : [rows]).filter(Boolean).map(u => ({
+      username: u.name || '',
+      realname: u.realname || '',
+      artworkUrl: (u.image || []).at(-1)?.['#text'] || '',
+      url: u.url || '',
+      playcount: Number(u.playcount || 0)
+    }));
+  }
+
   async friends(username, limit = 50) {
     const user = username || this.creds().username;
     if (!user) return [];
