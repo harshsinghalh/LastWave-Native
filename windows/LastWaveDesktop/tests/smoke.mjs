@@ -24,6 +24,13 @@ store.addHistory(trackB);
 store.addHistory(trackA);
 assert.equal(store.stats().totalPlays, 3);
 assert.equal(store.stats().topTracks[0].videoId, trackA.videoId);
+assert.equal(store.toggleExcluded(trackA), true);
+assert.equal(store.isExcluded(trackA.videoId), true);
+assert.equal(store.smartMix({ limit: 20 }).some(x => x.videoId === trackA.videoId), false);
+assert.equal(store.toggleExcluded(trackA), false);
+assert.equal(store.isExcluded(trackA.videoId), false);
+store.updateSettings({ hiddenHomeSections: ['Quick picks'] });
+assert.deepEqual(store.state.settings.hiddenHomeSections, ['Quick picks']);
 
 const fake = {
   contents: [
@@ -85,5 +92,11 @@ assert.ok(renderer.includes("['feed','stats','playlists']"), 'only the Android t
 assert.ok(renderer.includes('function openFullPlayer') && renderer.includes('function closeFullPlayer'));
 assert.ok(renderer.includes("function showLyrics") && renderer.includes("S.playerTab!=='lyrics'"), 'lyrics full-player state is required');
 assert.ok(renderer.includes("route !== 'playlists'"), 'Generator FAB must be scoped to Playlists');
+for (const route of ['provider-modules','home-sections','excluded-songs','youtube-import','external-import','youtube-login','new-releases','friend-profile']) {
+  assert.ok(renderer.includes(`case '${route}'`), `Android pushed route missing on Windows: ${route}`);
+}
+for (const tab of ['audio','appearance','youtube','lastfm','library','data','about']) {
+  assert.ok(renderer.includes(`['${tab}'`) || renderer.includes(`tab==='${tab}'`), `Settings category missing: ${tab}`);
+}
 
 console.log('LastWave full desktop smoke tests passed.');
