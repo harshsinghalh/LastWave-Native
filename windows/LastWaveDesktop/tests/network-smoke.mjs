@@ -28,7 +28,7 @@ const timeout = (promise, ms, label) =>
     )
   ]);
 
-async function main() {
+export async function runNetworkSmoke() {
   await app.whenReady();
 
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'lastwave-yt-smoke-'));
@@ -99,19 +99,6 @@ async function main() {
     }
   }
 
-  console.log(JSON.stringify(report, null, 2));
+  return report;
 }
 
-let exitCode = 0;
-try {
-  await main();
-} catch (error) {
-  report.errors.push(error?.message || String(error));
-  console.error(error);
-  exitCode = 1;
-} finally {
-  try { fs.writeFileSync(reportPath, JSON.stringify(report, null, 2)); } catch {}
-  // Electron can keep network/session handles alive after all windows close.
-  // CI needs an unconditional process termination after the report is flushed.
-  process.exit(exitCode);
-}
