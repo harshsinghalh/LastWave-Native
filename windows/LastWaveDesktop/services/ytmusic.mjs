@@ -2,7 +2,13 @@ import { Innertube, UniversalCache, Platform } from 'youtubei.js';
 import path from 'node:path';
 import { PoTokenService, appendPoToken } from './potoken.mjs';
 
-Platform.shim.eval = async data => new Function(data.output)();
+Platform.shim.eval = async (data, env = {}) => {
+  const properties = [];
+  if (env.n) properties.push(`n: exportedVars.nFunction(${JSON.stringify(env.n)})`);
+  if (env.sig) properties.push(`sig: exportedVars.sigFunction(${JSON.stringify(env.sig)})`);
+  const code = `${data.output}\nreturn { ${properties.join(', ')} };`;
+  return new Function(code)();
+};
 
 function textOf(value) {
   if (value == null) return '';
@@ -398,7 +404,7 @@ export class YouTubeMusicService {
       const visitorData = yt.session?.context?.client?.visitorData || videoId;
       const { playerToken, sessionToken } = await this.poTokens.mintPair(videoId, visitorData);
 
-      for (const client of ['YTMUSIC', 'WEB_EMBEDDED', 'ANDROID', 'MWEB', 'YTMUSIC_ANDROID']) {
+      for (const client of ['MUSIC', 'ANDROID_MUSIC', 'WEB_EMBEDDED', 'ANDROID', 'MWEB']) {
         try {
           const info = await yt.getBasicInfo(videoId, {
             client,
@@ -418,7 +424,7 @@ export class YouTubeMusicService {
     }
 
     // Tier 3: exhaustive non-token recovery for clients not already tried.
-    for (const client of ['TV_SIMPLY', 'WEB_EMBEDDED', 'YTMUSIC_ANDROID', 'ANDROID', 'YTMUSIC', 'MWEB', 'VISIONOS', 'WEB']) {
+    for (const client of ['TV_SIMPLY', 'WEB_EMBEDDED', 'ANDROID_MUSIC', 'MUSIC', 'ANDROID', 'MWEB', 'VISIONOS', 'WEB']) {
       try {
         return await resolveWithoutToken(client);
       } catch (error) {
@@ -444,7 +450,7 @@ export class YouTubeMusicService {
 
   async rawInfo(videoId) {
     const yt = await this.init(this.cookie);
-    const info = await yt.getBasicInfo(videoId, { client: 'YTMUSIC' });
+    const info = await yt.getBasicInfo(videoId, { client: 'MUSIC' });
     return safeObject(info);
   }
 }
