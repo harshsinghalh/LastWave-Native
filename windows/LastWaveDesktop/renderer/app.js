@@ -43,6 +43,8 @@
     scrobbledFor: null,
     activeSearchType: 'all',
     playlistSort: 'date_desc',
+    generatorMode: null,
+    generatorTrackCount: 25,
     trackCache: new Map()
   };
 
@@ -802,23 +804,124 @@
   }
 
   async function renderGenerator() {
-    page.innerHTML = pageHead('Smart Playlist Generator','Build a mix from mood, genre and your local listening signals.') +
-      `<div class="panel-card"><div class="form-grid">
-        <div class="field"><label>Mood</label><select id="genMood"><option>Energetic</option><option>Chill</option><option>Focus</option><option>Happy</option><option>Melancholic</option><option>Workout</option><option>Party</option><option>Sleep</option></select></div>
-        <div class="field"><label>Genre</label><select id="genGenre"><option value="">Any genre</option>${GENRES.slice(0,18).map(x=>`<option>${x}</option>`).join('')}</select></div>
-        <div class="field full"><label>Seed artist / track / idea</label><input id="genSeed" placeholder="e.g. Hans Zimmer, Arijit Singh, cinematic bass, 2000s nostalgia"></div>
-      </div><div class="page-actions" style="margin-top:16px"><button class="primary" id="generateBtn">Generate mix</button><button class="secondary" id="localMixBtn">Use my listening history</button></div></div>
-      <section id="generatedMix" class="section">${empty('Your generated mix will appear here')}</section>`;
-    q('#generateBtn').addEventListener('click', async () => {
-      const mood=q('#genMood').value, genre=q('#genGenre').value, seed=q('#genSeed').value.trim();
-      const searchQuery=[mood,genre,seed,'music'].filter(Boolean).join(' ');
-      q('#generatedMix').innerHTML=loading('Generating');
-      const result=await api.youtube.search(searchQuery,'song').catch(()=>({tracks:[]}));
-      showGenerated(result.tracks.slice(0,35),`${mood} ${genre || 'mix'}`);
+    const modes = [
+      ['top','Top Tracks','Your most played tracks of all time','★'],
+      ['recent','Recent Tracks',"What you've been listening to lately",'↻'],
+      ['similar-tracks','Song Radio','YouTube Music radio from any song','◉'],
+      ['similar-artists','Similar Artists','YouTube-first artist discovery','♧'],
+      ['tag','By Tag / Genre','YouTube-first genre picks','#'],
+      ['mix','My Mix','Your taste, mixes & local favorites','✦'],
+      ['recommendations','My Recommendation','35 YouTube-first discoveries','☼'],
+      ['never-heard','Never Heard',"Fresh discoveries you've never listened to before",'◇'],
+      ['library','My Library','Re-discover the sounds of your past','♫']
+    ];
+
+    const selected = modes.find(function(x){ return x[0] === S.generatorMode; });
+    let html = pageHead('Generator','Choose a mode to generate a playlist');
+
+    html += '<section class="android-generator-group">' +
+      modes.map(function(mode,index){
+        const posClass = modes.length===1?'single':index===0?'first':index===modes.length-1?'last':'middle';
+        return '<button class="android-generator-mode ' + posClass + ' ' + (S.generatorMode===mode[0]?'selected':'') + '" data-generator-mode="' + mode[0] + '">' +
+          '<span class="android-generator-badge">' + mode[3] + '</span>' +
+          '<span class="android-generator-copy"><strong>' + escapeHtml(mode[1]) + '</strong><small>' + escapeHtml(mode[2]) + '</small></span>' +
+          '<b>' + (S.generatorMode===mode[0]?'✓':'›') + '</b>' +
+        '</button>';
+      }).join('') +
+    '</section>';
+
+    if (selected) {
+      html += '<section class="android-generator-options"><div class="android-generator-option-head"><span>' + selected[3] + '</span><div><strong>' + escapeHtml(selected[1]) + '</strong><small>' + escapeHtml(selected[2]) + '</small></div></div>';
+
+      if (['top','library'].includes(S.generatorMode)) {
+        html += '<label class="android-field-label">Time Period</label><div class="android-generator-chips">' +
+          ['All Time','12 Months','6 Months','3 Months','1 Month','7 Days'].map(function(x,i){
+            return '<button class="chip ' + (i===0?'active':'') + '" data-generator-period="' + escapeHtml(x) + '">' + escapeHtml(x) + '</button>';
+          }).join('') + '</div>';
+      }
+      if (S.generatorMode === 'tag') {
+        html += '<label class="android-field-label">Genre or Tag</label><input class="android-generator-input" id="generatorTag" placeholder="e.g. rock, lofi, jazz…">' +
+          '<div class="android-generator-chips">' + ['pop','rock','hip-hop','electronic','jazz','lofi','metal','indie','classical','r&b','ambient','punk'].map(function(x){
+            return '<button class="chip" data-generator-tag="' + escapeHtml(x) + '">' + escapeHtml(x) + '</button>';
+          }).join('') + '</div>';
+      }
+      if (S.generatorMode === 'similar-tracks') {
+        html += '<label class="android-field-label">Seed Track</label><p class="mini-note">Pick any song; LastWave builds a YouTube Music radio around it.</p>' +
+          '<input class="android-generator-input" id="generatorSeedTrack" placeholder="Track name…">' +
+          '<label class="android-field-label">Seed Artist</label><input class="android-generator-input" id="generatorSeedArtist" placeholder="Artist name…">';
+      }
+      if (S.generatorMode === 'similar-artists') {
+        html += '<label class="android-field-label">Seed Artist</label><input class="android-generator-input" id="generatorSeedArtist" placeholder="Artist name…">';
+      }
+
+      html += '<div class="android-track-count"><div><strong>Track count</strong><small>' + S.generatorTrackCount + ' tracks</small></div><input id="generatorTrackCount" type="range" min="5" max="35" value="' + S.generatorTrackCount + '"></div>' +
+        '<button class="android-generate-button" id="generateBtn">✦ Generate playlist</button></section>';
+    }
+
+    html += '<section id="generatedMix" class="android-generated-results">' + (selected ? '' : empty('Choose a generation mode','Select one of the Android generator modes above.')) + '</section>';
+    page.innerHTML = html;
+
+    qa('[data-generator-mode]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        S.generatorMode = S.generatorMode === btn.dataset.generatorMode ? null : btn.dataset.generatorMode;
+        renderGenerator();
+      });
     });
-    q('#localMixBtn').addEventListener('click', async () => {
-      const tracks=await api.library.smartMix({limit:35});
-      showGenerated(tracks,'Your LastWave mix');
+    qa('[data-generator-tag]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        const input=q('#generatorTag');if(input)input.value=btn.dataset.generatorTag;
+        qa('[data-generator-tag]').forEach(function(x){x.classList.toggle('active',x===btn);});
+      });
+    });
+    q('#generatorTrackCount')?.addEventListener('input',function(e){
+      S.generatorTrackCount=Number(e.target.value);
+      q('.android-track-count small').textContent=S.generatorTrackCount+' tracks';
+    });
+    q('#generateBtn')?.addEventListener('click',async function(){
+      q('#generatedMix').innerHTML=loading('Generating playlist');
+      try{
+        let tracks=[];
+        const limit=S.generatorTrackCount;
+        if(S.generatorMode==='top'){
+          const stats=await api.library.stats();
+          tracks=(stats.topTracks||[]).slice(0,limit);
+        }else if(S.generatorMode==='recent'){
+          tracks=(S.local?.history||[]).filter(function(t,i,a){return t?.videoId&&a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+        }else if(S.generatorMode==='mix'){
+          tracks=await api.library.smartMix({limit:limit});
+        }else if(S.generatorMode==='library'){
+          const seen=new Set();
+          tracks=[...(S.local?.liked||[]),...(S.local?.history||[])].filter(function(t){return t?.videoId&&!seen.has(t.videoId)&&seen.add(t.videoId);}).slice(0,limit);
+        }else if(S.generatorMode==='tag'){
+          const tag=q('#generatorTag')?.value?.trim();
+          if(!tag)throw new Error('Enter a genre or tag');
+          tracks=(await api.youtube.search(tag+' music','song')).tracks.slice(0,limit);
+        }else if(S.generatorMode==='similar-tracks'){
+          const song=q('#generatorSeedTrack')?.value?.trim(),artist=q('#generatorSeedArtist')?.value?.trim();
+          if(!song||!artist)throw new Error('Enter a seed track and artist');
+          const seed=(await api.youtube.search(artist+' '+song,'song')).tracks[0];
+          if(!seed)throw new Error('Seed track was not found');
+          tracks=(await api.youtube.related(seed.videoId)).slice(0,limit);
+        }else if(S.generatorMode==='similar-artists'){
+          const artist=q('#generatorSeedArtist')?.value?.trim();
+          if(!artist)throw new Error('Enter a seed artist');
+          tracks=(await api.youtube.search('similar to '+artist+' music','song')).tracks.slice(0,limit);
+        }else if(S.generatorMode==='never-heard'){
+          const known=new Set([...(S.local?.history||[]),...(S.local?.liked||[])].map(function(t){return t.videoId;}));
+          const explore=await api.youtube.explore();
+          tracks=(explore.tracks||[]).filter(function(t){return t.videoId&&!known.has(t.videoId);}).slice(0,limit);
+          if(tracks.length<limit){
+            const more=(await api.youtube.search('new music discoveries','song')).tracks.filter(function(t){return !known.has(t.videoId);});
+            tracks=[...tracks,...more].filter(function(t,i,a){return a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+          }
+        }else if(S.generatorMode==='recommendations'){
+          const home=await api.youtube.home();
+          tracks=(home||[]).flatMap(function(x){return x.tracks||[];}).filter(function(t,i,a){return t.videoId&&a.findIndex(x=>x.videoId===t.videoId)===i;}).slice(0,limit);
+        }
+        showGenerated(tracks,selected?.[1]||'Generated playlist');
+      }catch(e){
+        q('#generatedMix').innerHTML=empty('Could not generate playlist',e.message||'Try another mode.');
+      }
     });
   }
 
