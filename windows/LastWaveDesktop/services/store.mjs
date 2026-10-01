@@ -10,6 +10,7 @@ const DEFAULT_STATE = {
     loudnessNormalization: false,
     crossfadeSeconds: 0,
     lyricsProvider: 'lrclib',
+    hiddenHomeSections: [],
     downloadFolder: '',
     audioQuality: 'best',
     lastfm: { apiKey: '', apiSecret: '', username: '', sessionKey: '' }
@@ -101,6 +102,31 @@ export class JsonStore {
 
   isLiked(videoId) {
     return this.state.liked.some(x => x.videoId === videoId);
+  }
+
+  toggleExcluded(track) {
+    const id = track?.videoId;
+    if (!id) return false;
+    const index = this.state.excluded.findIndex(x => x.videoId === id);
+    if (index >= 0) {
+      this.state.excluded.splice(index, 1);
+      this.save();
+      return false;
+    }
+    this.state.excluded.unshift({ ...track, excludedAt: Date.now() });
+    this.state.excluded = this.state.excluded.slice(0, 5000);
+    this.save();
+    return true;
+  }
+
+  isExcluded(videoId) {
+    return this.state.excluded.some(x => x.videoId === videoId);
+  }
+
+  clearExcluded() {
+    this.state.excluded = [];
+    this.save();
+    return [];
   }
 
   addHistory(track, progress = 0) {
@@ -214,7 +240,8 @@ export class JsonStore {
   smartMix({ limit = 30 } = {}) {
     const seed = [...this.state.liked, ...this.state.history.slice(0, 200)];
     const seen = new Set();
-    const unique = seed.filter(x => x?.videoId && !seen.has(x.videoId) && seen.add(x.videoId));
+    const excluded = new Set(this.state.excluded.map(x => x.videoId));
+    const unique = seed.filter(x => x?.videoId && !excluded.has(x.videoId) && !seen.has(x.videoId) && seen.add(x.videoId));
     unique.sort((a,b) => (b.likedAt || b.playedAt || 0) - (a.likedAt || a.playedAt || 0));
     return unique.slice(0, limit);
   }
