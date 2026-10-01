@@ -362,24 +362,73 @@
   }
 
   async function renderStats() {
-    page.innerHTML = pageHead('Statistics','', '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button><button class="secondary header-circle" data-route="search" title="Search">⌕</button><button class="secondary header-circle" data-route="settings" title="Settings">●</button>') + loading('Loading your listening history');
+    const actions =
+      '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button>' +
+      '<button class="secondary header-circle" data-route="search" title="Search">⌕</button>' +
+      '<button class="secondary header-circle android-profile-action" data-route="settings" title="Settings"><span>●</span></button>';
+
+    page.innerHTML = pageHead('Statistics','',actions) + loading('Loading your listening history');
+    await refreshLocal();
     const stats = await api.library.stats();
-    let html = pageHead('Statistics','', '<button class="secondary header-circle" data-route="downloads" title="Downloads">⇩</button><button class="secondary header-circle" data-route="search" title="Search">⌕</button><button class="secondary header-circle" data-route="settings" title="Settings">●</button>');
-    html += `<div class="wide-grid">
-      <div class="stat-card"><b>${stats.totalPlays}</b><span>Local plays</span></div>
-      <div class="stat-card"><b>${stats.uniqueTracks}</b><span>Unique tracks</span></div>
-      <div class="stat-card"><b>${stats.activeDays}</b><span>Active listening days</span></div>
-    </div>`;
-    if (stats.topTracks.length) html += `<section class="section"><div class="section-head"><h2>Top tracks</h2></div><div class="track-list">${stats.topTracks.map(trackRow).join('')}</div></section>`;
-    if (stats.topArtists.length) html += `<section class="section"><div class="section-head"><h2>Top artists</h2></div><div class="wide-grid">${stats.topArtists.map(x => `<div class="panel-card"><strong>${escapeHtml(x.artist)}</strong><div class="mini-note">${x.plays} plays</div></div>`).join('')}</div></section>`;
-    const username = S.local.settings.lastfm?.username;
-    if (username && S.local.settings.lastfm?.apiKey) {
-      try {
-        const user = await api.lastfm.user(username);
-        html += `<section class="section"><div class="section-head"><h2>Last.fm</h2></div><div class="wide-grid"><div class="stat-card"><b>${user.playcount.toLocaleString()}</b><span>Total scrobbles</span></div><div class="stat-card"><b>${escapeHtml(user.username)}</b><span>Connected profile</span></div></div></section>`;
-      } catch {}
+
+    const history = S.local?.history || [];
+    const uniqueAlbums = new Set(history.map(function(x){return String(x.album || '').trim();}).filter(Boolean)).size;
+    const username = S.local?.settings?.lastfm?.username || 'Guest';
+    const headline = S.local?.settings?.lastfm?.sessionKey ? 'Scrobbles' : 'Plays';
+    const currentLabel = S.current ? ('Listening to ' + S.current.title) : 'Local listening history';
+
+    let html = pageHead('Statistics','',actions) +
+      '<div class="android-stats-user-row">' +
+        '<button class="android-user-pill" data-route="friends"><span class="android-user-pill-avatar">●</span><strong>' + escapeHtml(username) + '</strong></button>' +
+        '<div class="android-listen-pill"><span>◷</span><strong>' + escapeHtml(currentLabel) + '</strong></div>' +
+      '</div>';
+
+    if (!S.local?.settings?.lastfm?.username) {
+      html += '<div class="android-local-stats-banner"><span>◉</span><div><strong>Local statistics</strong><small>Connect Last.fm in Settings for global scrobbles and friends.</small></div><button data-route="settings">Settings</button></div>';
     }
+
+    html += '<section class="android-stats-hero">' +
+      '<div class="android-stats-main">' +
+        '<div><strong>' + (stats.totalPlays ? stats.totalPlays.toLocaleString() : '—') + '</strong><span>' + headline + '</span></div>' +
+        '<button data-route="genres" title="View genres">→</button>' +
+      '</div>' +
+      '<div class="android-stat-pills">' +
+        '<div><strong>' + (stats.uniqueTracks || '—') + '</strong><span>Tracks</span></div>' +
+        '<div><strong>' + (stats.topArtists?.length || '—') + '</strong><span>Artists</span></div>' +
+        '<div><strong>' + (uniqueAlbums || '—') + '</strong><span>Albums</span></div>' +
+      '</div>' +
+    '</section>';
+
+    const rows = stats.topTracks || [];
+    html += '<section class="android-stats-list">' +
+      '<div class="android-mix-header"><div><strong>List</strong><span>' + rows.length + ' tracks</span></div><button id="statsSortBtn">↕ <span>Recent</span></button></div>' +
+      (rows.length ? '<div class="android-stats-rows">' + rows.map(function(track,index){
+        cacheTrack(track);
+        return '<div class="android-stat-track ' + (S.current?.videoId===track.videoId?'current':'') + '" data-play="' + escapeHtml(track.videoId || '') + '">' +
+          '<div class="android-stat-index">' + (index + 1) + '</div>' +
+          '<div class="android-stat-art">' + img(track.artworkUrl,track.title) + '</div>' +
+          '<div class="android-stat-copy"><strong>' + escapeHtml(track.title || '') + '</strong><span>' + escapeHtml(track.artist || '') + '</span></div>' +
+          '<div class="android-stat-plays">' + escapeHtml(String(track.plays || '')) + '</div>' +
+          '<button class="tiny-btn" data-context="' + escapeHtml(track.videoId || '') + '">⋮</button>' +
+        '</div>';
+      }).join('') + '</div>' : empty('No listening history yet','Play some music and your statistics will build here.')) +
+    '</section>';
+
+    if (stats.topArtists?.length) {
+      html += '<section class="section"><div class="section-head"><div><h2>Top artists</h2></div></div><div class="android-artist-strip">' +
+        stats.topArtists.slice(0,12).map(function(x,index){
+          return '<button class="android-artist-pill" data-search-artist="' + escapeHtml(x.artist) + '"><span>' + (index+1) + '</span><strong>' + escapeHtml(x.artist) + '</strong><small>' + x.plays + ' plays</small></button>';
+        }).join('') + '</div></section>';
+    }
+
     page.innerHTML = html;
+
+    q('#statsSortBtn')?.addEventListener('click',function(){
+      toast('The Android app exposes Recent / Most Played / 7 Days / 30 Days. Local Windows history currently uses the same Recent ordering.');
+    });
+    qa('[data-search-artist]').forEach(function(btn){
+      btn.addEventListener('click',function(){ navigate('search',{query:btn.dataset.searchArtist,type:'artist'}); });
+    });
   }
 
   function playlistCard(p) {
