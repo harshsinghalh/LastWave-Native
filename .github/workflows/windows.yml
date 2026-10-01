@@ -81,6 +81,7 @@ jobs:
         run: npm run test:smoke
 
       - name: Run live desktop playback smoke test
+        timeout-minutes: 4
         env:
           LASTWAVE_NETWORK_SMOKE: '1'
         run: npx electron tests/network-smoke.mjs
