@@ -443,17 +443,15 @@
 
   async function renderFriends() {
     const lf=S.local.settings.lastfm||{};
-    page.innerHTML=pageHead('Friends','See Last.fm friends and what they are listening to.',
-      `<button class="secondary" data-route="settings">Last.fm settings</button>`) + (lf.username&&lf.apiKey?loading('Loading friends'):empty('Connect Last.fm first','Add your API key and username in Settings → Integrations.'));
-    if (!lf.username || !lf.apiKey) return;
-    try {
+    const head=pageHead('Friends','See Last.fm friends and what they are listening to.',headerAction('⚙','Last.fm settings','settings'));
+    page.innerHTML=`<div class="android-content pushed">${head}<div class="screen-body">${lf.username&&lf.apiKey?loading('Loading friends'):empty('Connect Last.fm first','Add your API key and username in Settings → Integrations.')}</div></div>`;
+    if(!lf.username||!lf.apiKey)return;
+    try{
       const friends=await api.lastfm.friends(lf.username);
-      page.innerHTML=pageHead('Friends',`Last.fm friends for ${lf.username}`,`<button class="secondary" data-route="settings">Last.fm settings</button>`) +
-        (friends.length?`<div class="wide-grid">${friends.map(f=>`<div class="friend-card" data-friend="${escapeHtml(f.username)}">${img(f.artworkUrl,f.username)}<div><strong>${escapeHtml(f.realname||f.username)}</strong><span>@${escapeHtml(f.username)}${f.recentTrack?` • ${escapeHtml(f.recentTrack.artist)} — ${escapeHtml(f.recentTrack.title)}`:''}</span></div><button class="secondary" data-friend-open="${escapeHtml(f.username)}">Open</button></div>`).join('')}</div>`:empty('No friends returned'));
+      page.innerHTML=`<div class="android-content pushed">${pageHead('Friends',`Last.fm friends for ${lf.username}`,headerAction('⚙','Last.fm settings','settings'))}<div class="screen-body"><div class="wide-grid">${friends.map(f=>`<div class="friend-card">${img(f.artworkUrl,f.username)}<div><strong>${escapeHtml(f.realname||f.username)}</strong><span>@${escapeHtml(f.username)}${f.recentTrack?` · ${escapeHtml(f.recentTrack.artist)} — ${escapeHtml(f.recentTrack.title)}`:''}</span></div><button class="secondary" data-friend-open="${escapeHtml(f.username)}">Open</button></div>`).join('')}</div></div></div>`;
       qa('[data-friend-open]').forEach(b=>b.addEventListener('click',()=>showFriendProfile(b.dataset.friendOpen)));
-    } catch(e) { page.innerHTML=pageHead('Friends')+empty('Could not load Last.fm friends',e.message); }
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead('Friends')}${empty('Could not load Last.fm friends',e.message)}</div>`;}
   }
-
   async function showFriendProfile(username) {
     openRightPanel(username,'Last.fm profile',loading('Loading profile'));
     try {
@@ -465,18 +463,14 @@
   }
 
   async function renderDownloads() {
-    await refreshLocal();
-    const rows=S.local.downloads||[];
-    page.innerHTML=pageHead('Downloads','Audio saved by LastWave on this PC.',`<button class="secondary" id="openDownloadsBtn">Open folder</button>`) +
-      (rows.length?`<div class="wide-grid">${rows.map(x=>`<div class="download-row">${img(x.artworkUrl,x.title)}<div><strong>${escapeHtml(x.title)}</strong><div class="mini-note">${escapeHtml(x.artist||'')} • ${escapeHtml(x.format||'audio')}</div></div><button class="secondary" data-show-file="${escapeHtml(x.file||'')}">Show</button></div>`).join('')}</div>`:empty('No downloads yet','Use ••• on a track and choose Download.'));
-    q('#openDownloadsBtn')?.addEventListener('click',()=>api.openDownloads());
-    qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
+    await refreshLocal();const rows=S.local.downloads||[];
+    page.innerHTML=`<div class="android-content pushed">${pageHead('Downloads','Audio saved by LastWave on this PC.','<button class="header-icon" id="openDownloadsBtn">↗</button>')}<div class="screen-body"><div class="wide-grid">${rows.map(x=>`<div class="download-row">${img(x.artworkUrl,x.title)}<div><strong>${escapeHtml(x.title)}</strong><div class="mini-note">${escapeHtml(x.artist||'')} · ${escapeHtml(x.format||'audio')}</div></div><button class="secondary" data-show-file="${escapeHtml(x.file||'')}">Show</button></div>`).join('')}</div>${rows.length?'':empty('No downloads yet','Use ⋮ on a track and choose Download.')}</div></div>`;
+    q('#openDownloadsBtn')?.addEventListener('click',()=>api.openDownloads());qa('[data-show-file]').forEach(b=>b.addEventListener('click',()=>api.showFile(b.dataset.showFile)));
   }
-
   async function renderSettings() {
     await refreshLocal();
     const s=S.local.settings, lf=s.lastfm||{};
-    page.innerHTML=pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.') +
+    page.innerHTML=`<div class="android-content settings">${pageHead('Settings','Playback, Personal DJ, integrations, downloads, appearance and backup.',headerAction('⌕','Search settings',''))}<div class="screen-body">` +
       `<div class="setting-group"><h2>Audio & Playback</h2><div class="setting-card">
         ${settingToggle('DJ Energy','Laya-personalized −2 dB to +5 dB predictive pre-drop + impact shaping','djEnergy',s.djEnergy)}
         ${settingToggle('Loudness normalization','Keep perceived playback level more consistent between tracks','loudnessNormalization',s.loudnessNormalization)}
@@ -547,18 +541,16 @@
   }
 
   async function renderEntity(kind,id,title='') {
-    page.innerHTML=loading('Loading details');
-    try {
-      const data=await api.youtube.entity(kind,id);
-      const name=data.title||title||kind;
-      const cover=data.tracks?.[0]?.artworkUrl || data.entities?.[0]?.artworkUrl || '';
-      page.innerHTML=`<div class="entity-hero">${img(cover,name)}<div><span class="eyebrow">${escapeHtml(kind)}</span><h1>${escapeHtml(name)}</h1><p>${data.tracks.length} playable tracks</p><div class="page-actions"><button class="primary" id="entityPlay">Play</button><button class="secondary" id="entitySave">Save as playlist</button></div></div></div>`+
-        (data.tracks.length?`<div class="track-list">${data.tracks.map(trackRow).join('')}</div>`:empty('No playable tracks returned'));
+    page.innerHTML=`<div class="android-content pushed">${loading('Loading details')}</div>`;
+    try{
+      const data=await api.youtube.entity(kind,id);const name=data.title||title||kind;const cover=data.tracks?.[0]?.artworkUrl||data.entities?.[0]?.artworkUrl||'';data.tracks?.forEach(cacheTrack);
+      page.innerHTML=`<div class="android-content pushed">${pageHead(name,kind[0].toUpperCase()+kind.slice(1))}
+        <div class="entity-hero">${img(cover,name)}<div><span class="eyebrow">${escapeHtml(kind)}</span><h1>${escapeHtml(name)}</h1><p>${data.tracks.length} playable tracks</p><div class="page-actions"><button class="primary" id="entityPlay">▶ Play</button><button class="secondary" id="entitySave">Save playlist</button></div></div></div>
+        ${data.tracks.length?`<div class="track-list">${data.tracks.map(trackRow).join('')}</div>`:empty('No playable tracks returned')}</div>`;
       q('#entityPlay')?.addEventListener('click',()=>data.tracks[0]&&playTrack(data.tracks[0],data.tracks));
       q('#entitySave')?.addEventListener('click',async()=>{if(!data.tracks.length)return;const p=await api.library.createPlaylist(name);await api.library.addToPlaylist(p.id,data.tracks);await refreshLocal();toast('Saved to your playlists');});
-    } catch(e){page.innerHTML=pageHead(title||'Details')+empty('Could not load this item',e.message);}
+    }catch(e){page.innerHTML=`<div class="android-content pushed">${pageHead(title||'Details')}${empty('Could not load this item',e.message)}</div>`;}
   }
-
   function modal(title,body,actions) {
     const host=q('#modalHost');
     host.innerHTML=`<div class="modal-wrap"><div class="modal"><h2>${escapeHtml(title)}</h2>${body}<div class="modal-actions">${actions}</div></div></div>`;
