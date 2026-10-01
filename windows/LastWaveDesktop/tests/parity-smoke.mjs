@@ -30,6 +30,15 @@ assert.match(js, /function fullPlayerNowMarkup/);
 assert.match(js, /function fullPlayerLyricsMarkup/);
 assert.match(js, /function fullPlayerQueueMarkup/);
 assert.match(js, /android-hidden/);
+assert.match(js, /renderNewReleases/);
+assert.match(js, /renderProviderModules/);
+assert.match(js, /renderHomeSections/);
+assert.match(js, /renderExcludedSongs/);
+assert.match(js, /renderYouTubeLoginPage/);
+assert.match(js, /renderImportPage/);
+assert.match(js, /android-settings-tabs/);
+assert.match(js, /homeHiddenSections/);
+assert.match(js, /excludeTrack/);
 
 // Regression guard: the visible renderer must not use the old permanent
 // desktop shell as its primary responsive model.
