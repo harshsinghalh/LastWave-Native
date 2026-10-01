@@ -535,6 +535,7 @@ function setupIpc() {
   ipcMain.handle('lastfm:save', (_e, patch) => store.updateSettings({ lastfm: clean(patch) }).lastfm);
   ipcMain.handle('lastfm:auth-url', () => lastfm.authUrl());
   ipcMain.handle('lastfm:user', (_e, username) => lastfm.userInfo(username));
+  ipcMain.handle('lastfm:search-users', (_e, query, limit) => lastfm.searchUsers(query, limit));
   ipcMain.handle('lastfm:recent', (_e, username, limit) => lastfm.recentTracks(username, limit));
   ipcMain.handle('lastfm:top', (_e, username, period, limit) => lastfm.topTracks(username, period, limit));
   ipcMain.handle('lastfm:friends', (_e, username) => lastfm.friends(username));
