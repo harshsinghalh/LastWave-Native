@@ -130,14 +130,19 @@ generatorButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await tick();
 
 assert.equal(document.body.dataset.route, 'generator');
-assert.ok(document.querySelector('#generateBtn'), 'Generator screen did not render');
+const tagMode = document.querySelector('[data-generator-mode="tag"]');
+assert.ok(tagMode, 'Android generator mode group did not render');
+tagMode.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+await tick();
 
-document.querySelector('#genSeed').value = 'parity';
+assert.ok(document.querySelector('#generateBtn'), 'Generator action did not render after selecting a mode');
+assert.ok(document.querySelector('#generatorTag'), 'Tag generator options did not render');
+document.querySelector('#generatorTag').value = 'parity';
 document.querySelector('#generateBtn').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 await tick();
 await tick();
 
-assert.ok(calls.search > 0, 'Generate did not call YouTube search');
+assert.ok(calls.search > 0, 'By Tag / Genre did not call YouTube search');
 assert.match(document.querySelector('#generatedMix')?.textContent || '', /Parity Test Track/);
 
 // Search parity route should render its Android search header and recent history.
