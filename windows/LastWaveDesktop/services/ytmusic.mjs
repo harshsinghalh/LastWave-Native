@@ -342,34 +342,23 @@ export class YouTubeMusicService {
     if (cached && cached.expires > Date.now() + 60_000) return cached;
     const yt = await this.init(this.cookie);
 
-    // YouTube does not expose streaming_data uniformly to every client
-    // profile. Try music-native profiles first, then bounded fallbacks used by
-    // official TV/Android clients. This mirrors the Android app's philosophy:
-    // one rejected extractor must never make the track globally unplayable.
+    // youtubei.js v18.1.0 expects the supported client KEYS below, not the
+    // protocol client names such as WEB_REMIX/ANDROID_MUSIC.
+    // TV and ANDROID_VR are tried early because they are useful playback
+    // fallbacks when web/music clients omit streaming_data.
     const clients = this.cookie
-      ? ['MUSIC', 'ANDROID_MUSIC', 'TV', 'WEB_EMBEDDED', 'ANDROID_VR', 'ANDROID', 'WEB']
-      : ['TV', 'ANDROID_VR', 'WEB_EMBEDDED', 'ANDROID_MUSIC', 'MUSIC', 'ANDROID', 'WEB'];
+      ? ['YTMUSIC', 'YTMUSIC_ANDROID', 'TV', 'ANDROID_VR', 'IOS', 'TV_SIMPLY', 'WEB_EMBEDDED', 'ANDROID', 'MWEB', 'VISIONOS', 'WEB']
+      : ['TV', 'ANDROID_VR', 'IOS', 'TV_SIMPLY', 'WEB_EMBEDDED', 'YTMUSIC_ANDROID', 'ANDROID', 'YTMUSIC', 'MWEB', 'VISIONOS', 'WEB'];
     const failures = [];
 
     for (const client of clients) {
       try {
-        const info = await yt.getBasicInfo(videoId, { client });
-        let format;
-        try {
-          format = info.chooseFormat({ type: 'audio', quality: 'best' });
-        } catch {
-          format = info.streaming_data?.adaptive_formats
-            ?.filter(x => String(x.mime_type || x.mimeType || '').startsWith('audio/'))
-            ?.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-        }
-        if (!format) {
-          failures.push(`${client}: no audio format`);
-          continue;
-        }
-
-        const url = typeof format.decipher === 'function'
-          ? await format.decipher(yt.session.player)
-          : format.url;
+        const format = await yt.getStreamingData(videoId, {
+          client,
+          type: 'audio',
+          quality: 'best'
+        });
+        const url = format?.url;
         if (!url || !String(url).startsWith('http')) {
           failures.push(`${client}: no direct URL`);
           continue;
@@ -392,7 +381,7 @@ export class YouTubeMusicService {
 
     throw new Error(
       'No playable YouTube Music audio stream was returned. ' +
-      failures.slice(0, 5).join(' | ')
+      failures.slice(0, 11).join(' | ')
     );
   }
 
