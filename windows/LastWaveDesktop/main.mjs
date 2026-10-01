@@ -12,6 +12,7 @@ import { LastFmService } from './services/lastfm.mjs';
 import { BrowserStreamResolver } from './services/browserstream.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 let mainWindow;
 let store;
 let youtube;
