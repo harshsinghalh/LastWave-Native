@@ -67,6 +67,7 @@ jobs:
           node --check services/lastfm.mjs
           node --check renderer/app.js
           node --check tests/smoke.mjs
+          node --check tests/network-smoke.mjs
 
       - name: Run full desktop smoke tests
         run: npm run test:smoke
