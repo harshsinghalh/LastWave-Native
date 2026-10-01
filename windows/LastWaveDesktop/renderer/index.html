@@ -2,106 +2,170 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* https: data: blob:; img-src 'self' https: data: blob:; media-src 'self' http://127.0.0.1:* https: blob:; connect-src 'self' http://127.0.0.1:* https:; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* https: data: blob:; img-src 'self' https: data: blob:; media-src 'self' http://127.0.0.1:* https: blob:; connect-src 'self' http://127.0.0.1:* https:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;">
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>LastWave</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./android-parity.css" />
 </head>
 <body>
-  <div id="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">LW</div>
-        <div><strong>LastWave</strong><span>Windows</span></div>
-      </div>
-      <nav id="nav">
-        <button data-route="feed" class="nav-item active"><span>⌂</span> Feed</button>
-        <button data-route="stats" class="nav-item"><span>◫</span> Stats</button>
-        <button data-route="playlists" class="nav-item"><span>☷</span> Playlists</button>
-        <div class="nav-separator"></div>
-        <button data-route="discover" class="nav-item"><span>✦</span> Discover</button>
-        <button data-route="genres" class="nav-item"><span>◉</span> Genres</button>
-        <button data-route="search" class="nav-item"><span>⌕</span> Search</button>
-        <button data-route="generator" class="nav-item"><span>✧</span> Generator</button>
-        <button data-route="friends" class="nav-item"><span>♧</span> Friends</button>
-        <button data-route="downloads" class="nav-item"><span>⇩</span> Downloads</button>
-      </nav>
-      <div class="sidebar-bottom">
-        <button data-route="settings" class="nav-item"><span>⚙</span> Settings</button>
-        <div id="connectionBadge" class="connection-badge">Starting…</div>
-      </div>
-    </aside>
-
-    <main class="workspace">
-      <header class="topbar">
-        <div class="history-controls">
-          <button id="backBtn" class="icon-btn" title="Back">‹</button>
-          <button id="forwardBtn" class="icon-btn" title="Forward">›</button>
-        </div>
-        <div class="global-search">
-          <span>⌕</span>
-          <input id="globalSearchInput" placeholder="Search songs, artists, albums, playlists" autocomplete="off" />
-          <div id="suggestions" class="suggestions hidden"></div>
-        </div>
-        <button id="djQuickToggle" class="pill active">DJ Energy</button>
-        <button id="openSettingsBtn" class="avatar-btn" title="Settings">⚙</button>
-      </header>
-
-      <section id="page" class="page"></section>
+  <div id="app" class="lastwave-shell">
+    <main id="viewport" class="viewport">
+      <section id="page" class="page" aria-live="polite"></section>
     </main>
 
-    <aside id="rightPanel" class="right-panel hidden">
-      <div class="panel-header">
-        <div>
-          <strong id="rightPanelTitle">Queue</strong>
-          <small id="rightPanelSubtitle"></small>
-        </div>
-        <button id="closeRightPanel" class="icon-btn">×</button>
+    <section id="miniPlayer" class="mini-player hidden" aria-label="Now playing">
+      <div class="mini-art-wrap">
+        <img id="playerArt" class="mini-art" alt="" />
       </div>
-      <div id="rightPanelBody" class="panel-body"></div>
-    </aside>
+      <button id="miniMeta" class="mini-meta" type="button" aria-label="Open full player">
+        <strong id="playerTitle">Nothing playing</strong>
+        <span id="playerArtist">Choose a song to start</span>
+      </button>
+      <button id="miniPlayBtn" class="mini-primary" type="button" aria-label="Play or pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="miniPlayPath" d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="miniNextBtn" class="mini-secondary" type="button" aria-label="Next track">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+      </button>
+      <div class="mini-progress-track"><i id="miniProgress"></i></div>
+    </section>
 
-    <footer class="player">
-      <div class="now-playing" id="nowPlayingCard">
-        <img id="playerArt" alt="" />
-        <div class="track-meta">
-          <strong id="playerTitle">Nothing playing</strong>
-          <span id="playerArtist">Choose a song to start</span>
-        </div>
-        <button id="likeBtn" class="icon-btn" title="Like">♡</button>
+    <nav id="floatingDock" class="floating-dock" aria-label="Main navigation">
+      <div id="nav" class="dock-core">
+        <button class="dock-item active" data-route="feed" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <span>Feed</span>
+        </button>
+        <button class="dock-item" data-route="stats" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4V10H4v10zm6 0h4V4h-4v16zm6 0h4V7h-4v13z"/></svg>
+          <span>Stats</span>
+        </button>
+        <button class="dock-item" data-route="playlists" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zm14-10v8.18A3 3 0 1 0 19 17V8h3V6h-5z"/></svg>
+          <span>Playlists</span>
+        </button>
       </div>
+      <button id="generatorFab" class="generator-fab hidden" data-route="generator" type="button" aria-label="Generate playlist">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zM11.5 9.5L10 6 8.5 9.5 5 11l3.5 1.5L10 16l1.5-3.5L15 11l-3.5-1.5zM19 15l-1 2-2 1 2 1 1 2 1-2 2-1-2-1-1-2z"/></svg>
+      </button>
+    </nav>
 
-      <div class="transport">
-        <div class="transport-buttons">
-          <button id="shuffleBtn" class="icon-btn" title="Shuffle">⤨</button>
-          <button id="prevBtn" class="icon-btn">⏮</button>
-          <button id="playBtn" class="play-btn">▶</button>
-          <button id="nextBtn" class="icon-btn">⏭</button>
-          <button id="repeatBtn" class="icon-btn" title="Repeat">↻</button>
-        </div>
-        <div class="progress-row">
-          <span id="currentTime">0:00</span>
-          <input id="seek" type="range" min="0" max="1000" value="0" />
-          <span id="duration">0:00</span>
-        </div>
-      </div>
+    <section id="fullPlayer" class="full-player hidden" aria-label="Full player">
+      <img id="fullPlayerBackdropImage" class="full-player-backdrop" alt="" />
+      <div id="fullPlayerColorWash" class="full-player-color-wash"></div>
+      <div class="full-player-scrim"></div>
+      <div class="full-player-vignette"></div>
 
-      <div class="player-actions">
-        <button id="lyricsBtn" class="icon-btn" title="Lyrics">≋</button>
-        <button id="queueBtn" class="icon-btn" title="Queue">☷</button>
-        <span id="qualityBadge" class="quality-badge">AUTO</span>
-        <span id="djMeter" class="dj-meter" title="Personal DJ gain"><i></i><b>0.0 dB</b></span>
-        <span class="volume-icon">◖</span>
-        <input id="volume" type="range" min="0" max="100" value="85" />
+      <div class="full-player-safe">
+        <header class="player-header">
+          <button id="collapsePlayerBtn" class="glass-icon" type="button" aria-label="Minimize player">
+            <svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+          </button>
+          <div class="player-header-copy">
+            <strong id="playerHeaderLabel">NOW PLAYING</strong>
+            <span id="playerSourceLabel">LastWave</span>
+          </div>
+          <button id="playerMoreBtn" class="glass-icon" type="button" aria-label="Song options">
+            <svg viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+          </button>
+        </header>
+
+        <div class="player-tabs-content">
+          <div id="nowPlayingTab" class="player-tab active">
+            <div class="art-stage">
+              <div id="artGlow" class="art-glow"></div>
+              <img id="fullPlayerArt" class="full-player-art" alt="" />
+            </div>
+
+            <div class="full-meta-row">
+              <div class="full-meta">
+                <h1 id="fullPlayerTitle">Nothing playing</h1>
+                <button id="fullPlayerArtist" class="artist-link" type="button">Choose a song to start</button>
+              </div>
+              <button id="likeBtn" class="glass-icon player-action" type="button" aria-label="Like song">
+                <svg viewBox="0 0 24 24"><path id="likePath" d="M12 21.35 10.55 20.03C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6.02 6.02 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              </button>
+              <button id="lyricsBtn" class="glass-icon player-action" type="button" aria-label="Show lyrics">
+                <svg viewBox="0 0 24 24"><path d="M6 17h8v-2H6v2zm0-4h12v-2H6v2zm0-6v2h12V7H6z"/></svg>
+              </button>
+            </div>
+
+            <div class="seek-area">
+              <div class="android-seek">
+                <div id="seekActive" class="seek-active"></div>
+                <div id="seekInactive" class="seek-inactive"></div>
+                <div id="seekThumb" class="seek-thumb"></div>
+                <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position" />
+              </div>
+              <div class="time-row"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
+            </div>
+
+            <div class="main-controls">
+              <button id="shuffleBtn" class="control-small" type="button" aria-label="Shuffle">
+                <svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+              </button>
+              <button id="prevBtn" class="control-medium" type="button" aria-label="Previous">
+                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+              </button>
+              <button id="playBtn" class="control-primary" type="button" aria-label="Play or pause">
+                <svg viewBox="0 0 24 24"><path id="fullPlayPath" d="M8 5v14l11-7z"/></svg>
+              </button>
+              <button id="nextBtn" class="control-medium" type="button" aria-label="Next">
+                <svg viewBox="0 0 24 24"><path d="m6 18 8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+              </button>
+              <button id="repeatBtn" class="control-small" type="button" aria-label="Repeat">
+                <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H7a5 5 0 0 0-5 5v2h2v-2a3 3 0 0 1 3-3zm10 10H7v-3l-4 4 4 4v-3h10a5 5 0 0 0 5-5v-2h-2v2a3 3 0 0 1-3 3z"/></svg>
+              </button>
+            </div>
+
+            <div class="utility-controls">
+              <button id="queueBtn" class="utility-pill" type="button">
+                <svg viewBox="0 0 24 24"><path d="M3 10h11v2H3zm0-4h11v2H3zm0 8h7v2H3zm13-2v6.18A3 3 0 1 0 18 21v-7h3v-2h-5z"/></svg>
+                <span>Queue</span>
+              </button>
+              <button id="djQuickToggle" class="utility-pill active" type="button">
+                <svg viewBox="0 0 24 24"><path d="m7 2-1 5H2l5 15 2-9h4l-6-11zm10 4-1 4h-3l4 12 2-7h3l-5-9z"/></svg>
+                <span>DJ Energy</span>
+              </button>
+              <span id="djMeter" class="dj-meter"><i></i><b>0.0 dB</b></span>
+              <label class="volume-control">
+                <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06A9 9 0 0 0 14 3.23z"/></svg>
+                <input id="volume" type="range" min="0" max="100" value="85" />
+              </label>
+            </div>
+          </div>
+
+          <div id="lyricsTab" class="player-tab">
+            <div id="lyricsFullscreen" class="lyrics-panel"></div>
+          </div>
+
+          <div id="queueTab" class="player-tab">
+            <div id="queueFullscreen" class="queue-panel"></div>
+          </div>
+        </div>
       </div>
-    </footer>
+    </section>
+
+    <section id="rightPanel" class="android-sheet hidden" aria-modal="true">
+      <button id="sheetScrim" class="sheet-scrim" type="button" aria-label="Close sheet"></button>
+      <div class="sheet-card">
+        <div class="sheet-handle"></div>
+        <header class="sheet-header">
+          <div><strong id="rightPanelTitle"></strong><small id="rightPanelSubtitle"></small></div>
+          <button id="closeRightPanel" class="tonal-icon" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.3-6.3z"/></svg>
+          </button>
+        </header>
+        <div id="rightPanelBody" class="sheet-body"></div>
+      </div>
+    </section>
+
+    <audio id="audio" crossorigin="anonymous"></audio>
+    <div id="contextMenu" class="context-menu hidden"></div>
+    <div id="toastHost" class="toast-host"></div>
+    <div id="modalHost"></div>
   </div>
 
-  <audio id="audio" crossorigin="anonymous"></audio>
-  <div id="contextMenu" class="context-menu hidden"></div>
-  <div id="toastHost" class="toast-host"></div>
-  <div id="modalHost"></div>
-
-  <script src="./app.js"></script>
+  <script src="./android-parity.js"></script>
 </body>
 </html>
