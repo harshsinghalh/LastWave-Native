@@ -393,7 +393,11 @@
         <div class="setting-row"><div class="setting-copy"><strong>Download folder</strong><span>${escapeHtml(s.downloadFolder||'Windows Music/LastWave')}</span></div><button class="secondary" id="chooseDownloadFolder">Choose</button></div>
         <div class="setting-row"><div class="setting-copy"><strong>Import playlist</strong><span>YouTube playlist URL or local CSV/JSON/M3U</span></div><button class="secondary" id="settingsImportBtn">Import</button></div>
       </div></div>
-      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card"><div class="field"><label>Optional authenticated cookie</label><textarea id="youtubeCookie" placeholder="Paste a YouTube/YouTube Music cookie string only if you want authenticated library surfaces.">${escapeHtml(s.youtubeCookie||'')}</textarea></div><div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save connection</button></div></div></div>
+      <div class="setting-group"><h2>YouTube Music</h2><div class="setting-card">
+        <div class="setting-row"><div class="setting-copy"><strong>Account connection</strong><span>${s.youtubeCookie ? 'Authenticated session saved' : 'Anonymous catalog mode'}</span></div><div class="page-actions"><button class="primary" id="youtubeLoginBtn">Sign in</button><button class="secondary" id="youtubeLogoutBtn">Sign out</button></div></div>
+        <div class="field"><label>Advanced: authenticated cookie fallback</label><textarea id="youtubeCookie" placeholder="Optional manual cookie string if browser sign-in is unavailable.">${escapeHtml(s.youtubeCookie||'')}</textarea></div>
+        <div class="page-actions" style="margin-top:12px"><button class="secondary" id="saveYouTubeCookie">Save manual connection</button></div>
+      </div></div>
       <div class="setting-group"><h2>Last.fm Integration</h2><div class="setting-card"><div class="form-grid">
         <div class="field"><label>Username</label><input id="lfUsername" value="${escapeHtml(lf.username||'')}"></div>
         <div class="field"><label>API key</label><input id="lfApiKey" value="${escapeHtml(lf.apiKey||'')}"></div>
@@ -418,6 +422,16 @@
     $('#accentSetting').addEventListener('change',async e=>{S.local.settings=await api.settings.update({accent:e.target.value});setTheme();});
     $('#chooseDownloadFolder').addEventListener('click',async()=>{await api.settings.chooseDownloadFolder();renderSettings();});
     $('#settingsImportBtn').addEventListener('click',importDialog);
+    $('#youtubeLoginBtn').addEventListener('click',async()=>{
+      toast('A YouTube Music sign-in window has opened. Close it after your account is visible.',5000);
+      const result=await api.youtube.login();
+      await refreshLocal();S.home=null;S.explore=null;
+      toast(result?.connected?'YouTube Music account connected':'No authenticated YouTube session was detected');
+      renderSettings();
+    });
+    $('#youtubeLogoutBtn').addEventListener('click',async()=>{
+      await api.youtube.logout();await refreshLocal();S.home=null;S.explore=null;toast('YouTube Music account disconnected');renderSettings();
+    });
     $('#saveYouTubeCookie').addEventListener('click',async()=>{S.local.settings=await api.settings.update({youtubeCookie:$('#youtubeCookie').value});S.home=null;S.explore=null;toast('YouTube connection saved');});
     $('#saveLastFm').addEventListener('click',saveLastFmSettings);
     $('#authLastFm').addEventListener('click',async()=>{await saveLastFmSettings();const url=await api.lastfm.authUrl();if(url)api.openExternal(url);else toast('Add your Last.fm API key first');});
@@ -465,10 +479,10 @@
   }
 
   function importDialog(){
-    modal('Import playlist',`<div class="field"><label>YouTube / YouTube Music playlist URL</label><input id="importYoutubeUrl" placeholder="https://music.youtube.com/playlist?list=..."></div><p class="mini-note">You can also import CSV, JSON, M3U or text lists. Spotify/Apple exports can be imported as CSV/text and LastWave will match each track against YouTube Music.</p>`,
+    modal('Import playlist',`<div class="field"><label>Public playlist URL</label><input id="importYoutubeUrl" placeholder="YouTube Music, Spotify or Apple Music playlist URL"></div><p class="mini-note">LastWave reads public playlist metadata and matches songs to the YouTube Music catalog. You can also import CSV, JSON, M3U or text lists.</p>`,
       `<button class="secondary" data-close-modal>Cancel</button><button class="secondary" id="importFileBtn">Choose file</button><button class="primary" id="importYoutubeBtn">Import URL</button>`);
     $('#importFileBtn').addEventListener('click',async()=>{toast('Matching imported tracks…',6000);const p=await api.imports.file();if(p){$('#modalHost').innerHTML='';await refreshLocal();navigate('playlist-detail',{id:p.id});}});
-    $('#importYoutubeBtn').addEventListener('click',async()=>{const input=$('#importYoutubeUrl').value.trim();if(!input)return;toast('Importing playlist…',6000);try{const p=await api.imports.youtubePlaylist(input);$('#modalHost').innerHTML='';await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message);}});
+    $('#importYoutubeBtn').addEventListener('click',async()=>{const input=$('#importYoutubeUrl').value.trim();if(!input)return;toast('Reading and matching playlist…',7000);try{const p=await api.imports.externalUrl(input);$('#modalHost').innerHTML='';await refreshLocal();navigate('playlist-detail',{id:p.id});}catch(e){toast(e.message,6000);}});
   }
 
   function openRightPanel(title,subtitle,bodyHtml){
