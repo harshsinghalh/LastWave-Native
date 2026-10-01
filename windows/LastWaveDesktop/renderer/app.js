@@ -226,7 +226,12 @@
     try {
       if (!S.home) S.home = await api.youtube.home();
       setConnection('YouTube Music ready');
-      const sections=(S.home||[]).filter(x=>x?.tracks?.length);
+      const hiddenSections=new Set(S.local?.settings?.hiddenHomeSections||[]);
+      const excludedIds=new Set((S.local?.excluded||[]).map(x=>x.videoId));
+      const sections=(S.home||[])
+        .filter(x=>x?.tracks?.length)
+        .filter(x=>!hiddenSections.has(x.title||''))
+        .map(x=>({...x,tracks:(x.tracks||[]).filter(t=>!excludedIds.has(t.videoId))}));
       const liked=S.local?.liked||[];
       const playlists=S.local?.playlists||[];
       const history=S.local?.history||[];
@@ -244,7 +249,7 @@
         <section class="section"><div class="quick-tile-row">${quickTileHtml}</div></section>`;
 
       const first=sections[0]?.tracks||[];
-      if(first.length){
+      if(first.length && !hiddenSections.has('Quick picks')){
         first.forEach(cacheTrack);
         html+=`<section class="section">
           <div class="section-head"><div class="section-copy"><h2>Quick picks</h2><p>Start listening instantly</p></div><button class="section-action" data-shuffle-list="home-first">Shuffle</button></div>
@@ -254,7 +259,7 @@
         </section>`;
       }
 
-      if(history.length){
+      if(history.length && !hiddenSections.has('Jump back in')){
         const recent=[];
         const seen=new Set();
         for(const t of history){if(t?.videoId&&!seen.has(t.videoId)){seen.add(t.videoId);recent.push(t);}if(recent.length>=12)break;}
@@ -861,10 +866,10 @@
 
   function contextMenu(track,x,y){
     if(!track)return;
-    const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);
-    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button>`;
+    const menu=q('#contextMenu');const liked=S.local.liked.some(t=>t.videoId===track.videoId);const excluded=(S.local.excluded||[]).some(t=>t.videoId===track.videoId);
+    menu.innerHTML=`<button data-cm="play">Play now</button><button data-cm="next">Play next</button><button data-cm="like">${liked?'Remove from liked':'Add to liked'}</button><button data-cm="playlist">Add to playlist…</button><button data-cm="download">Download</button><button data-cm="related">Related tracks</button><button data-cm="exclude">${excluded?'Remove exclusion':'Exclude from recommendations'}</button>`;
     menu.style.left=Math.min(x,innerWidth-240)+'px';menu.style.top=Math.min(y,innerHeight-280)+'px';menu.classList.remove('hidden');
-    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;}}));
+    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',async()=>{menu.classList.add('hidden');switch(b.dataset.cm){case'play':playTrack(track);break;case'next':{const i=Math.max(0,S.queueIndex+1);S.queue.splice(i,0,track);toast('Added next');break;}case'like':await toggleLike(track);break;case'playlist':playlistPicker(track);break;case'download':downloadTrack(track);break;case'related':showRelated(track);break;case'exclude':{const value=await api.library.toggleExcluded(track);await refreshLocal();toast(value?'Excluded from recommendations':'Removed from exclusions');break;}}}));
   }
 
   async function toggleLike(track){const liked=await api.library.toggleLike(track);await refreshLocal();toast(liked?'Added to liked songs':'Removed from liked songs');updatePlayerLike();}
