@@ -987,8 +987,8 @@ fun SettingsScreen(
                                 title = "DJ Energy",
                                 subtitle = when {
                                     misc.isBitPerfectEnabled -> "Paused by Bit-Perfect mode"
-                                    misc.djEnergyEnabled -> "−2 to +5 dB • lifts instrumental energy • settles around vocals"
-                                    else -> "Adaptive DJ-style gain riding across a 7 dB window"
+                                    misc.djEnergyEnabled -> "−2 to +5 dB • pre-drop dip + concert impact spike"
+                                    else -> "7 dB DJ ride with predictive drop shaping"
                                 },
                                 checked = misc.djEnergyEnabled,
                                 onCheckedChange = viewModel::setDjEnergyEnabled,
