@@ -1,4 +1,6 @@
-import { Innertube, UniversalCache } from 'youtubei.js';
+import { Innertube, UniversalCache, Platform } from 'youtubei.js';
+
+Platform.shim.eval = async data => new Function(data.output)();
 import path from 'node:path';
 
 function textOf(value) {
