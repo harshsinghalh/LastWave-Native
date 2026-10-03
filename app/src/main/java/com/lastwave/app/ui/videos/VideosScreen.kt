@@ -79,9 +79,8 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
                     val service = YouTubeServiceManager.instance().contentService
                     if (query.isBlank()) service.home else service.getSearch(query)
                 }
-                groups = result ?: emptyList()
-                val incoming = groups.flatMap { it.mediaItems.orEmpty() }.map(Video::from).filter { !it.isShorts }
-                    .distinctBy { it.videoId ?: it.channelId ?: it.title }
+                groups = result?.filterNotNull().orEmpty()
+                val incoming = playableVideos(groups)
                 if (version == generation) { _videos.value = incoming; _decisions.value = emptyMap(); evaluate() }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _error.value = "YouTube could not load. Check your connection and try again." }
@@ -99,7 +98,7 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
                 val result = withContext(Dispatchers.IO) { candidates.mapNotNull { YouTubeServiceManager.instance().contentService.continueGroup(it) } }
                 if(version == generation) {
                     groups = result
-                    _videos.value = (_videos.value + result.flatMap { it.mediaItems.orEmpty() }.map(Video::from).filter { !it.isShorts }).distinctBy { it.videoId ?: it.channelId ?: it.title }
+                    _videos.value = (_videos.value + playableVideos(result)).distinctBy { it.videoId }
                     evaluate()
                 }
             } catch (e: CancellationException) { throw e }
@@ -107,6 +106,12 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
             finally { _busy.value = false }
         }
     }
+    private fun playableVideos(rows: List<MediaGroup>): List<Video> = rows
+        .flatMap { it.mediaItems.orEmpty() }
+        .mapNotNull { Video.from(it) }
+        .filter { !it.isShorts && !it.videoId.isNullOrBlank() }
+        .distinctBy { it.videoId }
+
     private fun evaluate() {
         val version = generation
         _videos.value.forEach { video ->
