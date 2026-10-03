@@ -72,3 +72,5 @@ lastwave-addon-service/
 *.zip
 credentials_backup*
 
+
+!tools/prepare_newtube.py
