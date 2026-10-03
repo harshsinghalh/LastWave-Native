@@ -120,8 +120,8 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
         _videos.value.forEach { video ->
             val id = id(video)
             if (!_decisions.value.containsKey(id)) {
-                _decisions.value = _decisions.value + (id to client.initial(id, video.title ?: "", video.author ?: "", "video"))
-                client.evaluate(id, video.title ?: "", video.author ?: "", "video") { decision ->
+                _decisions.value = _decisions.value + (id to client.initial(id, video.getTitle() ?: "", video.getAuthor() ?: "", "video"))
+                client.evaluate(id, video.getTitle() ?: "", video.getAuthor() ?: "", "video") { decision ->
                 if (version == generation) _decisions.value = _decisions.value + (id to decision)
                 }
             }
@@ -130,7 +130,7 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
     fun open(context: android.content.Context, video: Video) { musicPlayer.pause(); VideoActionPresenter.instance(context).apply(video) }
     fun reveal(video: Video) { client.reveal(id(video)); _decisions.value = _decisions.value + (id(video) to LayaClient.Decision(false, "Revealed for this session", "user")) }
     fun undoReveal(video: Video) { client.undoReveal(id(video)); _decisions.value = _decisions.value - id(video); evaluate() }
-    fun id(video: Video): String = "video:" + (video.videoId ?: video.channelId ?: video.title)
+    fun id(video: Video): String = "video:" + (video.videoId ?: video.channelId ?: video.getTitle())
     override fun onCleared() { store.preferences().unregisterOnSharedPreferenceChangeListener(listener); generation++ }
 }
 
@@ -166,9 +166,9 @@ fun VideosScreen(onOpenLaya: () -> Unit, viewModel: VideosViewModel = hiltViewMo
                         Text(decision.engine, style = MaterialTheme.typography.labelSmall)
                         if (decision.engine != "pending") TextButton(onClick = { viewModel.reveal(video) }) { Text("Reveal once") }
                     } else {
-                        AsyncImage(model = video.cardImageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).clickable { viewModel.open(context, video) })
-                        Text(video.title ?: "Untitled video", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp).clickable { viewModel.open(context, video) })
-                        Text(video.author ?: "", style = MaterialTheme.typography.bodySmall)
+                        AsyncImage(model = video.getCardImageUrl(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).clickable { viewModel.open(context, video) })
+                        Text(video.getTitle() ?: "Untitled video", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 10.dp).clickable { viewModel.open(context, video) })
+                        Text(video.getAuthor() ?: "", style = MaterialTheme.typography.bodySmall)
                         if (decision?.engine == "user") TextButton(onClick = { viewModel.undoReveal(video) }) { Text("Undo reveal") }
                     }
                 }
