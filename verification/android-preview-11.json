@@ -1,0 +1,22 @@
+{
+  "completed_checks": [
+    "APK installs and combined Application/MainActivity start",
+    "LastWave music shell and video tab render",
+    "Laya settings render and toggle persists across reopening",
+    "Prompt commands enable and disable filtering without a service URL",
+    "LastWave choice dialogs and switches persist the original NewTube playback preferences",
+    "LastWave video settings tree and global search navigate through NewTube settings"
+  ],
+  "release": "laya-preview-11",
+  "source_commit": "e8f7c1eba129c1ad4760801dd67f15cb8de34811",
+  "workflow_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37145060307",
+  "runtime_artifact_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37145060307/artifacts/11281674269",
+  "crash_log_empty": true,
+  "media_context_error": false,
+  "live_laya_deployed": false,
+  "online_playback_verified": false,
+  "online_playback_limitation": "YouTube player warmup returned LOGIN_REQUIRED on the CI network",
+  "newtube_home_rows": 17,
+  "bytes": 172837242,
+  "sha256": "639862c10585bd972ccea6535c71830089cb806e02f3fbc1ed367137f5017675"
+}

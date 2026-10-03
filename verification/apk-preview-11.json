@@ -1,0 +1,13 @@
+{
+  "release": "laya-preview-11",
+  "source_commit": "e8f7c1eba129c1ad4760801dd67f15cb8de34811",
+  "workflow_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37145060307",
+  "bytes": 172837242,
+  "sha256": "639862c10585bd972ccea6535c71830089cb806e02f3fbc1ed367137f5017675",
+  "download_matches_github_digest": true,
+  "download_matches_published_checksum": true,
+  "native_abis": [
+    "arm64-v8a",
+    "x86_64"
+  ]
+}
