@@ -55,6 +55,26 @@ def policy():
     root = ET.fromstring(xml)
     return json.loads(root.find("string[@name='policy']").text)
 
+def scroll_for(label, name, attempts=10):
+    size = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
+    width, height = size
+    for _ in range(attempts):
+        tree = snapshot(name)
+        node = find(tree, label)
+        if node is not None:
+            return tree, node
+        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
+            str(width//2), str(int(height*.35)), "400")
+        time.sleep(1)
+    raise AssertionError("Could not scroll to: " + label)
+
+def enter_text(node, value):
+    tap(node)
+    adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
+    adb("shell", "input", "keyevent", *("KEYCODE_DEL" for _ in range(64)))
+    adb("shell", "input", "text", value.replace(" ", "%s"))
+    adb("shell", "input", "keyevent", "4")
+
 try:
     adb("install", "-r", "-t", sys.argv[1])
     adb("logcat", "-c")
@@ -105,9 +125,42 @@ try:
     assert policy()["enabled"] is False, "Toggle changed on reopening settings"
     checks.append("Laya settings render and toggle persists across reopening")
     screenshot("laya-reopened")
+    _, prompt = scroll_for("Your prompt", "offline-prompt")
+    enter_text(prompt, "enable filters")
+    _, apply = scroll_for("Apply prompt", "offline-prompt-apply")
+    tap(apply)
+    assert policy()["enabled"] is True, "Offline enable prompt did not update the shared policy"
+    tree, prompt = scroll_for("Your prompt", "offline-prompt-enabled")
+    enter_text(prompt, "disable filters")
+    _, apply = scroll_for("Apply prompt", "offline-prompt-disable")
+    tap(apply)
+    assert policy()["enabled"] is False, "Offline disable prompt did not update the shared policy"
+    checks.append("Prompt commands enable and disable filtering without a service URL")
+    screenshot("offline-prompt")
     adb("shell", "input", "keyevent", "4")
     wait_for("Feed controls", "video-feed")
     screenshot("video-feed")
+    tree = snapshot("video-settings-entry")
+    settings = find(tree, "Video settings")
+    assert settings is not None, "Video settings header action missing"
+    tap(settings)
+    tree, _ = wait_for("Video settings", "video-settings-root")
+    _, playback = scroll_for("Playback", "video-settings-playback-entry")
+    tap(playback)
+    wait_for("Video settings", "video-playback-settings")
+    screenshot("video-playback-settings")
+    adb("shell", "input", "keyevent", "4")
+    _, search = wait_for("Search video settings", "video-settings-search-entry")
+    tap(search)
+    tree, _ = wait_for("Search video settings", "video-settings-search")
+    field = next((n for n in tree.iter("node") if n.get("class") == "android.widget.EditText"), None)
+    assert field is not None, "LastWave video settings search field missing"
+    enter_text(field, "captions")
+    tree, result = wait_for("Captions", "video-settings-search-results")
+    tap(result)
+    wait_for("Video settings", "video-settings-captions")
+    screenshot("video-settings-captions")
+    checks.append("LastWave video settings tree and global search navigate through NewTube settings")
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
 finally:
     screenshot("final-state")

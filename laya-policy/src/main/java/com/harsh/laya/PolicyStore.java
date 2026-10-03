@@ -32,12 +32,16 @@ public final class PolicyStore {
     public void save(JSONObject policy) { prefs.edit().putString("policy",policy.toString()).apply(); }
     public String endpoint() { return prefs.getString("endpoint",""); }
     public void setEndpoint(String url) {
+        url = url.trim();
         if(!url.isBlank()) {
             java.net.URI parsed=java.net.URI.create(url);
             if(!"https".equalsIgnoreCase(parsed.getScheme()) || parsed.getHost()==null || parsed.getUserInfo()!=null || parsed.getQuery()!=null || parsed.getFragment()!=null)
                 throw new IllegalArgumentException("Enter an HTTPS service address without credentials, query or fragment");
         }
-        prefs.edit().putString("endpoint",url.replaceAll("/+$","")).apply();
+        String normalized=url.replaceAll("/+$", "");
+        SharedPreferences.Editor edit=prefs.edit().putString("endpoint",normalized);
+        if(!normalized.equals(endpoint())) edit.remove("status");
+        edit.apply();
     }
     public boolean consent() { return prefs.getBoolean("remote_consent",false); }
     public void setConsent(boolean value) { prefs.edit().putBoolean("remote_consent",value).apply(); }

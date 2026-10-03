@@ -10,10 +10,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.harsh.laya.PolicyStore
 import com.harsh.laya.LayaClient
+import com.harsh.laya.LocalPrompt
 import com.lastwave.app.ui.common.ExpressiveHeader
 import com.lastwave.app.ui.common.LiquidGlassCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.json.JSONArray
@@ -29,6 +31,8 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
     var status by remember { mutableStateOf(store.status()) }
     var consent by remember { mutableStateOf(store.consent()) }
     var busy by remember { mutableStateOf(false) }
+    var promptMessage by remember { mutableStateOf<String?>(null) }
+    var connectionMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     DisposableEffect(store) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -69,22 +73,33 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
             LiquidGlassCard {
                 Text("Describe what you want", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(value = prompt, onValueChange = { prompt = it.take(1000) }, label = { Text("Your prompt") }, placeholder = { Text("Only education and programming. Hide spam.") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                Button(enabled = !busy && consent && endpoint.isNotBlank() && prompt.isNotBlank(), onClick = {
+                Button(enabled = !busy && prompt.isNotBlank(), onClick = {
                     busy = true
+                    promptMessage = null
                     scope.launch {
                         try {
-                            val result = withContext(Dispatchers.IO) {
-                                store.setEndpoint(endpoint)
-                                LayaClient.get(context).post("/v1/policy/compile", JSONObject().put("prompt", prompt).put("policy", policy))
+                            val local = LocalPrompt.apply(prompt, policy)
+                            if (local != null) {
+                                policy = local
+                                store.save(policy)
+                                status = "Controls updated on this device. Review the switches above."
+                            } else {
+                                val result = withContext(Dispatchers.IO) {
+                                    store.setEndpoint(endpoint)
+                                    LayaClient.get(context).post("/v1/policy/compile", JSONObject().put("prompt", prompt).put("policy", policy))
+                                }
+                                policy = result.getJSONObject("policy")
+                                store.save(policy)
+                                status = "Prompt applied. Review the controls above."
                             }
-                            policy = result.getJSONObject("policy")
-                            store.save(policy)
-                            status = "Prompt applied. Review the controls above."
-                        } catch (e: Exception) { status = e.message ?: "Could not apply prompt" }
+                            promptMessage = status
+                        } catch (e: CancellationException) { throw e
+                        } catch (e: Exception) { promptMessage = e.message ?: "Could not apply prompt" }
                         finally { busy = false }
                     }
                 }) { Text(if (busy) "Applying…" else "Apply prompt") }
-                Text("Your prompt also guides Laya's content decisions. Prompt changes do not override excluded creators or safety rules.", style = MaterialTheme.typography.bodySmall)
+                promptMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text("Basic commands work offline: disable filters, enable filters, hide spam, or allow abuse. Other prompts need your connected Laya service. Control commands keep your saved topics and semantic preference.", style = MaterialTheme.typography.bodySmall)
             }
             LiquidGlassCard {
                 Text("Keywords and creators", style = MaterialTheme.typography.titleMedium)
@@ -103,9 +118,30 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
                 SettingSwitch("Allow metadata processing by this service", consent) { consent = it; store.setConsent(it) }
                 Text("Sends video titles, creator names, comment text and your filtering preferences. Account credentials, watched video frames and audio are never sent.", style = MaterialTheme.typography.bodySmall)
                 Button(enabled = !busy, onClick = {
-                    try { store.setEndpoint(endpoint); status = if (endpoint.isBlank()) "Local rules only" else "Connection saved" }
-                    catch (e: Exception) { status = e.message ?: "Invalid address" }
-                }) { Text("Save connection") }
+                    busy = true
+                    connectionMessage = null
+                    scope.launch {
+                        try {
+                            store.setEndpoint(endpoint)
+                            endpoint = store.endpoint()
+                            if (endpoint.isBlank()) {
+                                status = "Local rules only"
+                            } else {
+                                withContext(Dispatchers.IO) { LayaClient.get(context).checkConnection() }
+                                status = if (consent) "Laya is ready for metadata filtering."
+                                    else "Laya is ready. Allow metadata processing to use semantic filtering."
+                                store.status(status)
+                            }
+                            connectionMessage = status
+                        } catch (e: CancellationException) { throw e
+                        } catch (e: Exception) {
+                            connectionMessage = e.message ?: "Could not reach the Laya service"
+                            store.status("Connection check failed. Local rules remain active.")
+                        } finally { busy = false }
+                    }
+                }) { Text(if (busy) "Checking…" else "Save and check connection") }
+                connectionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text("The readiness check sends no video, comment or prompt metadata.", style = MaterialTheme.typography.bodySmall)
             }
             LiquidGlassCard {
                 Text("What filtering can verify", style = MaterialTheme.typography.titleMedium)

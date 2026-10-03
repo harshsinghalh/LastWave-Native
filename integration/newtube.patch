@@ -1,3 +1,5 @@
+diff --git a/common/build.gradle b/common/build.gradle
+index 2c848cb3..17d47db4 100644
 --- a/common/build.gradle
 +++ b/common/build.gradle
 @@ -1,7 +1,9 @@
@@ -10,7 +12,7 @@
      namespace = 'com.liskovsoft.smartyoutubetv2.common'
  
      // FIX: Default interface methods are only supported starting with Android N (--min-api 24)
-@@ -48,10 +50,10 @@
+@@ -48,10 +50,10 @@ dependencies {
      testImplementation 'junit:junit:' + junitVersion
      testImplementation 'org.robolectric:robolectric:' + robolectricVersion
  
@@ -25,7 +27,7 @@
  
      implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
      implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
-@@ -74,7 +76,9 @@
+@@ -74,7 +76,9 @@ dependencies {
  
      implementation 'com.jakewharton:process-phoenix:' + phoenixVersion
  
@@ -37,6 +39,8 @@
  }
 +
 +kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+diff --git a/doubletapplayerview-media3/build.gradle b/doubletapplayerview-media3/build.gradle
+index 6848cb71..d6cb12a1 100644
 --- a/doubletapplayerview-media3/build.gradle
 +++ b/doubletapplayerview-media3/build.gradle
 @@ -5,8 +5,10 @@
@@ -50,15 +54,17 @@
      namespace = 'com.github.vkay94.dtpv3'
  
      compileSdk = project.ext.compileSdkVersion
-@@ -44,3 +46,5 @@
+@@ -44,3 +46,5 @@ dependencies {
      api 'androidx.media3:media3-exoplayer:' + media3Version
      api 'androidx.media3:media3-ui:' + media3Version
  }
 +
 +kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+diff --git a/filepicker-lib/build.gradle b/filepicker-lib/build.gradle
+index 6aad8a42..b9f3797c 100644
 --- a/filepicker-lib/build.gradle
 +++ b/filepicker-lib/build.gradle
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,7 @@ task sourceJar(type: Jar) {
  }
  
  android {
@@ -66,9 +72,11 @@
      namespace = 'arte.programar.materialfile'
  
      compileSdk = project.ext.compileSdkVersion
+diff --git a/sabr-media3/build.gradle b/sabr-media3/build.gradle
+index fc19706b..8cc3bc3b 100644
 --- a/sabr-media3/build.gradle
 +++ b/sabr-media3/build.gradle
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,7 @@ apply from: gradle.ext.sharedModulesConstants
  apply plugin: 'com.android.library'
  
  android {
@@ -76,9 +84,11 @@
      namespace = 'com.newtube.sabr'
      compileSdk = project.ext.compileSdkVersion
      defaultConfig { minSdk = 24 }
+diff --git a/slidableactivity/build.gradle b/slidableactivity/build.gradle
+index 4dae6b00..128c69aa 100644
 --- a/slidableactivity/build.gradle
 +++ b/slidableactivity/build.gradle
-@@ -2,6 +2,7 @@
+@@ -2,6 +2,7 @@ apply from: gradle.ext.sharedModulesConstants
  apply plugin: 'com.android.library'
  
  android {
@@ -86,6 +96,8 @@
      namespace = 'com.r0adkll.slidr'
  
      compileSdk = project.ext.compileSdkVersion
+diff --git a/smarttubetv/build.gradle b/smarttubetv/build.gradle
+index 480d185c..8189b909 100644
 --- a/smarttubetv/build.gradle
 +++ b/smarttubetv/build.gradle
 @@ -1,135 +1,7 @@
@@ -226,7 +238,7 @@
      // NOTE: this is the R package the code imports (unchanged from the TV era on purpose).
      namespace = 'com.liskovsoft.smartyoutubetv2.tv'
  
-@@ -145,15 +17,12 @@
+@@ -145,15 +17,12 @@ android {
  
      compileSdk = project.ext.compileSdkVersion
      testOptions.unitTests.includeAndroidResources = true
@@ -244,7 +256,7 @@
          testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
          // NEWTUBE(fdroid): reproducible builds - with SOURCE_DATE_EPOCH set (F-Droid's build server
          // sets it to the commit time) the stamp is that, not the wall clock, so two builds of one
-@@ -163,92 +32,14 @@
+@@ -163,92 +32,14 @@ android {
          buildConfigField "boolean", "BENCHMARK", "false"
          // NEWTUBE(fdroid): -Pfdroid turns the in-app updater off - F-Droid delivers the updates, and
          // its inclusion policy forbids self-updates that aren't an explicit opt-in.
@@ -260,7 +272,8 @@
 -            }
 -        }
 -    }
--
++        buildConfigField "boolean", "IN_APP_UPDATES", "false"
+ 
 -    // https://stackoverflow.com/questions/37382057/android-apk-how-to-exclude-a-so-file-from-a-3rd-party-dependency-using-gradle
 -    // armeabi-v7a backward compatible with arm64-v8a, x86 -> x86_64 etc
 -    splits {
@@ -271,7 +284,7 @@
 -            //include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a' //select ABIs to build APKs for
 -            include 'armeabi-v7a', 'arm64-v8a', 'x86' // v7a main build, x86 for WSL, v8a for Pixel Tablet (no 32 bit support)
 -            universalApk = true //generate an additional APK that contains all the ABIs
--        }
+         }
 -    }
 -
 -    signingConfigs {
@@ -285,9 +298,6 @@
 -        }
 -    }
 -    
-+        buildConfigField "boolean", "IN_APP_UPDATES", "false"
-+
-+        }
      buildTypes {
 -        release {
 -            // Enable minification
@@ -335,16 +345,15 @@
 -                applicationIdSuffix project.property('sideBySide') == 'auth' ? ".auth" : ".check"
 -            }
 -        }
--    }
--
 +        release { minifyEnabled false }
 +        debug { }
 +        benchmark { initWith release; matchingFallbacks = ['release'] }
-+    }
+     }
+-
      sourceSets {
          androidTest.java.srcDir '../sabr-media3/src/testSupport/java'
          // Optional, generated synthetic input for explicitly opted-in link comparisons.
-@@ -295,62 +86,23 @@
+@@ -295,62 +86,23 @@ android {
      // flavor so its source set (src/stmobile/) keeps applying without a directory move.
      productFlavors {
          stmobile {
@@ -363,10 +372,10 @@
              // 1.0.0 -> 10000, 1.0.1 -> 10001, 1.1.0 -> 10100, 2.0.0 -> 20000.
 -            versionCode 11500
 -            versionName "1.15.0"
--        }
--    }
--}
--
+         }
+     }
+ }
+ 
 -// AGP 9 removed applicationVariants. Listen to the public APK artifact and copy it under the
 -// stable release filename instead of mutating AGP's internal package task/output model.
 -androidComponents {
@@ -404,17 +413,13 @@
 -    }
 -    variant.sources.assets?.addGeneratedSourceDirectory(task, { it.outputDir })
 -}
-+        }
-+    }
-+}
-+
  
  dependencies {
 +    implementation project(":laya-policy")
      implementation fileTree(include: ['*.jar'], dir: 'libs')
  
      implementation 'androidx.annotation:annotation:' + annotationXVersion
-@@ -408,10 +160,10 @@
+@@ -408,10 +160,10 @@ dependencies {
      // F-Droid's scanner reads build files line by line, and its pending rule (fdroid-suss !55) only
      // clears this coordinate when the play-services-cronet exclude sits next to it.
      stmobileImplementation('androidx.media3:media3-datasource-cronet:' + media3Version) { exclude group: 'com.google.android.gms', module: 'play-services-cronet' }
@@ -428,7 +433,7 @@
  
      //////// END PLAYER ENGINE //////////
  
-@@ -427,10 +179,10 @@
+@@ -427,10 +179,10 @@ dependencies {
      androidTestImplementation 'com.google.protobuf:protobuf-javalite:3.22.3'
      testImplementation 'com.google.protobuf:protobuf-javalite:3.22.3'
  
@@ -443,7 +448,7 @@
  
      implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
      implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
-@@ -476,7 +228,7 @@
+@@ -476,7 +228,7 @@ def generateSabrProofProto = tasks.register('generateSabrProofProto', Exec) {
  }
  android.sourceSets.androidTest.java.srcDir(sabrProofGeneratedJava.get().asFile)
  android.sourceSets.test.java.srcDir(sabrProofGeneratedJava.get().asFile)
@@ -452,9 +457,11 @@
  tasks.configureEach {
      if (name.startsWith('compile') && (name.endsWith('AndroidTestJavaWithJavac')
              || name.endsWith('UnitTestJavaWithJavac') || name.endsWith('AndroidTestKotlin')
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java
+index 206e33b1..4a9802b9 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java
-@@ -143,6 +143,7 @@
+@@ -143,6 +143,7 @@ public class MobileBrowseActivity extends MobileActivity
      };
  
      private BrowsePresenter mPresenter;
@@ -462,7 +469,7 @@
  
      private RecyclerView mContentGrid;
      private SwipeRefreshLayout mContentSwipe;
-@@ -233,6 +234,14 @@
+@@ -233,6 +234,14 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onCreate(Bundle savedInstanceState) {
          super.onCreate(savedInstanceState);
@@ -477,7 +484,7 @@
  
          // Transitions: same task as the player now (singleTop + reorder, see the manifest note).
          // During interactive minimize this already-rendered Activity remains visible through the
-@@ -1744,6 +1753,7 @@
+@@ -1744,6 +1753,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onResume() {
          super.onResume();
@@ -485,7 +492,7 @@
  
          if (mPresenter != null) {
              mPresenter.onViewResumed();
-@@ -1785,6 +1795,7 @@
+@@ -1785,6 +1795,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      public void onWindowFocusChanged(boolean hasFocus) {
          super.onWindowFocusChanged(hasFocus);
@@ -493,7 +500,7 @@
  
          if (hasFocus) {
              SystemPipBridge.restoreFromLauncher(this);
-@@ -1830,6 +1841,7 @@
+@@ -1830,6 +1841,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onPause() {
          super.onPause();
@@ -501,7 +508,7 @@
  
          if (mPresenter != null) {
              mPresenter.onViewPaused();
-@@ -1858,6 +1870,7 @@
+@@ -1858,6 +1870,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onStop() {
          super.onStop();
@@ -509,7 +516,7 @@
          // Covered: a card still waiting for the player to fold it can go now.
          if (mMiniTexture == null) {
              hideMiniPlayer();
-@@ -1871,12 +1884,14 @@
+@@ -1871,12 +1884,14 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onNewIntent(Intent intent) {
          super.onNewIntent(intent);
@@ -524,7 +531,7 @@
          mNavHandler.removeCallbacks(mNavRebuild);
          mNavHandler.removeCallbacks(mRunwayCheck);
          cancelFeedSwap(); // NEWTUBE(feed-swap)
-@@ -1901,6 +1916,7 @@
+@@ -1901,6 +1916,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      public void onConfigurationChanged(Configuration newConfig) {
          super.onConfigurationChanged(newConfig);
@@ -532,7 +539,7 @@
  
          updateGridSpanCount(com.newtube.mobile.ui.common.MobileGrid.computeSpanCount(newConfig));
      }
-@@ -1916,6 +1932,7 @@
+@@ -1916,6 +1932,7 @@ public class MobileBrowseActivity extends MobileActivity
      @Override
      protected void onSaveInstanceState(@NonNull Bundle outState) {
          super.onSaveInstanceState(outState);
@@ -540,7 +547,7 @@
          outState.putBoolean(STATE_YOU_SHOWING, mYouShowing);
          outState.putBoolean(STATE_SECTION_FROM_YOU, mSectionFromYou);
          outState.putInt(STATE_SECTION_ID, mCurrentSectionId);
-@@ -1923,7 +1940,8 @@
+@@ -1923,7 +1940,8 @@ public class MobileBrowseActivity extends MobileActivity
  
      @Override
      protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
@@ -550,9 +557,11 @@
  
          if (savedInstanceState.getBoolean(STATE_YOU_SHOWING)) {
              showYouPanel();
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java
+index 751d297b..82dc11ba 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java
-@@ -33,6 +33,20 @@
+@@ -33,6 +33,20 @@ import com.liskovsoft.smartyoutubetv2.tv.R;
   * and {@code MaterialCardView} elevation).
   */
  public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder> {
@@ -573,7 +582,7 @@
      /** Regular video card (full-width thumbnail + title/meta). */
      private static final int VIEW_TYPE_VIDEO = 0;
      /** Channel result row (round avatar + name + subs) — e.g. channels in search results. */
-@@ -234,6 +248,7 @@
+@@ -234,6 +248,7 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
              bindProgress(video);
              bindReadiness(video);
              bindThumbnail(context, video);
@@ -581,9 +590,11 @@
          }
  
          /**
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java
+index 03618880..edc5afe5 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java
-@@ -61,6 +61,20 @@
+@@ -61,6 +61,20 @@ import java.util.regex.Pattern;
   * button, and the person's own comments a ⋮ with Delete.</p>
   */
  final class CommentsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
@@ -604,7 +615,7 @@
  
      interface Listener {
          void onLikeClicked(Entry entry);
-@@ -618,6 +632,7 @@
+@@ -618,6 +632,7 @@ final class CommentsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
              mMessage.setText(entry.mText);
              mMessage.setVisibility(TextUtils.isEmpty(entry.mText) ? View.GONE : View.VISIBLE);
              mMessage.setExpanded(mIsParent || entry.expanded, false);
@@ -612,13 +623,14 @@
  
              bindLike(false);
  
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java
+index 6a85fac9..364a9898 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java
-@@ -27,6 +27,21 @@
-  * sheet can auto-scroll to the newest.
+@@ -28,6 +28,21 @@ import java.util.List;
   */
  public class LiveChatAdapter extends RecyclerView.Adapter<LiveChatAdapter.VH> {
-+
+ 
 +    private android.content.SharedPreferences layaPrefs;
 +    private android.content.SharedPreferences.OnSharedPreferenceChangeListener layaListener;
 +    @Override public void onAttachedToRecyclerView(@NonNull RecyclerView recycler) {
@@ -633,10 +645,11 @@
 +        super.onDetachedFromRecyclerView(recycler);
 +    }
 +
- 
++
      private final List<ChatItem> mItems = new ArrayList<>();
  
-@@ -97,6 +112,7 @@
+     public void setItems(List<ChatItem> items) {
+@@ -97,6 +112,7 @@ public class LiveChatAdapter extends RecyclerView.Adapter<LiveChatAdapter.VH> {
              }
              sb.append(message);
              mMessage.setText(sb);
@@ -644,7 +657,7 @@
  
              String photo = item.getAuthorPhoto();
              if (TextUtils.isEmpty(photo)) {
-@@ -112,6 +128,7 @@
+@@ -112,6 +128,7 @@ public class LiveChatAdapter extends RecyclerView.Adapter<LiveChatAdapter.VH> {
          }
  
          void recycle() {
@@ -652,9 +665,11 @@
              Glide.with(itemView.getContext().getApplicationContext()).clear(mAvatar);
          }
      }
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java
+index 02b8c129..b65a071a 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java
-@@ -1903,6 +1903,7 @@
+@@ -1903,6 +1903,7 @@ public class MobilePlaybackActivity extends MobileActivity
      private boolean mBackPreview;
  
      private boolean canMinimizeByBack() {
@@ -662,7 +677,7 @@
          return mPlayer != null && mContainer != null && mVideoArea != null && !mIsInPip && !mPipEnterPending
                  && !mScrubbing && mMorphAnimator == null && mMorphFraction == 0f
                  && getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
-@@ -5658,6 +5659,10 @@
+@@ -5658,6 +5659,10 @@ public class MobilePlaybackActivity extends MobileActivity
       * player. Called once the release animation has landed on the mini-card rectangle.
       */
      private void minimizeByDrag() {
@@ -673,9 +688,11 @@
          // WHOLE-APP-IN-PIP GUARD: the host reorder below launches Browse into THIS activity's task.
          // While the task is pinned that puts Browse on top of the PiP window, so the system renders
          // the entire app - feed, tab bar and all - shrunk into the corner (and removeTop then leaves
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java
+index 337a24e6..a5bb2bb6 100644
 --- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java
 +++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java
-@@ -34,6 +34,20 @@
+@@ -34,6 +34,20 @@ import com.liskovsoft.smartyoutubetv2.tv.R;
   * marks queue state and loads/plays the video in the same player.</p>
   */
  public class RelatedVideoAdapter extends ListAdapter<Video, RelatedVideoAdapter.RelatedViewHolder> {
@@ -696,7 +713,7 @@
  
      public interface OnRelatedClickListener {
          /**
-@@ -196,6 +210,7 @@
+@@ -196,6 +210,7 @@ public class RelatedVideoAdapter extends ListAdapter<Video, RelatedVideoAdapter.
              bindBadge(video, isCurrent);
              bindProgress(video);
              bindThumbnail(context, video);
@@ -704,3 +721,319 @@
          }
  
          private void bindBadge(Video video, boolean isCurrent) {
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/MobileSettingsActivity.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/MobileSettingsActivity.java
+index 35916e78..3721ec46 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/MobileSettingsActivity.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/MobileSettingsActivity.java
+@@ -60,6 +60,12 @@ public class MobileSettingsActivity extends MobileActivity {
+         }
+     }
+ 
++    @Override
++    protected boolean shouldInsetContentForSystemBars() {
++        // The host Compose frontend handles safeDrawing insets itself.
++        return SettingsPageFragment.getFrontend() == null;
++    }
++
+     /** Opens a page of the tree on top of {@code from}, the page whose row was tapped. */
+     public void openPage(@NonNull Fragment from, @NonNull String pageId) {
+         openPage(from, pageId, true, null);
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsFrontend.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsFrontend.java
+new file mode 100644
+index 00000000..52b19968
+--- /dev/null
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsFrontend.java
+@@ -0,0 +1,11 @@
++package com.newtube.mobile.ui.settings;
++
++import android.view.View;
++import androidx.annotation.NonNull;
++
++/** The host may render settings while the original fragment retains actions and navigation. */
++public interface SettingsFrontend {
++    @NonNull View create(@NonNull SettingsPageFragment fragment);
++    @NonNull View createSearch(@NonNull SettingsSearchFragment fragment);
++    void update(@NonNull View view, @NonNull SettingsPages.Page model);
++}
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPageFragment.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPageFragment.java
+index 6c4eb4d9..fa84a29d 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPageFragment.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPageFragment.java
+@@ -43,6 +43,13 @@ public final class SettingsPageFragment extends Fragment implements SettingsAdap
+     /** After the page's slide-in, so the glow is seen. */
+     private static final long HIGHLIGHT_DELAY_MS = 350;
+ 
++    @Nullable private static SettingsFrontend sFrontend;
++    @Nullable private SettingsFrontend mFrontend;
++    @Nullable private View mFrontendView;
++
++    @Nullable public static SettingsFrontend getFrontend() { return sFrontend; }
++    public static void setFrontend(@Nullable SettingsFrontend frontend) { sFrontend = frontend; }
++
+     private String mPageId;
+     private SettingsAdapter mAdapter;
+     private RecyclerView mList;
+@@ -82,6 +89,11 @@ public final class SettingsPageFragment extends Fragment implements SettingsAdap
+     @Nullable
+     @Override
+     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
++        mFrontend = sFrontend;
++        if (mFrontend != null) {
++            mFrontendView = mFrontend.create(this);
++            return mFrontendView;
++        }
+         View view = inflater.inflate(R.layout.fragment_mobile_settings_page, container, false);
+         mTitle = view.findViewById(R.id.settings_title);
+         mList = view.findViewById(R.id.settings_list);
+@@ -110,6 +122,10 @@ public final class SettingsPageFragment extends Fragment implements SettingsAdap
+     @Override
+     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+         super.onViewCreated(view, savedInstanceState);
++        if (mFrontendView != null) {
++            rebuild();
++            return;
++        }
+         if (SettingsPages.ROOT.equals(mPageId)) {
+             View search = view.findViewById(R.id.settings_search_field);
+             search.setVisibility(View.VISIBLE);
+@@ -166,11 +182,20 @@ public final class SettingsPageFragment extends Fragment implements SettingsAdap
+             mDialog.dismiss();
+             mDialog = null;
+         }
++        mFrontendView = null;
++        mFrontend = null;
++        mAdapter = null;
++        mList = null;
++        mTitle = null;
+         super.onDestroyView();
+     }
+ 
+     /** Builds the page again: its rows, and which of them exist, may depend on other values. */
+     public void rebuild() {
++        if (getContext() != null && mFrontend != null && mFrontendView != null) {
++            mFrontend.update(mFrontendView, SettingsPages.build(requireContext(), mPageId));
++            return;
++        }
+         if (getContext() == null || mAdapter == null) {
+             return;
+         }
+@@ -186,8 +211,23 @@ public final class SettingsPageFragment extends Fragment implements SettingsAdap
+         }
+     }
+ 
++    public void openSearch() {
++        if (getActivity() instanceof MobileSettingsActivity) {
++            ((MobileSettingsActivity) getActivity()).openSearch(this);
++        }
++    }
++
++    public void pickChoice(@NonNull SettingsRow row, int index) {
++        if (!row.isEnabled() || row.options == null || row.pick == null || index < 0 || index >= row.options.size()) return;
++        if (index != row.currentIndex()) {
++            row.pick.pick(row.options.get(index).value);
++            applied(row);
++        }
++    }
++
+     @Override
+     public void onRowClicked(@NonNull SettingsRow row) {
++        if (!row.isEnabled()) return;
+         switch (row.kind) {
+             case SettingsRow.KIND_LINK:
+                 if (row.page != null) {
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPages.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPages.java
+index 0d94df74..26e159ff 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPages.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsPages.java
+@@ -57,6 +57,9 @@ public final class SettingsPages {
+         final CharSequence title;
+         final List<SettingsRow> rows;
+ 
++        public CharSequence getTitle() { return title; }
++        public List<SettingsRow> getRows() { return java.util.Collections.unmodifiableList(rows); }
++
+         Page(CharSequence title, List<SettingsRow> rows) {
+             this.title = title;
+             this.rows = rows;
+@@ -67,7 +70,7 @@ public final class SettingsPages {
+     }
+ 
+     @NonNull
+-    static Page build(@NonNull Context context, @NonNull String id) {
++    public static Page build(@NonNull Context context, @NonNull String id) {
+         switch (id) {
+             case GENERAL:
+                 return AppPages.general(context);
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsRow.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsRow.java
+index 8ce3f6c9..560d2806 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsRow.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsRow.java
+@@ -60,6 +60,9 @@ public final class SettingsRow {
+         @Nullable final CharSequence description;
+         final Object value;
+ 
++        public CharSequence getLabel() { return label; }
++        @Nullable public CharSequence getDescription() { return description; }
++
+         Option(CharSequence label, @Nullable CharSequence description, Object value) {
+             this.label = label;
+             this.description = description;
+@@ -206,12 +209,18 @@ public final class SettingsRow {
+         return this;
+     }
+ 
+-    boolean isEnabled() {
++    public int getKind() { return kind; }
++    public CharSequence getTitle() { return title; }
++    public boolean isDestructive() { return destructive; }
++    public boolean isChecked() { return checked != null && checked.getAsBoolean(); }
++    public List<Option> getOptions() { return options != null ? java.util.Collections.unmodifiableList(options) : java.util.Collections.emptyList(); }
++
++    public boolean isEnabled() {
+         return enabled == null || enabled.getAsBoolean();
+     }
+ 
+     @Nullable
+-    CharSequence summaryText() {
++    public CharSequence summaryText() {
+         if (kind == KIND_CHOICE && summary == null) {
+             Option option = currentOption();
+             return option != null ? option.label : null;
+@@ -219,7 +228,7 @@ public final class SettingsRow {
+         return summary != null ? summary.get() : null;
+     }
+ 
+-    int currentIndex() {
++    public int currentIndex() {
+         if (options == null || current == null) {
+             return -1;
+         }
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearch.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearch.java
+index eca9125c..730fa5f3 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearch.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearch.java
+@@ -55,7 +55,7 @@ import java.util.concurrent.Executors;
+  * "subtitles" for Captions, "autoplay" for When a video ends), the labels of its options ("dark"
+  * finds Theme), its summary, and last the pages it sits in.</p>
+  */
+-final class SettingsSearch {
++public final class SettingsSearch {
+     private static final String TAG = SettingsSearch.class.getSimpleName();
+     private static final String SEPARATOR = " › ";
+     private static final ExecutorService BUILDER = Executors.newSingleThreadExecutor();
+@@ -103,7 +103,7 @@ final class SettingsSearch {
+     };
+ 
+     /** One row that search can find. */
+-    static final class Entry {
++    public static final class Entry {
+         /** The page the row is on. */
+         final String pageId;
+         /** For a row that opens a page: that page (the result opens it instead of pointing at the row). */
+@@ -139,6 +139,9 @@ final class SettingsSearch {
+             mPath = normalize(path + " " + pathWords);
+         }
+ 
++        public CharSequence getTitle() { return title; }
++        public String getPath() { return path; }
++
+         /** 0 when a word of the query matches nothing, else higher for a better match. */
+         int score(List<String> words, String query) {
+             int total = 0;
+@@ -188,7 +191,7 @@ final class SettingsSearch {
+      * page takes a few hundred ms (more the first time: the language and country lists, the caption
+      * styles), which would hold up the search page's opening and its keyboard.
+      */
+-    static void buildAsync(@NonNull Context context, @NonNull OnBuilt onBuilt) {
++    public static void buildAsync(@NonNull Context context, @NonNull OnBuilt onBuilt) {
+         warmUp(context);
+         BUILDER.execute(() -> {
+             long start = SystemClock.elapsedRealtime();
+@@ -218,7 +221,7 @@ final class SettingsSearch {
+         MediaServiceData.instance();
+     }
+ 
+-    interface OnBuilt {
++    public interface OnBuilt {
+         void onBuilt(@NonNull SettingsSearch search);
+     }
+ 
+@@ -307,7 +310,7 @@ final class SettingsSearch {
+ 
+     /** The rows that match, best first. */
+     @NonNull
+-    List<Entry> find(@Nullable CharSequence query) {
++    public List<Entry> find(@Nullable CharSequence query) {
+         String normalized = normalize(query).trim();
+         if (normalized.isEmpty()) {
+             return Collections.emptyList();
+diff --git a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearchFragment.java b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearchFragment.java
+index cf9a9fb2..f2cc480e 100644
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearchFragment.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/settings/SettingsSearchFragment.java
+@@ -37,6 +37,10 @@ public final class SettingsSearchFragment extends Fragment {
+     private static final String STATE_QUERY = "query";
+     private static final String STATE_KEYBOARD_SHOWN = "keyboard_shown";
+ 
++    @Nullable private View mFrontendView;
++    public String getQuery() { return mQuery; }
++    public void setQuery(String query) { mQuery = query; }
++
+     private EditText mInput;
+     private View mClear;
+     private RecyclerView mResults;
+@@ -59,6 +63,11 @@ public final class SettingsSearchFragment extends Fragment {
+     @Nullable
+     @Override
+     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
++        SettingsFrontend frontend = SettingsPageFragment.getFrontend();
++        if (frontend != null) {
++            mFrontendView = frontend.createSearch(this);
++            return mFrontendView;
++        }
+         View view = inflater.inflate(R.layout.fragment_mobile_settings_search, container, false);
+         mInput = view.findViewById(R.id.settings_search_input);
+         mClear = view.findViewById(R.id.settings_search_clear);
+@@ -145,6 +154,7 @@ public final class SettingsSearchFragment extends Fragment {
+     @Override
+     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+         super.onViewCreated(view, savedInstanceState);
++        if (mFrontendView != null) return;
+         ViewCompat.requestApplyInsets(mResults);
+         if (!mKeyboardShown) {
+             mKeyboardShown = true;
+@@ -153,6 +163,17 @@ public final class SettingsSearchFragment extends Fragment {
+         }
+     }
+ 
++    @Override
++    public void onDestroyView() {
++        mFrontendView = null;
++        mInput = null;
++        mClear = null;
++        mResults = null;
++        mEmpty = null;
++        mAdapter = null;
++        super.onDestroyView();
++    }
++
+     @Override
+     public void onPause() {
+         hideKeyboard(); // leaving for a result or going back: never carry the keyboard along
+@@ -183,7 +204,7 @@ public final class SettingsSearchFragment extends Fragment {
+         }
+     }
+ 
+-    private void open(@NonNull SettingsSearch.Entry entry) {
++    public void open(@NonNull SettingsSearch.Entry entry) {
+         hideKeyboard();
+         if (getActivity() instanceof MobileSettingsActivity) {
+             ((MobileSettingsActivity) getActivity()).openResult(this, entry);
+@@ -199,6 +220,7 @@ public final class SettingsSearchFragment extends Fragment {
+     }
+ 
+     private void hideKeyboard() {
++        if (mInput == null) return;
+         if (getActivity() == null || mInput == null) {
+             return;
+         }

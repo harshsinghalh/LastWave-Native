@@ -55,6 +55,9 @@ class LastWaveApplication : com.newtube.mobile.MobileMainApplication(), ImageLoa
         com.liskovsoft.sharedutils.prefs.GlobalPreferences.instance(this)
         com.liskovsoft.sharedutils.rx.RxHelper.setupGlobalErrorHandler()
         super.onCreate()
+        com.newtube.mobile.ui.settings.SettingsPageFragment.setFrontend(
+            com.lastwave.app.ui.videos.LastWaveVideoSettings
+        )
         StartupTrail.mark("app.onCreate.start")
         // Sync per-app locale (Settings -> Language) before any UI is drawn.
         // AppCompat restores the last requested locale itself; the collector

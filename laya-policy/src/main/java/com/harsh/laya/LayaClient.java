@@ -22,7 +22,7 @@ public final class LayaClient {
     private final PolicyStore store;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor queue=new ThreadPoolExecutor(1,1,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(96),new ThreadPoolExecutor.AbortPolicy());
-    private final OkHttpClient http=new OkHttpClient.Builder().connectTimeout(4,TimeUnit.SECONDS).readTimeout(12,TimeUnit.SECONDS).callTimeout(16,TimeUnit.SECONDS).build();
+    private final OkHttpClient http=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(4,TimeUnit.SECONDS).readTimeout(12,TimeUnit.SECONDS).callTimeout(16,TimeUnit.SECONDS).build();
     private final Map<String,Decision> cache=Collections.synchronizedMap(new LinkedHashMap<String,Decision>(128,0.75f,true) {
         protected boolean removeEldestEntry(Map.Entry<String,Decision> e) { return size()>512; }
     });
@@ -80,6 +80,18 @@ public final class LayaClient {
         };
         try { queue.execute(job); } catch(RejectedExecutionException full) { main.post(()->callback.complete(new Decision(false,"Inference queue busy; only local rules checked","local rules"))); }
     }
+    /** Readiness sends no video, comment or prompt metadata. */
+    public void checkConnection() throws Exception {
+        if(store.endpoint().isBlank()) throw new IllegalStateException("Enter your Laya HTTPS address first");
+        Request request=new Request.Builder().url(store.endpoint()+"/healthz").get().build();
+        try(Response response=http.newCall(request).execute()) {
+            if(!response.isSuccessful()||response.body()==null) throw new java.io.IOException("Laya readiness response "+response.code());
+            JSONObject body=new JSONObject(response.body().string());
+            if(!ServiceReadiness.isReady(body))
+                throw new java.io.IOException("The address did not confirm a ready Laya service");
+        }
+    }
+
     public JSONObject post(String path,JSONObject payload) throws Exception {
         if(!store.consent()||store.endpoint().isBlank()) throw new IllegalStateException("Connect your Laya service and allow metadata processing first");
         Request request=new Request.Builder().url(store.endpoint()+path).post(RequestBody.create(payload.toString(),MediaType.get("application/json"))).build();

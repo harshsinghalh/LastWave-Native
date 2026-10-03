@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,13 +25,13 @@ import com.harsh.laya.LayaClient
 import com.harsh.laya.PolicyStore
 import com.lastwave.app.ui.common.ExpressiveHeader
 import com.lastwave.app.ui.common.LiquidGlassCard
+import com.lastwave.app.ui.common.HeaderActionIcon
 import com.lastwave.app.ui.shell.FloatingNavDefaults
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import com.liskovsoft.youtubeapi.service.YouTubeServiceManager
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.VideoActionPresenter
 import com.newtube.mobile.ui.settings.MobileSettingsActivity
-import com.newtube.mobile.ui.signin.MobileSignInActivity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -140,10 +140,12 @@ fun VideosScreen(onOpenLaya: () -> Unit, viewModel: VideosViewModel = hiltViewMo
     val error by viewModel.error.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        ExpressiveHeader("Videos", subtitle = "NewTube · powered by Laya controls", actions = {
-            IconButton(onClick = onOpenLaya) { Icon(Icons.Filled.Tune, "Feed controls") }
-            IconButton(onClick = { context.startActivity(Intent(context, MobileSignInActivity::class.java)) }) { Icon(Icons.Filled.AccountCircle, "YouTube account") }
-            IconButton(onClick = { viewModel.load(query) }) { Icon(Icons.Filled.Refresh, "Refresh") }
+        ExpressiveHeader("Videos", subtitle = "Your video feed", actions = {
+            HeaderActionIcon(Icons.Filled.Tune, "Feed controls", onOpenLaya)
+            HeaderActionIcon(Icons.Filled.Settings, "Video settings") {
+                context.startActivity(Intent(context, MobileSettingsActivity::class.java))
+            }
+            HeaderActionIcon(Icons.Filled.Refresh, "Refresh") { viewModel.load(query) }
         })
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = query, onValueChange = { query = it.take(256) }, label = { Text("Search YouTube") }, modifier = Modifier.weight(1f), singleLine = true)
