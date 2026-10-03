@@ -4,18 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,7 +29,6 @@ class AppUpdateManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs = context.getSharedPreferences("lastwave_updates", Context.MODE_PRIVATE)
 
     private val _updateInfo = MutableStateFlow(
@@ -57,83 +49,12 @@ class AppUpdateManager @Inject constructor(
     }
 
     fun checkForUpdate(isSilent: Boolean = false) {
-        scope.launch {
-            _updateInfo.update {
-                it.copy(
-                    isChecking = true,
-                    message = if (!isSilent) "Checking for updates..." else it.message,
-                )
-            }
-            try {
-                val request = Request.Builder()
-                    .url("https://api.github.com/repos/harshsinghalh/LastWave-Native/releases/latest")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .header("User-Agent", "LastWave-Android")
-                    .build()
-
-                val response = withContext(Dispatchers.IO) {
-                    okHttpClient.newCall(request).execute()
-                }
-
-                if (!response.isSuccessful) {
-                    val code = response.code
-                    _updateInfo.update {
-                        it.copy(
-                            isChecking = false,
-                            message = if (!isSilent) "Could not check updates (HTTP $code)" else null,
-                        )
-                    }
-                    return@launch
-                }
-
-                val body = response.body?.string().orEmpty()
-                val json = JSONObject(body)
-                val tagName = json.optString("tag_name", "")
-                val releaseUrl = json.optString("html_url", "https://github.com/harshsinghalh/LastWave-Native/releases")
-                val releaseNotes = json.optString("body", "")
-
-                var downloadUrl: String? = null
-                val assets = json.optJSONArray("assets")
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i)
-                        val name = asset?.optString("name", "").orEmpty()
-                        if (name.endsWith(".apk", ignoreCase = true)) {
-                            downloadUrl = asset?.optString("browser_download_url")
-                            break
-                        }
-                    }
-                }
-
-                val currentVersion = getCurrentVersion()
-                val hasNewer = isNewerVersion(tagName, currentVersion)
-                val cleanTag = tagName.removePrefix("v").removePrefix("V")
-                val dismissedVersion = prefs.getString("dismissed_version", null)
-                val isDismissed = dismissedVersion == cleanTag
-
-                _updateInfo.update {
-                    it.copy(
-                        isChecking = false,
-                        isUpdateAvailable = hasNewer,
-                        latestVersion = cleanTag,
-                        currentVersion = currentVersion,
-                        releaseNotes = releaseNotes,
-                        releaseUrl = releaseUrl,
-                        downloadUrl = downloadUrl ?: releaseUrl,
-                        isDismissed = isDismissed,
-                        message = if (!isSilent) {
-                            if (hasNewer) "New version $cleanTag available!" else "You're on the latest version ($currentVersion)"
-                        } else null,
-                    )
-                }
-            } catch (e: Exception) {
-                _updateInfo.update {
-                    it.copy(
-                        isChecking = false,
-                        message = if (!isSilent) "Check failed: ${e.message ?: "Network error"}" else null,
-                    )
-                }
-            }
+        // Preview APKs have their own package/signing identity and release series.
+        // The fork also carries upstream LastWave releases; never offer those
+        // as an update for this integration.
+        _updateInfo.update {
+            it.copy(isChecking = false, isUpdateAvailable = false,
+                message = if (!isSilent) "Get LayaWave previews from this project's GitHub releases." else null)
         }
     }
 

@@ -72,7 +72,7 @@ try:
     feed = next((n for n in tree.iter("node") if n.get("text", "").lower() == "feed"), None)
     assert feed is not None, "LastWave Feed tab missing"
     tap(feed)
-    wait_for("Home", "main-music")
+    wait_for("Infinite Radio", "main-music")
     screenshot("main")
     checks.append("LastWave music shell and video tab render")
     tree = snapshot("main-music-navigation")
@@ -103,6 +103,7 @@ try:
     screenshot("laya-reopened")
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
 finally:
+    screenshot("final-state")
     (OUT / "crash.log").write_text(adb("logcat", "-b", "crash", "-d"))
     (OUT / "report.json").write_text(json.dumps({"completed_checks": checks}, indent=2))
 

@@ -7,16 +7,23 @@ on:
       - '.github/workflows/laya-runtime.yml'
       - 'tools/test_android_runtime.py'
   workflow_dispatch:
+  workflow_run:
+    workflows: [Build and publish LayaWave Android]
+    types: [completed]
+    branches: [laya-newtube-android]
 
 permissions:
   contents: read
 
 jobs:
   runtime:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: laya-newtube-android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,7 +36,14 @@ jobs:
       - name: Download the published APK
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download laya-preview-3 --pattern '*.apk' --dir runtime-apk
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            TAG="laya-preview-${{ github.event.workflow_run.run_number }}"
+          else
+            TAG=$(gh api repos/$GITHUB_REPOSITORY/releases --jq '[.[] | select(.tag_name | startswith("laya-preview-"))][0].tag_name')
+          fi
+          gh release download "$TAG" --pattern '*.apk' --dir runtime-apk
+          echo "$TAG" > tested-release.txt
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
