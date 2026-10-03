@@ -108,6 +108,9 @@ try:
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
 finally:
     screenshot("final-state")
+    process = adb("shell", "pidof", PACKAGE).strip()
+    if process:
+        (OUT / "application.log").write_text(adb("logcat", "-d", "--pid=" + process.split()[0]))
     (OUT / "crash.log").write_text(adb("logcat", "-b", "crash", "-d"))
     (OUT / "report.json").write_text(json.dumps({"completed_checks": checks}, indent=2))
 
