@@ -50,6 +50,17 @@ def wait_for(label, name, attempts=12):
         time.sleep(2)
     raise AssertionError("UI element not visible: " + label)
 
+def wait_for_exact(label, name, attempts=12):
+    for _ in range(attempts):
+        tree = snapshot(name)
+        node = next((n for n in tree.iter("node")
+                     if n.get("text", "").lower() == label.lower()
+                     and n.get("class") != "android.widget.EditText"), None)
+        if node is not None:
+            return tree, node
+        time.sleep(2)
+    raise AssertionError("Exact UI label not visible: " + label)
+
 def policy():
     xml = adb("shell", "run-as", PACKAGE, "cat", "shared_prefs/laya_policy.xml")
     root = ET.fromstring(xml)
@@ -147,7 +158,8 @@ try:
     tree, _ = wait_for("Video settings", "video-settings-root")
     _, playback = scroll_for("Playback", "video-settings-playback-entry")
     tap(playback)
-    wait_for("Video settings", "video-playback-settings")
+    wait_for_exact("Playback", "video-playback-settings")
+    wait_for_exact("Video settings", "video-playback-settings")
     screenshot("video-playback-settings")
     adb("shell", "input", "keyevent", "4")
     _, search = wait_for("Search video settings", "video-settings-search-entry")
@@ -156,9 +168,10 @@ try:
     field = next((n for n in tree.iter("node") if n.get("class") == "android.widget.EditText"), None)
     assert field is not None, "LastWave video settings search field missing"
     enter_text(field, "captions")
-    tree, result = wait_for("Captions", "video-settings-search-results")
+    tree, result = wait_for_exact("Captions", "video-settings-search-results")
     tap(result)
-    wait_for("Video settings", "video-settings-captions")
+    wait_for_exact("Captions", "video-settings-captions")
+    wait_for_exact("Video settings", "video-settings-captions")
     screenshot("video-settings-captions")
     checks.append("LastWave video settings tree and global search navigate through NewTube settings")
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
@@ -169,7 +182,9 @@ finally:
         application_log = adb("logcat", "-d", "--pid=" + process.split()[0])
         (OUT / "application.log").write_text(application_log)
         assert "GlobalPreferences isn't initialized" not in application_log, "NewTube media engine context was not initialized"
-    (OUT / "crash.log").write_text(adb("logcat", "-b", "crash", "-d"))
+    crash = adb("logcat", "-b", "crash", "-d")
+    (OUT / "crash.log").write_text(crash)
     (OUT / "report.json").write_text(json.dumps({"completed_checks": checks}, indent=2))
+    assert "Process: " + PACKAGE not in crash, "Android recorded an application crash"
 
 print(json.dumps({"passed": True, "checks": checks}, indent=2))

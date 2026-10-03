@@ -1,0 +1,23 @@
+{
+  "policy_tests": {
+    "total": 13,
+    "passed": 13,
+    "failed": 0,
+    "scope": [
+      "local content rules",
+      "offline prompt commands",
+      "Laya readiness response contract"
+    ]
+  },
+  "backend_contract_tests": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "inference": "explicit test double, not model accuracy"
+  },
+  "inherited_lastwave_tests": {
+    "last_recorded_total": 229,
+    "last_recorded_passed": 229,
+    "rerun_in_this_continuation": false
+  }
+}
