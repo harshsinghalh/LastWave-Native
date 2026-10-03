@@ -68,6 +68,10 @@ try:
     guest = find(tree, "Continue as Guest")
     if guest is not None:
         tap(guest)
+    tree, _ = wait_for("Videos", "main-videos")
+    feed = next((n for n in tree.iter("node") if n.get("text", "").lower() == "feed"), None)
+    assert feed is not None, "LastWave Feed tab missing"
+    tap(feed)
     _, settings = wait_for("Settings", "main")
     screenshot("main")
     checks.append("LastWave main shell renders")
