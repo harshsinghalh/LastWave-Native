@@ -105,6 +105,9 @@ try:
     assert policy()["enabled"] is False, "Toggle changed on reopening settings"
     checks.append("Laya settings render and toggle persists across reopening")
     screenshot("laya-reopened")
+    adb("shell", "input", "keyevent", "4")
+    wait_for("Feed controls", "video-feed")
+    screenshot("video-feed")
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
 finally:
     screenshot("final-state")
