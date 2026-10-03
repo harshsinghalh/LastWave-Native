@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "engine": "actual pinned Laya checkpoint",
+  "cases": [
+    {
+      "prompt": "Disable filters",
+      "seconds": 2.91,
+      "response": {
+        "policy": {
+          "enabled": false,
+          "abuse": true,
+          "spam": false,
+          "mode": "ANY",
+          "topics": [],
+          "include": [],
+          "exclude": [],
+          "allowedCreators": [],
+          "excludedCreators": [],
+          "prompt": "Disable filters",
+          "verifiedFalse": false
+        },
+        "engine": "laya",
+        "review": "Review the updated controls; uncertain changes are left unchanged."
+      }
+    },
+    {
+      "prompt": "Enable filters",
+      "seconds": 2.91,
+      "response": {
+        "policy": {
+          "enabled": true,
+          "abuse": true,
+          "spam": true,
+          "mode": "ANY",
+          "topics": [],
+          "include": [],
+          "exclude": [],
+          "allowedCreators": [],
+          "excludedCreators": [],
+          "prompt": "Enable filters",
+          "verifiedFalse": false
+        },
+        "engine": "laya",
+        "review": "Review the updated controls; uncertain changes are left unchanged."
+      }
+    },
+    {
+      "prompt": "Hide spam",
+      "seconds": 2.72,
+      "response": {
+        "policy": {
+          "enabled": true,
+          "abuse": true,
+          "spam": true,
+          "mode": "ANY",
+          "topics": [],
+          "include": [],
+          "exclude": [],
+          "allowedCreators": [],
+          "excludedCreators": [],
+          "prompt": "Hide spam",
+          "verifiedFalse": false
+        },
+        "engine": "laya",
+        "review": "Review the updated controls; uncertain changes are left unchanged."
+      }
+    }
+  ]
+}

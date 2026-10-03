@@ -1,0 +1,17 @@
+{
+  "completed_checks": [
+    "APK installs and combined Application/MainActivity start",
+    "LastWave music shell and video tab render",
+    "Laya settings render and toggle persists across reopening"
+  ],
+  "release": "laya-preview-6",
+  "source_commit": "f5a68dda6949060bcdd596472981142a9338e9d8",
+  "sha256": "277b16b2e9cd72350309ceccb8b54cf077de8b6778276a99c96cdd0022afe1cb",
+  "workflow_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37131142633",
+  "runtime_artifact_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37131142633/artifacts/11276808260",
+  "crash_log_empty": true,
+  "newtube_home_rows": 17,
+  "online_playback_verified": false,
+  "online_playback_limit": "YouTube bot confirmation wall on the CI network",
+  "live_laya_deployed": false
+}
