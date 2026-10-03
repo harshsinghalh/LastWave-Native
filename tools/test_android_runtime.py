@@ -69,6 +69,10 @@ try:
     if guest is not None:
         tap(guest)
     tree, _ = wait_for("Videos", "main-videos")
+    dismiss = find(tree, "Dismiss update")
+    if dismiss is not None:
+        tap(dismiss)
+        tree = snapshot("main-videos")
     feed = next((n for n in tree.iter("node") if n.get("text", "").lower() == "feed"), None)
     assert feed is not None, "LastWave Feed tab missing"
     tap(feed)
