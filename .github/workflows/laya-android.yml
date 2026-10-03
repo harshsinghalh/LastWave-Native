@@ -3,6 +3,12 @@ name: Build and publish LayaWave Android
 on:
   push:
     branches: [laya-newtube-android]
+    paths-ignore:
+      - 'verification/**'
+      - 'tools/test_android_runtime.py'
+      - '.github/workflows/laya-runtime.yml'
+      - '.github/workflows/laya-android.yml'
+      - '.gitignore'
   workflow_dispatch:
 
 permissions:

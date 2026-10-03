@@ -74,3 +74,4 @@ credentials_backup*
 
 
 !tools/prepare_newtube.py
+!tools/test_android_runtime.py
