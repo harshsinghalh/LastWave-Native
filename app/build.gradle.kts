@@ -12,8 +12,10 @@ plugins {
 }
 
 android {
+    buildToolsVersion = "37.0.0"
     namespace = "com.lastwave.app"
     compileSdk = 37
+    ndkVersion = "29.0.14206865"
 
     val localProps = Properties().apply {
         val localPropsFile = rootProject.file("local.properties")
@@ -57,11 +59,14 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.lastwave.app"
+        applicationId = "com.harsh.layawave"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         minSdk = (project.findProperty("minSdk") as? String)?.toIntOrNull() ?: 29
-        targetSdk = 35
-        versionCode = 22
-        versionName = "4.2.2"
+        targetSdk = 37
+        missingDimensionStrategy("default", "stmobile")
+        buildConfigField("String", "LAYA_BASE_URL", "\"" + (System.getenv("LAYA_BASE_URL") ?: "") + "\"")
+        versionCode = 100
+        versionName = "1.0.0"
 
         // Native secrets (addon client lock) live strictly in native .so via
         // SecretsBridge_generated.h (tools/generate_native_secrets.py).
@@ -130,6 +135,7 @@ android {
         }
         create("rawRelease") {
             initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
             isMinifyEnabled = false
             isShrinkResources = false
             // Raw variant — no code/resource shrinking, no ProGuard/R8
@@ -181,6 +187,14 @@ android {
 }
 
 dependencies {
+    implementation(project(":laya-policy"))
+    implementation(project(":smarttubetv"))
+    implementation(project(":common"))
+    implementation(project(":youtubeapi"))
+    implementation(project(":mediaserviceinterfaces"))
+    implementation("io.reactivex.rxjava3:rxjava:3.1.12")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-rx3:1.11.0")
+    implementation("androidx.media3:media3-ui:1.10.1")
     implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation(libs.androidx.core.ktx)
@@ -244,11 +258,11 @@ dependencies {
 
     // Native in-app audio playback, background service, system media
     // controls, Bluetooth/headset controls and a MediaController-backed UI.
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.2.1")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.10.1")
     // Segmented provider-module path: DASH chunk source + CDM decryption.
     // Pinned to the same 1.2.1 line as exoplayer/hls to avoid binary mismatch.
-    implementation("androidx.media3:media3-exoplayer-dash:1.2.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.10.1")
     // MediaBrowserServiceCompat/MediaSessionCompat bridge used by Android
     // Auto to browse the LastWave library and control the same player.
     implementation("androidx.media:media:1.7.0")
@@ -257,7 +271,7 @@ dependencies {
     // The renderer factory prefers FFmpeg for every codec it supports so all
     // devices decode through one deterministic, OEM-bug-free path; platform
     // decoders remain as automatic fallbacks.
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.2.1+1")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
     // Core library desugaring required by the FFmpeg decoder AAR metadata.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
@@ -321,3 +335,8 @@ tasks.matching { it.name.startsWith("preBuild") || it.name.startsWith("configure
     dependsOn(generateNativeSecrets)
 }
 
+
+// NewTube and NewPipe export the same nanojson classes under different coordinates.
+configurations.configureEach {
+    exclude(group = "com.grack", module = "nanojson")
+}

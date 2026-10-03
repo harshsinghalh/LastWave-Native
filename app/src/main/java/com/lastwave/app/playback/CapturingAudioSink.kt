@@ -42,6 +42,8 @@ class CapturingAudioSink(
 
     fun isConfigured(): Boolean = output != null && sampleRate > 0 && channelCount > 0
 
+    override fun getAudioTrackBufferSizeUs(): Long = 0L
+
     override fun setListener(listener: AudioSink.Listener) {
         this.listener = listener
     }

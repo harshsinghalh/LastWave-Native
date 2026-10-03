@@ -28,3 +28,16 @@ dependencyResolutionManagement {
 rootProject.name = "LastWave"
 include(":app")
 include(":audio:decent-usb-audio-driver")
+
+// NewTube 1.15.0 engine and native player, pinned in newtube/.
+gradle.extra["sharedModulesRoot"] = file("newtube/SharedModules")
+gradle.extra["mediaServiceCoreRoot"] = file("newtube/MediaServiceCore")
+gradle.extra["sharedModulesConstants"] = file("newtube/SharedModules/constants.gradle")
+apply(from = "newtube/SharedModules/core_settings.gradle")
+apply(from = "newtube/MediaServiceCore/core_settings.gradle")
+listOf("smarttubetv", "common", "filepicker-lib", "doubletapplayerview-media3", "slidableactivity", "sabr-media3").forEach {
+    include(":$it")
+    project(":$it").projectDir = file("newtube/$it")
+}
+
+include(":laya-policy")

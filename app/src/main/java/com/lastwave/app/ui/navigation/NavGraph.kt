@@ -184,6 +184,7 @@ fun LastWaveNavHost(
         popEnterTransition = { ExpressiveMotion.backEnter() },
         popExitTransition = { ExpressiveMotion.backExit() },
     ) {
+        composable("laya_settings") { com.lastwave.app.ui.laya.LayaSettingsScreen(onBack = { navController.popBackStack() }) }
 
         // Resolves the persisted session BEFORE showing any interactive UI.
         // YouTube Music-first gate: MainShell when Last.fm signed in OR
@@ -255,7 +256,7 @@ fun LastWaveNavHost(
         // clear session) return all the way to Login.
         composable(Screen.MainShell.route) {
             MainShell(
-                onOpenSettings = {
+                onOpenLaya = { navController.navigate("laya_settings") },                onOpenSettings = {
                     navController.navigate(Screen.Settings.route) { launchSingleTop = true }
                 },
                 onOpenSearch = { navController.navigate(Screen.Search.route) },

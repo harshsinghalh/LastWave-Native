@@ -1158,6 +1158,7 @@ class MusicPlayer @Inject constructor(
                     override fun onAudioInputFormatChanged(
                         eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
                         format: androidx.media3.common.Format,
+                        decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
                     ) {
                         runCatching { effects.setReplayGainFromFormat(format) }
                         // Crossfade standby or background players must NEVER publish format or rate to active state.

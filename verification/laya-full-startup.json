@@ -1,0 +1,98 @@
+{
+  "checkpoint": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+  "startup_seconds": 16.76,
+  "cases": [
+    {
+      "path": "/v1/evaluate",
+      "input": {
+        "policy": {
+          "topics": [
+            "Education"
+          ]
+        },
+        "items": [
+          {
+            "id": "video:python",
+            "text": "Learn Python programming with a tutorial"
+          }
+        ]
+      },
+      "status": 200,
+      "seconds": 1.04,
+      "response": {
+        "decisions": [
+          {
+            "id": "video:python",
+            "hidden": false,
+            "reason": "No confident blocking reason",
+            "engine": "laya"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/v1/evaluate",
+      "input": {
+        "policy": {
+          "abuse": true
+        },
+        "items": [
+          {
+            "id": "comment:hindi",
+            "text": "तुम बेवकूफ हो, कुछ नहीं जानते",
+            "kind": "comment"
+          }
+        ]
+      },
+      "status": 200,
+      "seconds": 0.83,
+      "response": {
+        "decisions": [
+          {
+            "id": "comment:hindi",
+            "hidden": false,
+            "reason": "No confident blocking reason",
+            "engine": "laya"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/v1/policy/compile",
+      "input": {
+        "prompt": "Only education and programming. Hide spam.",
+        "policy": {}
+      },
+      "status": 200,
+      "seconds": 3.06,
+      "response": {
+        "policy": {
+          "enabled": true,
+          "abuse": true,
+          "spam": true,
+          "mode": "ANY",
+          "topics": [
+            "Education",
+            "Programming"
+          ],
+          "include": [],
+          "exclude": [],
+          "allowedCreators": [],
+          "excludedCreators": [],
+          "prompt": "Only education and programming. Hide spam.",
+          "verifiedFalse": false
+        },
+        "engine": "laya",
+        "review": "Review the updated controls; uncertain changes are left unchanged."
+      }
+    }
+  ],
+  "health": {
+    "ready": true,
+    "engine": "laya",
+    "models": [
+      "english",
+      "multilingual"
+    ]
+  }
+}

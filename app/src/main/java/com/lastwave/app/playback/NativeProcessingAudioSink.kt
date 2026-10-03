@@ -100,6 +100,8 @@ class NativeProcessingAudioSink(
     var onConfiguredFormat: ((sampleRateHz: Int, pcmEncoding: Int, channelCount: Int) -> Unit)? = null
     var bitDepthHintProvider: (() -> Int?)? = null
 
+    override fun getAudioTrackBufferSizeUs(): Long = if (usbExclusive) 0L else activeDelegate.getAudioTrackBufferSizeUs()
+
     override fun setListener(listener: AudioSink.Listener) {
         enhancedDelegate.setListener(listener)
         fallbackDelegate.setListener(listener)

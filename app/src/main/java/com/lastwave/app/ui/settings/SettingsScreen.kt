@@ -654,6 +654,16 @@ fun SettingsScreen(
                 when (tab) {
                     null -> {
                         item {
+                            SettingsActionCard(
+                                icon = Icons.Filled.AutoAwesome,
+                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                title = "Laya Feed Control",
+                                subtitle = "Topics, prompts, keywords and comment filtering",
+                                onClick = { context.startActivity(android.content.Intent(context, com.lastwave.app.ui.laya.LayaSettingsActivity::class.java)) },
+                            )
+                        }
+                        item {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 SectionLabel("Services & Addons")
                                 SettingsGroup(rowCount = 2) { index, position ->

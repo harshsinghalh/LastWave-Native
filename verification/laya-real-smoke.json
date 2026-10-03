@@ -1,0 +1,92 @@
+[
+  {
+    "text": "Learn Python programming and computer science fundamentals",
+    "expected": "technical",
+    "duration_ms": 179,
+    "result": {
+      "model": "laya-rl-agent",
+      "answers": {
+        "abuse": {
+          "type": "noul",
+          "noul": 0.0008,
+          "confidence": 0.9992,
+          "action": {
+            "act_probability": 1.0
+          }
+        },
+        "education": {
+          "type": "noul",
+          "noul": 0.9781,
+          "confidence": 0.9781,
+          "action": {
+            "act_probability": 1.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 95,
+        "output_tokens": 0
+      }
+    }
+  },
+  {
+    "text": "तुम बेवकूफ हो और तुम्हें यहाँ से चले जाना चाहिए",
+    "expected": "abusive",
+    "duration_ms": 260,
+    "result": {
+      "model": "laya-rl-agent",
+      "answers": {
+        "abuse": {
+          "type": "noul",
+          "noul": 0.7376,
+          "confidence": 0.7376,
+          "action": {
+            "act_probability": 1.0
+          }
+        },
+        "education": {
+          "type": "noul",
+          "noul": 0.0107,
+          "confidence": 0.9893,
+          "action": {
+            "act_probability": 1.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 121,
+        "output_tokens": 0
+      }
+    }
+  },
+  {
+    "text": "Medical education: sexual health and anatomy",
+    "expected": "educational",
+    "duration_ms": 171,
+    "result": {
+      "model": "laya-rl-agent",
+      "answers": {
+        "abuse": {
+          "type": "noul",
+          "noul": 0.0457,
+          "confidence": 0.9543,
+          "action": {
+            "act_probability": 1.0
+          }
+        },
+        "education": {
+          "type": "noul",
+          "noul": 0.991,
+          "confidence": 0.991,
+          "action": {
+            "act_probability": 1.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 95,
+        "output_tokens": 0
+      }
+    }
+  }
+]

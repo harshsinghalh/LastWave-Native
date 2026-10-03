@@ -1,0 +1,3 @@
+[submodule "newtube"]
+	path = newtube
+	url = https://github.com/aleixrodriala/newtube.git

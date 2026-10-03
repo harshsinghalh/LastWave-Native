@@ -1,0 +1,63 @@
+name: Build and publish LayaWave Android
+
+on:
+  push:
+    branches: [laya-newtube-android]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: laya-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LAYA_BASE_URL: ${{ vars.LAYA_BASE_URL }}
+      ADDON_CLIENT_SECRET: ${{ secrets.ADDON_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install pinned Android tools
+        run: |
+          sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+      - name: Prepare NewTube v1.15.0
+        run: python3 tools/prepare_newtube.py
+      - name: Verify backend policy contracts
+        run: |
+          python3 -m pip install -r backend/requirements.txt pytest
+          python3 -m pytest backend/tests -q
+      - name: Build APK and verify local filter rules
+        run: |
+          chmod +x gradlew
+          ./gradlew :laya-policy:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+          cp app/build/outputs/apk/debug/app-debug.apk LayaWave-1.0.0-preview.apk
+          sha256sum LayaWave-1.0.0-preview.apk > LayaWave-1.0.0-preview.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LayaWave-APK
+          path: |
+            LayaWave-1.0.0-preview.apk
+            LayaWave-1.0.0-preview.apk.sha256
+            laya-policy/build/reports/tests/testDebugUnitTest/
+      - name: Publish APK preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="laya-preview-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" LayaWave-1.0.0-preview.apk LayaWave-1.0.0-preview.apk.sha256 \
+            --target "$GITHUB_SHA" --prerelease --title "LayaWave Android preview ${GITHUB_RUN_NUMBER}" \
+            --notes-file integration/RELEASE_NOTES.md

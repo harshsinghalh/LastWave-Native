@@ -1,0 +1,17 @@
+{
+  "LastWave": {
+    "url": "https://github.com/Clash-Projects/LastWave-Native",
+    "commit": "ac19d0634e2d9d0f9ea47d4720b46ce53722f757",
+    "license": "GPL-3.0"
+  },
+  "NewTube": {
+    "url": "https://github.com/aleixrodriala/newtube",
+    "commit": "756e7e56acba61ccdf5b4d5a802963f0eb62616c",
+    "tag": "v1.15.0",
+    "license": "MIT"
+  },
+  "Laya": {
+    "source": "user supplied laya-main(4).zip",
+    "license": "Apache-2.0"
+  }
+}

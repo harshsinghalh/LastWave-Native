@@ -1,0 +1,469 @@
+--- a/appupdatechecker2/build.gradle
++++ b/appupdatechecker2/build.gradle
+@@ -1,58 +1,59 @@
+-apply from: '../constants.gradle'
+-apply plugin: 'com.android.library'
+-
+-android {
+-    namespace = 'com.liskovsoft.appupdatechecker2'
+-
+-    // FIX: Default interface methods are only supported starting with Android N (--min-api 24)
+-    compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_17
+-        targetCompatibility JavaVersion.VERSION_17
+-    }
+-
+-    // allow other modules import debug/release configurations
+-    //publishNonDefault true
+-
+-    compileSdk = project.ext.compileSdkVersion
+-
+-    defaultConfig {
+-        minSdk = project.ext.minSdkVersion
+-        targetSdk = project.ext.targetSdkVersion
+-        versionCode 10
+-        versionName "1.0.1"
+-
+-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+-
+-    }
+-
+-    buildTypes {
+-        release {
+-            minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-        }
+-    }
+-
+-    lint {
+-        abortOnError = true
+-        disable 'MissingTranslation'
+-        //lintConfig rootProject.file('lint.xml')
+-    }
+-}
+-
+-dependencies {
+-    androidTestImplementation 'androidx.test.espresso:espresso-core:' + espressoVersion
+-    testImplementation 'junit:junit:' + junitVersion
+-    // NEWTUBE(update-flow): the real org.json for UpdateManifestTest (android.jar only has stubs)
+-    testImplementation 'org.json:json:20240303'
+-
+-    // Removed melautils.jar - only StreamUtils was used, now provided as source
+-    // See: src/main/java/edu/mit/mobile/android/utils/StreamUtils.java
+-
+-    implementation dependencies.project(':sharedutils')
+-
+-    implementation 'androidx.appcompat:appcompat:' + appCompatXVersion
+-
+-    implementation 'dnsjava:dnsjava:' + dnsjavaVersion
+-
+-    implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
+-}
++apply from: '../constants.gradle'
++apply plugin: 'com.android.library'
++
++android {
++    buildToolsVersion = "37.0.0"
++    namespace = 'com.liskovsoft.appupdatechecker2'
++
++    // FIX: Default interface methods are only supported starting with Android N (--min-api 24)
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    // allow other modules import debug/release configurations
++    //publishNonDefault true
++
++    compileSdk = project.ext.compileSdkVersion
++
++    defaultConfig {
++        minSdk = project.ext.minSdkVersion
++        targetSdk = project.ext.targetSdkVersion
++        versionCode 10
++        versionName "1.0.1"
++
++        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
++
++    }
++
++    buildTypes {
++        release {
++            minifyEnabled false
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
++        }
++    }
++
++    lint {
++        abortOnError = true
++        disable 'MissingTranslation'
++        //lintConfig rootProject.file('lint.xml')
++    }
++}
++
++dependencies {
++    androidTestImplementation 'androidx.test.espresso:espresso-core:' + espressoVersion
++    testImplementation 'junit:junit:' + junitVersion
++    // NEWTUBE(update-flow): the real org.json for UpdateManifestTest (android.jar only has stubs)
++    testImplementation 'org.json:json:20240303'
++
++    // Removed melautils.jar - only StreamUtils was used, now provided as source
++    // See: src/main/java/edu/mit/mobile/android/utils/StreamUtils.java
++
++    implementation project(':sharedutils')
++
++    implementation 'androidx.appcompat:appcompat:' + appCompatXVersion
++
++    implementation 'dnsjava:dnsjava:' + dnsjavaVersion
++
++    implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
++}
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,27 +1,27 @@
+-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+-
+-buildscript {
+-    
+-    repositories {
+-        google()
+-        mavenCentral()
+-    }
+-    dependencies {
+-        classpath 'com.android.tools.build:gradle:3.1.0'
+-        
+-
+-        // NOTE: Do not place your application dependencies here; they belong
+-        // in the individual module build.gradle files
+-    }
+-}
+-
+-allprojects {
+-    repositories {
+-        google()
+-        mavenCentral()
+-    }
+-}
+-
+-task clean(type: Delete) {
+-    delete rootProject.buildDir
+-}
++// Top-level build file where you can add configuration options common to all sub-projects/modules.
++
++buildscript {
++    
++    repositories {
++        google()
++        mavenCentral()
++    }
++    dependencies {
++        classpath 'com.android.tools.build:gradle:3.1.0'
++        
++
++        // NOTE: Do not place your application dependencies here; they belong
++        // in the individual module build.gradle files
++    }
++}
++
++allprojects {
++    repositories {
++        google()
++        mavenCentral()
++    }
++}
++
++task clean(type: Delete) {
++    delete rootProject.buildDir
++}
+--- a/commons-io-2.8.0/build.gradle
++++ b/commons-io-2.8.0/build.gradle
+@@ -2,6 +2,7 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace 'org.apache.commons.commonsio'
+ 
+     // FIX: Default interface methods are only supported starting with Android N (--min-api 24)
+--- a/constants.gradle
++++ b/constants.gradle
+@@ -1,7 +1,7 @@
+ project.ext {
+     // NEWTUBE(phone-only): minSdk 24 - media3 1.10.x floor is 23, and 24 gives native
+     // multidex + default interface methods without desugaring the min-api warning away.
+-    minSdkVersion = 24
++    minSdkVersion = 29
+     // Fix AppSettingsActivity crash: "Only fullscreen opaque activities can request orientation".
+     // Error happen only on Android 8.0 (api 26) when you set activity orientation in manifest.
+     // Possible fix is to set targetSdkVersion to 26.
+--- a/j2v8/build.gradle
++++ b/j2v8/build.gradle
+@@ -2,6 +2,7 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'com.eclipsesource.v8'
+ 
+     compileSdk = project.ext.compileSdkVersion
+--- a/sharedtests/build.gradle
++++ b/sharedtests/build.gradle
+@@ -1,42 +1,43 @@
+-apply from: '../constants.gradle'
+-apply plugin: 'com.android.library'
+-
+-android {
+-    namespace = 'com.liskovsoft.sharedtests'
+-
+-    compileSdk = project.ext.compileSdkVersion
+-    testOptions.unitTests.includeAndroidResources = true
+-
+-    compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_17
+-        targetCompatibility JavaVersion.VERSION_17
+-    }
+-
+-    defaultConfig {
+-        minSdk = project.ext.minSdkVersion
+-        targetSdk = project.ext.targetSdkVersion
+-        versionCode 1
+-        versionName "1.0"
+-
+-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+-
+-    }
+-
+-    buildTypes {
+-        release {
+-            minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-        }
+-    }
+-
+-    lint {
+-        abortOnError = true
+-    }
+-}
+-
+-dependencies {
+-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+-
+-    testImplementation 'junit:junit:' + junitVersion
+-    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
+-}
++apply from: '../constants.gradle'
++apply plugin: 'com.android.library'
++
++android {
++    buildToolsVersion = "37.0.0"
++    namespace = 'com.liskovsoft.sharedtests'
++
++    compileSdk = project.ext.compileSdkVersion
++    testOptions.unitTests.includeAndroidResources = true
++
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    defaultConfig {
++        minSdk = project.ext.minSdkVersion
++        targetSdk = project.ext.targetSdkVersion
++        versionCode 1
++        versionName "1.0"
++
++        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
++
++    }
++
++    buildTypes {
++        release {
++            minifyEnabled false
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
++        }
++    }
++
++    lint {
++        abortOnError = true
++    }
++}
++
++dependencies {
++    implementation fileTree(dir: 'libs', include: ['*.jar'])
++
++    testImplementation 'junit:junit:' + junitVersion
++    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
++}
+--- a/sharedutils/build.gradle
++++ b/sharedutils/build.gradle
+@@ -1,83 +1,87 @@
+-apply from: '../constants.gradle'
+-apply plugin: 'com.android.library'
+-
+-android {
+-    namespace = 'com.liskovsoft.sharedutils'
+-
+-    compileSdk = project.ext.compileSdkVersion
+-    testOptions.unitTests.includeAndroidResources = true
+-
+-    compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_17
+-        targetCompatibility JavaVersion.VERSION_17
+-    }
+-
+-    buildFeatures {
+-        buildConfig = true
+-    }
+-
+-    defaultConfig {
+-        minSdk = project.ext.minSdkVersion
+-        // Robolectric 4.16.1 (latest) supports package targets through API 36. This library's
+-        // target is test metadata only; the consuming app still targets API 37.
+-        targetSdk = Math.min(project.ext.targetSdkVersion, 36)
+-        versionCode 3
+-        versionName "1.3"
+-
+-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+-
+-    }
+-
+-    buildTypes {
+-        release {
+-            minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-        }
+-    }
+-
+-    lint {
+-        abortOnError = true
+-    }
+-}
+-
+-dependencies {
+-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+-
+-    testImplementation 'junit:junit:' + junitVersion
+-    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
+-    testImplementation dependencies.project(':sharedtests')
+-
+-    implementation 'commons-io:commons-io:' + commonsIOVersion
+-
+-    implementation 'androidx.appcompat:appcompat:' + appCompatXVersion
+-    // Note: 1.2.0 Requires multiple androidx.lifecycle libs
+-    implementation 'androidx.preference:preference:' + preferenceXVersion
+-
+-    implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
+-    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:' + okhttpVersion
+-    implementation 'com.squareup.okhttp3:logging-interceptor:' + okhttpVersion
+-    implementation 'com.squareup.okhttp3:okhttp-brotli:' + okhttpBrotliVersion
+-    // Both libraries should be present.
+-    // Use specific version of Cronet instead of one hardcoded inside okhttp extension
+-    // implementation 'com.google.android.gms:play-services-cronet:' + playServicesCronetVersion
+-    implementation 'org.chromium.net:cronet-api:' + cronetApiVersion
+-    
+-    // Cronet provider support (native, gms).
+-    implementation 'org.chromium.net:cronet-embedded:' + cronetApiVersion
+-
+-    implementation 'com.google.code.gson:gson:' + gsonVersion
+-
+-    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
+-    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
+-    implementation 'com.jakewharton:disklrucache:' + diskLruCacheVersion
+-
+-    // Add modern TLS ciphers to HttpUrlConnection
+-    // https://stackoverflow.com/questions/16299531/how-to-override-the-cipherlist-sent-to-the-server-by-android-when-using-httpsurl
+-    implementation 'info.guardianproject.netcipher:netcipher:' + netcipherVersion
+-
+-    // Add kotlin support libs
+-    implementation 'androidx.core:core-ktx:' + kotlinCoreXVersion
+-    //implementation 'org.conscrypt:conscrypt-android:2.5.2'
+-
+-    implementation 'dnsjava:dnsjava:' + dnsjavaVersion
+-}
++apply from: '../constants.gradle'
++apply plugin: 'com.android.library'
++apply plugin: 'org.jetbrains.kotlin.android'
++
++android {
++    buildToolsVersion = "37.0.0"
++    namespace = 'com.liskovsoft.sharedutils'
++
++    compileSdk = project.ext.compileSdkVersion
++    testOptions.unitTests.includeAndroidResources = true
++
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    buildFeatures {
++        buildConfig = true
++    }
++
++    defaultConfig {
++        minSdk = project.ext.minSdkVersion
++        // Robolectric 4.16.1 (latest) supports package targets through API 36. This library's
++        // target is test metadata only; the consuming app still targets API 37.
++        targetSdk = Math.min(project.ext.targetSdkVersion, 36)
++        versionCode 3
++        versionName "1.3"
++
++        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
++
++    }
++
++    buildTypes {
++        release {
++            minifyEnabled false
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
++        }
++    }
++
++    lint {
++        abortOnError = true
++    }
++}
++
++dependencies {
++    implementation fileTree(dir: 'libs', include: ['*.jar'])
++
++    testImplementation 'junit:junit:' + junitVersion
++    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
++    testImplementation project(':sharedtests')
++
++    implementation 'commons-io:commons-io:' + commonsIOVersion
++
++    implementation 'androidx.appcompat:appcompat:' + appCompatXVersion
++    // Note: 1.2.0 Requires multiple androidx.lifecycle libs
++    implementation 'androidx.preference:preference:' + preferenceXVersion
++
++    implementation 'com.squareup.okhttp3:okhttp:' + okhttpVersion
++    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:' + okhttpVersion
++    implementation 'com.squareup.okhttp3:logging-interceptor:' + okhttpVersion
++    implementation 'com.squareup.okhttp3:okhttp-brotli:' + okhttpBrotliVersion
++    // Both libraries should be present.
++    // Use specific version of Cronet instead of one hardcoded inside okhttp extension
++    // implementation 'com.google.android.gms:play-services-cronet:' + playServicesCronetVersion
++    implementation 'org.chromium.net:cronet-api:' + cronetApiVersion
++    
++    // Cronet provider support (native, gms).
++    implementation 'org.chromium.net:cronet-embedded:' + cronetApiVersion
++
++    implementation 'com.google.code.gson:gson:' + gsonVersion
++
++    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
++    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
++    implementation 'com.jakewharton:disklrucache:' + diskLruCacheVersion
++
++    // Add modern TLS ciphers to HttpUrlConnection
++    // https://stackoverflow.com/questions/16299531/how-to-override-the-cipherlist-sent-to-the-server-by-android-when-using-httpsurl
++    implementation 'info.guardianproject.netcipher:netcipher:' + netcipherVersion
++
++    // Add kotlin support libs
++    implementation 'androidx.core:core-ktx:' + kotlinCoreXVersion
++    //implementation 'org.conscrypt:conscrypt-android:2.5.2'
++
++    implementation 'dnsjava:dnsjava:' + dnsjavaVersion
++}
++
++kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }

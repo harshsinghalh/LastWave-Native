@@ -36,8 +36,10 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
+    <uses-feature android:name="android.hardware.touchscreen" android:required="true" tools:replace="android:required" />
     <application
         android:name=".LastWaveApplication"
+        tools:replace="android:name,android:theme,android:label,android:icon,android:roundIcon,android:allowBackup,android:appCategory,android:usesCleartextTraffic"
         android:allowBackup="true"
         android:appCategory="audio"
         android:icon="@mipmap/ic_launcher"
@@ -51,6 +53,8 @@
         android:largeHeap="true"
         android:enableOnBackInvokedCallback="true">
 
+        <activity android:name="com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivity" tools:node="remove" />
+        <activity android:name="com.lastwave.app.ui.laya.LayaSettingsActivity" android:exported="false" android:theme="@style/Theme.LastWave" />
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.lastwave.app.playback.cast.LastWaveCastOptionsProvider" />
@@ -191,12 +195,14 @@
         <!-- Retained for the Playlist module's M3U export (SAF/legacy write) -->
         <provider
             android:name="androidx.core.content.FileProvider"
+            tools:replace="android:authorities"
             android:authorities="${applicationId}.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+                android:resource="@xml/file_paths"
+                tools:replace="android:resource" />
         </provider>
 
     </application>

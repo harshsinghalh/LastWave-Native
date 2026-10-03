@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material3.Icon
@@ -156,6 +157,7 @@ class MainShellViewModel @Inject constructor(
 }
 
 private enum class MainTab(val labelRes: Int) {
+    VIDEOS(com.lastwave.app.R.string.nav_videos),
     FEED(com.lastwave.app.R.string.nav_feed),
     STATS(com.lastwave.app.R.string.nav_stats),
     PLAYLISTS(com.lastwave.app.R.string.nav_playlists),
@@ -190,6 +192,7 @@ private fun <T> navSpring() = ExpressiveMotion.spatialSpring<T>()
 @Composable
 fun MainShell(
     onOpenSettings: () -> Unit,
+    onOpenLaya: () -> Unit = {},
     onOpenSearch: () -> Unit,
     onOpenDiscover: () -> Unit,
     onOpenGenres: () -> Unit,
@@ -242,6 +245,7 @@ fun MainShell(
                 onBack = { scope.launch { pagerState.animateScrollToPage(feedIndex) } },
             ) {
                 when (tabs[page]) {
+                    MainTab.VIDEOS -> com.lastwave.app.ui.videos.VideosScreen(onOpenLaya = onOpenLaya)
                     MainTab.FEED -> FeedScreen(
                         onOpenSettings = onOpenSettings,
                         onOpenSearch = onOpenSearch,
@@ -616,6 +620,8 @@ private fun FloatingNavItem(
 }
 
 private fun MainTab.icon(): ImageVector = when (this) {
+    MainTab.VIDEOS -> Icons.Filled.PlayCircle
+
     MainTab.FEED -> Icons.Filled.Home
     MainTab.STATS -> Icons.Filled.Leaderboard
     MainTab.PLAYLISTS -> Icons.AutoMirrored.Filled.QueueMusic

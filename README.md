@@ -1,3 +1,5 @@
+> **LayaWave Android preview:** This branch integrates the complete LastWave music app with NewTube v1.15.0 and a shared Laya filtering backend. See [integration/build details](integration/README.md) and [backend deployment](backend/README.md).
+
 <div align="center">
 
 <img src="lastwave_logo.png" alt="LastWave Logo" width="120" height="120" style="border-radius: 50%;" />

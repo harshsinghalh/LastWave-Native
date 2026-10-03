@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
-class LastWaveApplication : Application(), ImageLoaderFactory {
+class LastWaveApplication : com.newtube.mobile.MobileMainApplication(), ImageLoaderFactory {
 
     @Inject lateinit var themeRepository: dagger.Lazy<ThemeRepository>
     @Inject lateinit var applicationScope: CoroutineScope

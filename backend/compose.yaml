@@ -1,0 +1,23 @@
+services:
+  laya:
+    build: .
+    restart: unless-stopped
+    environment:
+      LAYA_DEVICE: cpu
+    volumes:
+      - models:/models
+    expose: ["8080"]
+    mem_limit: 6g
+  tls:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      LAYA_DOMAIN: ${LAYA_DOMAIN:?Set your domain}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [laya]
+volumes:
+  models:
+  caddy_data:

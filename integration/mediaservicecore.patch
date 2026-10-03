@@ -1,0 +1,342 @@
+--- a/build.gradle
++++ b/build.gradle
+@@ -1,27 +1,27 @@
+-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+-
+-buildscript {
+-    repositories {
+-        google()
+-        mavenCentral()
+-    }
+-
+-    dependencies {
+-        classpath 'com.android.tools.build:gradle:3.3.1'
+-        
+-
+-        // NOTE: Do not place your application dependencies here; they belong
+-        // in the individual module build.gradle files
+-    }
+-}
+-
+-allprojects {
+-    repositories {
+-        google()
+-        mavenCentral()
+-    }
+-}
+-
+-task clean(type: Delete) {
+-    delete rootProject.buildDir
+-}
++// Top-level build file where you can add configuration options common to all sub-projects/modules.
++
++buildscript {
++    repositories {
++        google()
++        mavenCentral()
++    }
++
++    dependencies {
++        classpath 'com.android.tools.build:gradle:3.3.1'
++        
++
++        // NOTE: Do not place your application dependencies here; they belong
++        // in the individual module build.gradle files
++    }
++}
++
++allprojects {
++    repositories {
++        google()
++        mavenCentral()
++    }
++}
++
++task clean(type: Delete) {
++    delete rootProject.buildDir
++}
+--- a/mediaserviceinterfaces/build.gradle
++++ b/mediaserviceinterfaces/build.gradle
+@@ -1,41 +1,42 @@
+-apply from: '../../SharedModules/constants.gradle'
+-apply plugin: 'com.android.library'
+-
+-android {
+-    namespace = 'com.liskovsoft.mediaserviceinterfaces'
+-
+-    compileSdk = project.ext.compileSdkVersion
+-    testOptions.unitTests.includeAndroidResources = true
+-
+-    compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_17
+-        targetCompatibility JavaVersion.VERSION_17
+-    }
+-
+-    defaultConfig {
+-        minSdk = project.ext.minSdkVersion
+-        targetSdk = project.ext.targetSdkVersion
+-        versionCode 11
+-        versionName "0.3.1"
+-    }
+-
+-    buildTypes {
+-        release {
+-            minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-        }
+-    }
+-}
+-
+-dependencies {
+-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+-
+-    testImplementation 'junit:junit:' + junitVersion
+-    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
+-
+-    implementation dependencies.project(':sharedutils')
+-
+-    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
+-    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
+-    implementation 'androidx.annotation:annotation:' + annotationXVersion
+-}
++apply from: '../../SharedModules/constants.gradle'
++apply plugin: 'com.android.library'
++
++android {
++    buildToolsVersion = "37.0.0"
++    namespace = 'com.liskovsoft.mediaserviceinterfaces'
++
++    compileSdk = project.ext.compileSdkVersion
++    testOptions.unitTests.includeAndroidResources = true
++
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    defaultConfig {
++        minSdk = project.ext.minSdkVersion
++        targetSdk = project.ext.targetSdkVersion
++        versionCode 11
++        versionName "0.3.1"
++    }
++
++    buildTypes {
++        release {
++            minifyEnabled false
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
++        }
++    }
++}
++
++dependencies {
++    implementation fileTree(dir: 'libs', include: ['*.jar'])
++
++    testImplementation 'junit:junit:' + junitVersion
++    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
++
++    implementation project(':sharedutils')
++
++    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
++    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
++    implementation 'androidx.annotation:annotation:' + annotationXVersion
++}
+--- a/youtubeapi/build.gradle
++++ b/youtubeapi/build.gradle
+@@ -1,96 +1,100 @@
+-apply from: '../../SharedModules/constants.gradle'
+-apply plugin: 'com.android.library'
+-
+-android {
+-    namespace = 'com.liskovsoft.youtubeapi'
+-
+-    compileSdk = project.ext.compileSdkVersion
+-    testOptions.unitTests.includeAndroidResources = true
+-
+-    compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_17
+-        targetCompatibility JavaVersion.VERSION_17
+-    }
+-
+-    defaultConfig {
+-        minSdk = project.ext.minSdkVersion
+-        // Robolectric 4.16.1 (latest) supports package targets through API 36. This library's
+-        // target is test metadata only; the consuming app still targets API 37.
+-        targetSdk = Math.min(project.ext.targetSdkVersion, 36)
+-        versionCode 15
+-        versionName "0.1.5"
+-
+-        // required for androidTest support
+-        // more info: https://developer.android.com/training/testing/unit-testing/instrumented-unit-tests
+-        // small tests: https://stackoverflow.com/questions/4671923/what-is-the-purpose-of-smalltest-mediumtest-and-largetest-annotations-in-an
+-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+-
+-        // consumerProguardFiles 'proguard-rules.txt' // embed this file to aar
+-    }
+-
+-    buildTypes {
+-        release {
+-            minifyEnabled false
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-        }
+-    }
+-}
+-
+-dependencies {
+-    implementation fileTree(dir: 'libs', include: ['*.jar'])
+-
+-    testImplementation dependencies.project(':sharedtests')
+-    testImplementation 'co.infinum:retromock:' + retromockVersion
+-    testImplementation 'junit:junit:' + junitVersion
+-    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
+-
+-    androidTestImplementation dependencies.project(':sharedtests')
+-    androidTestImplementation 'junit:junit:' + junitVersion
+-    androidTestImplementation 'androidx.test:runner:' + testXSupportVersion
+-    androidTestImplementation 'androidx.test:rules:' + testXSupportVersion
+-
+-    implementation 'commons-io:commons-io:' + commonsIOVersion
+-    implementation dependencies.project(':sharedutils')
+-    implementation dependencies.project(':mediaserviceinterfaces')
+-
+-    implementation 'com.squareup.retrofit2:retrofit:' + retrofitVersion
+-    implementation 'com.squareup.retrofit2:converter-gson:' + retrofitVersion
+-    implementation 'com.google.code.gson:gson:' + gsonVersion
+-    implementation 'com.jayway.jsonpath:json-path:' + jsonPathVersion
+-
+-    implementation 'com.google.net.cronet:cronet-okhttp:' + cronetOkHttpVersion
+-    implementation 'org.chromium.net:cronet-api:' + cronetApiVersion
+-
+-    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
+-    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
+-
+-    implementation 'androidx.annotation:annotation:' + annotationXVersion
+-
+-    // js interpreter
+-    // duktape fork
+-    // implementation 'app.cash.quickjs:quickjs-android:' + quickjsVersion
+-    //implementation 'com.squareup.duktape:duktape-android:' + duktapeVersion
+-    //implementation 'org.mozilla:rhino:' + rhinoVersion
+-    //implementation 'com.eclipsesource.j2v8:j2v8:' + j2v8Version + '@aar'
+-    // https://mvnrepository.com/artifact/com.eclipsesource.j2v8/j2v8/6.2.1
+-    //implementation(name: 'j2v8-6.2.1', ext: 'aar')
+-    //implementation files('libs/j2v8-6.2.1-fixed.aar')
+-    // https://stackoverflow.com/questions/60878599/error-building-android-library-direct-local-aar-file-dependencies-are-not-supp
+-    // NEWTUBE(phone-only): j2v8 (V8 JS engine) is used by src/main sig/nsig/po-token extractors
+-    // (SigExtractor/PlayerDataExtractor/nsigsolver/potokennp2), so it is required at compile AND
+-    // runtime for playback. It was previously flavor-scoped (stbeta/ststable project(':j2v8'),
+-    // stfdroid maven @aar); the stmobile build consumed the ststable variant's :j2v8 via
+-    // matchingFallbacks. With the flavors gone, pull it unconditionally.
+-    implementation dependencies.project(':j2v8')
+-
+-    // Add kotlin support libs
+-    implementation 'androidx.core:core-ktx:' + kotlinCoreXVersion
+-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:' + kotlinxVersion // was wrongly keyed to kotlinVersion
+-
+-    // https://github.com/florianingerl/com.florianingerl.util.regex
+-    implementation 'com.github.florianingerl.util:regex:' + florianingerlRegexVersion
+-
+-    // NewPipe pot
+-    implementation 'androidx.webkit:webkit:' + webkitVersion
+-    implementation 'com.grack:nanojson:' + nanojsonVersion
+-}
++apply from: '../../SharedModules/constants.gradle'
++apply plugin: 'com.android.library'
++apply plugin: 'org.jetbrains.kotlin.android'
++
++android {
++    buildToolsVersion = "37.0.0"
++    namespace = 'com.liskovsoft.youtubeapi'
++
++    compileSdk = project.ext.compileSdkVersion
++    testOptions.unitTests.includeAndroidResources = true
++
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
++    }
++
++    defaultConfig {
++        minSdk = project.ext.minSdkVersion
++        // Robolectric 4.16.1 (latest) supports package targets through API 36. This library's
++        // target is test metadata only; the consuming app still targets API 37.
++        targetSdk = Math.min(project.ext.targetSdkVersion, 36)
++        versionCode 15
++        versionName "0.1.5"
++
++        // required for androidTest support
++        // more info: https://developer.android.com/training/testing/unit-testing/instrumented-unit-tests
++        // small tests: https://stackoverflow.com/questions/4671923/what-is-the-purpose-of-smalltest-mediumtest-and-largetest-annotations-in-an
++        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
++
++        // consumerProguardFiles 'proguard-rules.txt' // embed this file to aar
++    }
++
++    buildTypes {
++        release {
++            minifyEnabled false
++            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
++        }
++    }
++}
++
++dependencies {
++    implementation fileTree(dir: 'libs', include: ['*.jar'])
++
++    testImplementation project(':sharedtests')
++    testImplementation 'co.infinum:retromock:' + retromockVersion
++    testImplementation 'junit:junit:' + junitVersion
++    testImplementation 'org.robolectric:robolectric:' + robolectricVersion
++
++    androidTestImplementation project(':sharedtests')
++    androidTestImplementation 'junit:junit:' + junitVersion
++    androidTestImplementation 'androidx.test:runner:' + testXSupportVersion
++    androidTestImplementation 'androidx.test:rules:' + testXSupportVersion
++
++    implementation 'commons-io:commons-io:' + commonsIOVersion
++    implementation project(':sharedutils')
++    implementation project(':mediaserviceinterfaces')
++
++    implementation 'com.squareup.retrofit2:retrofit:' + retrofitVersion
++    implementation 'com.squareup.retrofit2:converter-gson:' + retrofitVersion
++    implementation 'com.google.code.gson:gson:' + gsonVersion
++    implementation 'com.jayway.jsonpath:json-path:' + jsonPathVersion
++
++    implementation 'com.google.net.cronet:cronet-okhttp:' + cronetOkHttpVersion
++    implementation 'org.chromium.net:cronet-api:' + cronetApiVersion
++
++    implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
++    implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
++
++    implementation 'androidx.annotation:annotation:' + annotationXVersion
++
++    // js interpreter
++    // duktape fork
++    // implementation 'app.cash.quickjs:quickjs-android:' + quickjsVersion
++    //implementation 'com.squareup.duktape:duktape-android:' + duktapeVersion
++    //implementation 'org.mozilla:rhino:' + rhinoVersion
++    //implementation 'com.eclipsesource.j2v8:j2v8:' + j2v8Version + '@aar'
++    // https://mvnrepository.com/artifact/com.eclipsesource.j2v8/j2v8/6.2.1
++    //implementation(name: 'j2v8-6.2.1', ext: 'aar')
++    //implementation files('libs/j2v8-6.2.1-fixed.aar')
++    // https://stackoverflow.com/questions/60878599/error-building-android-library-direct-local-aar-file-dependencies-are-not-supp
++    // NEWTUBE(phone-only): j2v8 (V8 JS engine) is used by src/main sig/nsig/po-token extractors
++    // (SigExtractor/PlayerDataExtractor/nsigsolver/potokennp2), so it is required at compile AND
++    // runtime for playback. It was previously flavor-scoped (stbeta/ststable project(':j2v8'),
++    // stfdroid maven @aar); the stmobile build consumed the ststable variant's :j2v8 via
++    // matchingFallbacks. With the flavors gone, pull it unconditionally.
++    implementation project(':j2v8')
++
++    // Add kotlin support libs
++    implementation 'androidx.core:core-ktx:' + kotlinCoreXVersion
++    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:' + kotlinxVersion // was wrongly keyed to kotlinVersion
++
++    // https://github.com/florianingerl/com.florianingerl.util.regex
++    implementation 'com.github.florianingerl.util:regex:' + florianingerlRegexVersion
++
++    // NewPipe pot
++    implementation 'androidx.webkit:webkit:' + webkitVersion
++    implementation 'com.grack:nanojson:' + nanojsonVersion
++}
++
++kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }

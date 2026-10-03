@@ -1,7 +1,7 @@
 package com.lastwave.app.playback
 
 import androidx.media3.common.Format
-import androidx.media3.extractor.metadata.flac.VorbisComment
+import androidx.media3.extractor.metadata.vorbis.VorbisComment
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import kotlin.math.log10
 import kotlin.math.pow

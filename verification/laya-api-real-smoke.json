@@ -1,0 +1,42 @@
+[
+  {
+    "path": "/v1/evaluate",
+    "status": 200,
+    "seconds": 0.33,
+    "response": {
+      "decisions": [
+        {
+          "id": "video:smoke",
+          "hidden": false,
+          "reason": "No confident blocking reason",
+          "engine": "laya"
+        }
+      ]
+    }
+  },
+  {
+    "path": "/v1/policy/compile",
+    "status": 200,
+    "seconds": 1.08,
+    "response": {
+      "policy": {
+        "enabled": true,
+        "abuse": true,
+        "spam": true,
+        "mode": "ANY",
+        "topics": [
+          "Education",
+          "Programming"
+        ],
+        "include": [],
+        "exclude": [],
+        "allowedCreators": [],
+        "excludedCreators": [],
+        "prompt": "Only education and programming. Hide spam.",
+        "verifiedFalse": false
+      },
+      "engine": "laya",
+      "review": "Review the updated controls; uncertain changes are left unchanged."
+    }
+  }
+]

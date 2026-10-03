@@ -4,8 +4,9 @@ plugins {
 }
 
 android {
+    buildToolsVersion = "37.0.0"
     namespace = "com.decent.usbaudio"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 24
@@ -30,7 +31,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin { jvmToolchain(17) }
+    kotlin {
+        jvmToolchain(21)
+        compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+    }
 }
 
 dependencies {

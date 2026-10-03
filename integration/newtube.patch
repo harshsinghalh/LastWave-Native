@@ -1,0 +1,706 @@
+--- a/common/build.gradle
++++ b/common/build.gradle
+@@ -1,7 +1,9 @@
+ apply from: gradle.ext.sharedModulesConstants
+ apply plugin: 'com.android.library'
++apply plugin: 'org.jetbrains.kotlin.android'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'com.liskovsoft.smartyoutubetv2.common'
+ 
+     // FIX: Default interface methods are only supported starting with Android N (--min-api 24)
+@@ -48,10 +50,10 @@
+     testImplementation 'junit:junit:' + junitVersion
+     testImplementation 'org.robolectric:robolectric:' + robolectricVersion
+ 
+-    implementation dependencies.project(':sharedutils')
+-    implementation dependencies.project(':mediaserviceinterfaces')
+-    implementation dependencies.project(':youtubeapi')
+-    implementation dependencies.project(':filepicker-lib')
++    implementation project(':sharedutils')
++    implementation project(':mediaserviceinterfaces')
++    implementation project(':youtubeapi')
++    implementation project(':filepicker-lib')
+ 
+     implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
+     implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
+@@ -74,7 +76,9 @@
+ 
+     implementation 'com.jakewharton:process-phoenix:' + phoenixVersion
+ 
+-    implementation dependencies.project(':appupdatechecker2')
++    implementation project(':appupdatechecker2')
+ 
+-    implementation dependencies.project(':slidableactivity') // https://github.com/r0adkll/Slidr
++    implementation project(':slidableactivity') // https://github.com/r0adkll/Slidr
+ }
++
++kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+--- a/doubletapplayerview-media3/build.gradle
++++ b/doubletapplayerview-media3/build.gradle
+@@ -5,8 +5,10 @@
+ // DoubleTapPlayerAdapter is not carried over.
+ apply from: gradle.ext.sharedModulesConstants
+ apply plugin: 'com.android.library'
++apply plugin: 'org.jetbrains.kotlin.android'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'com.github.vkay94.dtpv3'
+ 
+     compileSdk = project.ext.compileSdkVersion
+@@ -44,3 +46,5 @@
+     api 'androidx.media3:media3-exoplayer:' + media3Version
+     api 'androidx.media3:media3-ui:' + media3Version
+ }
++
++kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+--- a/filepicker-lib/build.gradle
++++ b/filepicker-lib/build.gradle
+@@ -7,6 +7,7 @@
+ }
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'arte.programar.materialfile'
+ 
+     compileSdk = project.ext.compileSdkVersion
+--- a/sabr-media3/build.gradle
++++ b/sabr-media3/build.gradle
+@@ -7,6 +7,7 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'com.newtube.sabr'
+     compileSdk = project.ext.compileSdkVersion
+     defaultConfig { minSdk = 24 }
+--- a/slidableactivity/build.gradle
++++ b/slidableactivity/build.gradle
+@@ -2,6 +2,7 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
++    buildToolsVersion = "37.0.0"
+     namespace = 'com.r0adkll.slidr'
+ 
+     compileSdk = project.ext.compileSdkVersion
+--- a/smarttubetv/build.gradle
++++ b/smarttubetv/build.gradle
+@@ -1,135 +1,7 @@
+ apply from: gradle.ext.sharedModulesConstants
+-
+-apply plugin: 'com.android.application'
+-
+-import com.android.build.api.artifact.SingleArtifact
+-import com.android.build.api.variant.BuiltArtifactsLoader
+-import org.gradle.api.file.ConfigurableFileCollection
+-import org.gradle.api.file.DirectoryProperty
+-import org.gradle.api.provider.Property
+-import org.gradle.api.tasks.Input
+-import org.gradle.api.tasks.InputDirectory
+-import org.gradle.api.tasks.InputFiles
+-import org.gradle.api.tasks.Internal
+-import org.gradle.api.tasks.OutputDirectory
+-import org.gradle.api.tasks.PathSensitive
+-import org.gradle.api.tasks.PathSensitivity
+-import org.gradle.api.tasks.TaskAction
+-
+-import java.nio.file.Files
+-import java.nio.file.StandardCopyOption
+-
+-abstract class CopyRenamedApks extends DefaultTask {
+-    @InputDirectory
+-    @PathSensitive(PathSensitivity.RELATIVE)
+-    abstract DirectoryProperty getInput()
+-
+-    @OutputDirectory
+-    abstract DirectoryProperty getOutput()
+-
+-    @Internal
+-    abstract Property<BuiltArtifactsLoader> getBuiltArtifactsLoader()
+-
+-    /** Goes between the version and the ABI: "" normally, "fdroid_" for -Pfdroid builds. */
+-    @Input
+-    abstract Property<String> getNameTag()
+-
+-    @TaskAction
+-    void copyApks() {
+-        def outputDirectory = output.get().asFile
+-        project.delete(outputDirectory)
+-        outputDirectory.mkdirs()
+-
+-        def builtArtifacts = builtArtifactsLoader.get().load(input.get())
+-        if (builtArtifacts == null) {
+-            throw new GradleException('Cannot load APK artifacts')
+-        }
+-
+-        builtArtifacts.elements.each { artifact ->
+-            def abi = artifact.filters.find { it.filterType.toString() == 'ABI' }?.identifier ?: 'universal'
+-            def version = artifact.versionName ?: 'unknown'
+-            def outputFile = new File(outputDirectory, "NewTube_${version}_${nameTag.get()}${abi}.apk")
+-            Files.copy(new File(artifact.outputFile).toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+-        }
+-    }
+-}
+-
+-/**
+- * NEWTUBE(startup): the baseline profile where ART itself looks for it at INSTALL time.
+- *
+- * AGP packages the profile as assets/dexopt/baseline.prof, which only androidx.profileinstaller
+- * reads - on the app's first run it queues the profile for the next BACKGROUND dexopt (idle +
+- * charging). NewTube is sideloaded (GitHub APK, in-app updater -> system installer), so an update
+- * installs with filter "verify" and every cold start runs interpreted/JIT until that background
+- * job: measured on the Pixel 9, cold share-link opens at median 926 ms right after install vs
+- * 582 ms once compiled. Since Android 15, ART Service's install-time dexopt also reads an
+- * EMBEDDED profile at assets/art-profile/baseline.prof (art/artd: kEmbeddedProfileEntry, used
+- * when the APK comes without a .dm file) and compiles it right away. That entry must be a binary
+- * profile in ART's own format (v0.1.5) keyed to the final dex, so it is generated here from the
+- * merged dex and AGP's merged human-readable profile, and added as an ordinary asset (packaging
+- * and signing are untouched). If profgen (cmdline-tools) is missing the task logs and emits
+- * nothing; the APK is then exactly what it was before.
+- */
+-abstract class EmbeddedArtProfileTask extends DefaultTask {
+-    @InputFiles
+-    @PathSensitive(PathSensitivity.NAME_ONLY)
+-    abstract ConfigurableFileCollection getDexFiles()
+-
+-    @InputFiles
+-    @PathSensitive(PathSensitivity.NONE)
+-    abstract ConfigurableFileCollection getHumanReadableProfile()
+-
+-    @Input
+-    abstract Property<String> getProfgen()
+-
+-    @OutputDirectory
+-    abstract DirectoryProperty getOutputDir()
+-
+-    @javax.inject.Inject
+-    abstract org.gradle.process.ExecOperations getExecOperations()
+-
+-    @TaskAction
+-    void generate() {
+-        def root = outputDir.get().asFile
+-        root.deleteDir()
+-        def target = new File(root, 'art-profile')
+-        target.mkdirs()
+-
+-        def profgenFile = new File(profgen.get())
+-        def hrf = humanReadableProfile.files.find { it.isFile() }
+-        def dexes = dexFiles.files.findAll { it.isFile() && it.name ==~ /classes\d*\.dex/ }
+-        if (!profgenFile.canExecute() || hrf == null || dexes.isEmpty()) {
+-            logger.warn("NewTube: no embedded ART profile (profgen=${profgenFile.canExecute()}, " +
+-                    "profile=${hrf != null}, dex=${dexes.size()}); install-time compilation stays off")
+-            return
+-        }
+-
+-        // profgen resolves rules against classes*.dex inside an APK-shaped zip.
+-        def dexZip = new File(temporaryDir, 'dex.zip')
+-        new java.util.zip.ZipOutputStream(new FileOutputStream(dexZip)).withCloseable { zip ->
+-            dexes.sort { it.name }.each { dex ->
+-                zip.putNextEntry(new java.util.zip.ZipEntry(dex.name))
+-                dex.withInputStream { zip << it }
+-                zip.closeEntry()
+-            }
+-        }
+-
+-        execOperations.exec {
+-            commandLine profgenFile.absolutePath, 'bin', hrf.absolutePath,
+-                    '--apk', dexZip.absolutePath,
+-                    '--output', new File(target, 'baseline.prof').absolutePath,
+-                    '--profile-format', 'v0_1_5_s'
+-        }
+-    }
+-}
+-
+-def keystorePropertiesFile = rootProject.file("keystore.properties")
+-def keystoreProperties = new Properties()
+-if (keystorePropertiesFile.exists()) {
+-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+-}
+-
++apply plugin: "com.android.library"
+ android {
++    buildToolsVersion = "37.0.0"
+     // NOTE: this is the R package the code imports (unchanged from the TV era on purpose).
+     namespace = 'com.liskovsoft.smartyoutubetv2.tv'
+ 
+@@ -145,15 +17,12 @@
+ 
+     compileSdk = project.ext.compileSdkVersion
+     testOptions.unitTests.includeAndroidResources = true
+-    ndkVersion = "21.0.6113669" // reduce size of the *.so files (stripping debug symbols)
++    ndkVersion = "29.0.14206865" // reduce size of the *.so files (stripping debug symbols)
+     
+     defaultConfig {
+-        // values linked with applicationId: searchable.searchSuggestAuthority, searchable.searchSuggestIntentData, VideoContract.CONTENT_AUTHORITY
+-        applicationId "app.smarttube"
++        // values linked with
+         minSdk = project.ext.minSdkVersion
+         targetSdk = project.ext.targetSdkVersion
+-        versionCode 2387
+-        versionName "31.97"
+         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+         // NEWTUBE(fdroid): reproducible builds - with SOURCE_DATE_EPOCH set (F-Droid's build server
+         // sets it to the commit time) the stamp is that, not the wall clock, so two builds of one
+@@ -163,92 +32,14 @@
+         buildConfigField "boolean", "BENCHMARK", "false"
+         // NEWTUBE(fdroid): -Pfdroid turns the in-app updater off - F-Droid delivers the updates, and
+         // its inclusion policy forbids self-updates that aren't an explicit opt-in.
+-        buildConfigField "boolean", "IN_APP_UPDATES", project.hasProperty('fdroid') ? "false" : "true"
+-
+-        // The content of Universal apk
+-        ndk {
+-            abiFilters 'armeabi-v7a', 'arm64-v8a'
+-            // -PemulatorAbi adds native x86_64 libs so an x86_64 AVD runs Cronet/J2V8 natively
+-            // instead of through ARM translation (which inflates JS-solve and CPU timings ~10x).
+-            if (project.hasProperty('emulatorAbi')) {
+-                abiFilters 'x86_64'
+-            }
+-        }
+-    }
+-
+-    // https://stackoverflow.com/questions/37382057/android-apk-how-to-exclude-a-so-file-from-a-3rd-party-dependency-using-gradle
+-    // armeabi-v7a backward compatible with arm64-v8a, x86 -> x86_64 etc
+-    splits {
+-        abi {
+-            enable = true
+-            reset()
+-            // Note, Android could soon start warning users when they run 32-bit apps
+-            //include 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a' //select ABIs to build APKs for
+-            include 'armeabi-v7a', 'arm64-v8a', 'x86' // v7a main build, x86 for WSL, v8a for Pixel Tablet (no 32 bit support)
+-            universalApk = true //generate an additional APK that contains all the ABIs
+-        }
+-    }
+-
+-    signingConfigs {
+-        release {
+-            if (keystorePropertiesFile.exists()) {
+-                storeFile = file(keystoreProperties['storeFile'])
+-                storePassword = keystoreProperties['storePassword']
+-                keyAlias = keystoreProperties['keyAlias']
+-                keyPassword = keystoreProperties['keyPassword']
+-            }
+-        }
+-    }
+-    
++        buildConfigField "boolean", "IN_APP_UPDATES", "false"
++
++        }
+     buildTypes {
+-        release {
+-            // Enable minification
+-            // shrinkResources true
+-            // minifyEnabled true
+-
+-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+-
+-            if (keystorePropertiesFile.exists()) {
+-                signingConfig signingConfigs.release
+-            }
+-        }
+-        // Use same key for release and debug for testing
+-        debug {
+-            if (keystorePropertiesFile.exists()) {
+-                signingConfig signingConfigs.release
+-            } else {
+-                // No keystore.properties on this machine, so debug falls back to the auto-generated
+-                // debug key and can NOT replace an installed release build (INSTALL_FAILED_UPDATE_
+-                // INCOMPATIBLE). Suffixing the applicationId lets the debug build sit side by side
+-                // with the daily driver instead of forcing an uninstall that would wipe the signed-in
+-                // OAuth state. All manifest authorities already interpolate ${applicationId}, so they
+-                // follow the suffix automatically. When the release keystore IS present this branch
+-                // is skipped and debug keeps replacing release in place, exactly as before.
+-                applicationIdSuffix ".debug"
+-            }
+-        }
+-        benchmark {
+-            initWith release
+-            debuggable false
+-            // Retain the production no-minification contract while measuring release code.
+-            minifyEnabled false
+-            matchingFallbacks = ['release']
+-            buildConfigField "boolean", "BENCHMARK", "true"
+-            // Match the existing debug install identity; never require uninstalling user data.
+-            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+-            if (!keystorePropertiesFile.exists()) {
+-                applicationIdSuffix ".debug"
+-            } else if (project.hasProperty('sideBySide')) {
+-                // Device checks on the owner's phone (-PsideBySide): its own app id, data and (no)
+-                // account next to the daily driver, so a test never plays on his account.
+-                // -PsideBySide=auth: a second id for the signed-in benchmark, which signs in to the
+-                // owner's account (his OK, 2026-09-29) while ".check" stays signed out. Benchmark
+-                // builds never write to the account's history (MobileMainApplication).
+-                applicationIdSuffix project.property('sideBySide') == 'auth' ? ".auth" : ".check"
+-            }
+-        }
+-    }
+-
++        release { minifyEnabled false }
++        debug { }
++        benchmark { initWith release; matchingFallbacks = ['release'] }
++    }
+     sourceSets {
+         androidTest.java.srcDir '../sabr-media3/src/testSupport/java'
+         // Optional, generated synthetic input for explicitly opted-in link comparisons.
+@@ -295,62 +86,23 @@
+     // flavor so its source set (src/stmobile/) keeps applying without a directory move.
+     productFlavors {
+         stmobile {
+-            // Brand-neutral, GitHub-verifiable applicationId (io.github.<user>.*) chosen so the
++            // Brand-neutral, GitHub-verifiable
+             // package name never has to change if the app is ever renamed — "arc" ties to the
+             // arch-"n" launcher mark (Catalan for "arch"). This ID is permanent once released;
+             // do not couple it to the marketing name. See docs/gtm + the legal-risk memo.
+-            applicationId "io.github.aleixrodriala.arc"
+-            minSdk = 24 // media3 1.10.x floor is 23; 24 = project-wide minimum
++            minSdk = 29 // media3 1.10.x floor is 23; 24 = project-wide minimum
+             targetSdk = project.ext.targetSdkVersion
+             // NewTube versions independently of upstream SmartTube (defaultConfig carries the
+             // fork-point 31.97/2387). versionCode starts at 10000 - above upstream's code so
+             // existing test installs upgrade in place - and encodes the version:
+             // 1.0.0 -> 10000, 1.0.1 -> 10001, 1.1.0 -> 10100, 2.0.0 -> 20000.
+-            versionCode 11500
+-            versionName "1.15.0"
+-        }
+-    }
+-}
+-
+-// AGP 9 removed applicationVariants. Listen to the public APK artifact and copy it under the
+-// stable release filename instead of mutating AGP's internal package task/output model.
+-androidComponents {
+-    onVariants(selector().all()) { variant ->
+-        def copyTask = tasks.register("copyRenamedApksFor${variant.name.capitalize()}", CopyRenamedApks) {
+-            output.set(layout.buildDirectory.dir("outputs/renamed_apks/${variant.name}"))
+-            builtArtifactsLoader.set(variant.artifacts.getBuiltArtifactsLoader())
+-            // A -Pfdroid build is a different APK (updater off, Maven J2V8): its files must not
+-            // overwrite the regular release files when both are built in one checkout.
+-            nameTag.set(project.hasProperty('fdroid') ? 'fdroid_' : '')
+-        }
+-        variant.artifacts.use(copyTask).wiredWith { it.input }.toListenTo(SingleArtifact.APK.INSTANCE)
+-    }
+-
+-    // Install-time ART profile (see EmbeddedArtProfileTask) for the non-debuggable builds that get
+-    // installed and timed: release, and benchmark (release-derived) so it can be measured.
+-    onVariants(selector().withBuildType('release')) { variant -> registerEmbeddedArtProfile(variant) }
+-    onVariants(selector().withBuildType('benchmark')) { variant -> registerEmbeddedArtProfile(variant) }
+-}
+-
+-def registerEmbeddedArtProfile(variant) {
+-    def cap = variant.name.capitalize()
+-    def override = project.findProperty('profgenPath')
+-    def profgenPath = override != null ? providers.provider { override.toString() }
+-            : androidComponents.sdkComponents.sdkDirectory.map { it.file('cmdline-tools/latest/bin/profgen').asFile.absolutePath }
+-    def task = tasks.register("generate${cap}EmbeddedArtProfile", EmbeddedArtProfileTask) {
+-        dependsOn("mergeDex${cap}", "merge${cap}ArtProfile")
+-        dexFiles.from(layout.buildDirectory.dir("intermediates/dex/${variant.name}/mergeDex${cap}").map {
+-            it.asFileTree.matching { include 'classes*.dex' }
+-        })
+-        humanReadableProfile.from(layout.buildDirectory.file(
+-                "intermediates/merged_art_profile/${variant.name}/merge${cap}ArtProfile/baseline-prof.txt"))
+-        profgen.set(profgenPath)
+-        outputDir.set(layout.buildDirectory.dir("generated/embeddedArtProfile/${variant.name}"))
+-    }
+-    variant.sources.assets?.addGeneratedSourceDirectory(task, { it.outputDir })
+-}
++        }
++    }
++}
++
+ 
+ dependencies {
++    implementation project(":laya-policy")
+     implementation fileTree(include: ['*.jar'], dir: 'libs')
+ 
+     implementation 'androidx.annotation:annotation:' + annotationXVersion
+@@ -408,10 +160,10 @@
+     // F-Droid's scanner reads build files line by line, and its pending rule (fdroid-suss !55) only
+     // clears this coordinate when the play-services-cronet exclude sits next to it.
+     stmobileImplementation('androidx.media3:media3-datasource-cronet:' + media3Version) { exclude group: 'com.google.android.gms', module: 'play-services-cronet' }
+-    stmobileImplementation dependencies.project(':doubletapplayerview-media3')
+-    stmobileImplementation dependencies.project(':sabr-media3')
++    stmobileImplementation project(':doubletapplayerview-media3')
++    stmobileImplementation project(':sabr-media3')
+     // NEWTUBE(update-flow): the phone's update sheet drives the updater directly (AppUpdates)
+-    stmobileImplementation dependencies.project(':appupdatechecker2')
++    stmobileImplementation project(':appupdatechecker2')
+ 
+     //////// END PLAYER ENGINE //////////
+ 
+@@ -427,10 +179,10 @@
+     androidTestImplementation 'com.google.protobuf:protobuf-javalite:3.22.3'
+     testImplementation 'com.google.protobuf:protobuf-javalite:3.22.3'
+ 
+-    implementation dependencies.project(':common')
+-    implementation dependencies.project(':sharedutils')
+-    implementation dependencies.project(':mediaserviceinterfaces')
+-    implementation dependencies.project(':youtubeapi')
++    implementation project(':common')
++    implementation project(':sharedutils')
++    implementation project(':mediaserviceinterfaces')
++    implementation project(':youtubeapi')
+ 
+     implementation 'io.reactivex.rxjava3:rxandroid:' + rxAndroidVersion
+     implementation 'io.reactivex.rxjava3:rxjava:' + rxJavaVersion
+@@ -476,7 +228,7 @@
+ }
+ android.sourceSets.androidTest.java.srcDir(sabrProofGeneratedJava.get().asFile)
+ android.sourceSets.test.java.srcDir(sabrProofGeneratedJava.get().asFile)
+-android.sourceSets.test.java.srcDir('src/androidTest/java/com/newtube/mobile/sabrproof')
++
+ tasks.configureEach {
+     if (name.startsWith('compile') && (name.endsWith('AndroidTestJavaWithJavac')
+             || name.endsWith('UnitTestJavaWithJavac') || name.endsWith('AndroidTestKotlin')
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/MobileBrowseActivity.java
+@@ -143,6 +143,7 @@
+     };
+ 
+     private BrowsePresenter mPresenter;
++    private boolean mHostRedirect;
+ 
+     private RecyclerView mContentGrid;
+     private SwipeRefreshLayout mContentSwipe;
+@@ -233,6 +234,14 @@
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
++        if ("com.lastwave.app.LastWaveApplication".equals(getApplication().getClass().getName())) {
++            mHostRedirect = true;
++            Intent host = new Intent().setClassName(this, "com.lastwave.app.MainActivity");
++            host.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
++            startActivity(host);
++            finish();
++            return;
++        }
+ 
+         // Transitions: same task as the player now (singleTop + reorder, see the manifest note).
+         // During interactive minimize this already-rendered Activity remains visible through the
+@@ -1744,6 +1753,7 @@
+     @Override
+     protected void onResume() {
+         super.onResume();
++        if (mHostRedirect) return;
+ 
+         if (mPresenter != null) {
+             mPresenter.onViewResumed();
+@@ -1785,6 +1795,7 @@
+     @Override
+     public void onWindowFocusChanged(boolean hasFocus) {
+         super.onWindowFocusChanged(hasFocus);
++        if (mHostRedirect) return;
+ 
+         if (hasFocus) {
+             SystemPipBridge.restoreFromLauncher(this);
+@@ -1830,6 +1841,7 @@
+     @Override
+     protected void onPause() {
+         super.onPause();
++        if (mHostRedirect) return;
+ 
+         if (mPresenter != null) {
+             mPresenter.onViewPaused();
+@@ -1858,6 +1870,7 @@
+     @Override
+     protected void onStop() {
+         super.onStop();
++        if (mHostRedirect) return;
+         // Covered: a card still waiting for the player to fold it can go now.
+         if (mMiniTexture == null) {
+             hideMiniPlayer();
+@@ -1871,12 +1884,14 @@
+     @Override
+     protected void onNewIntent(Intent intent) {
+         super.onNewIntent(intent);
++        if (mHostRedirect) return;
+         setIntent(intent);
+         handleOpenDownloads(intent);
+     }
+ 
+     @Override
+     protected void onDestroy() {
++        if (mHostRedirect) { super.onDestroy(); return; }
+         mNavHandler.removeCallbacks(mNavRebuild);
+         mNavHandler.removeCallbacks(mRunwayCheck);
+         cancelFeedSwap(); // NEWTUBE(feed-swap)
+@@ -1901,6 +1916,7 @@
+     @Override
+     public void onConfigurationChanged(Configuration newConfig) {
+         super.onConfigurationChanged(newConfig);
++        if (mHostRedirect) return;
+ 
+         updateGridSpanCount(com.newtube.mobile.ui.common.MobileGrid.computeSpanCount(newConfig));
+     }
+@@ -1916,6 +1932,7 @@
+     @Override
+     protected void onSaveInstanceState(@NonNull Bundle outState) {
+         super.onSaveInstanceState(outState);
++        if (mHostRedirect) return;
+         outState.putBoolean(STATE_YOU_SHOWING, mYouShowing);
+         outState.putBoolean(STATE_SECTION_FROM_YOU, mSectionFromYou);
+         outState.putInt(STATE_SECTION_ID, mCurrentSectionId);
+@@ -1923,7 +1940,8 @@
+ 
+     @Override
+     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+-        super.onRestoreInstanceState(savedInstanceState); // restores the nav's own highlight
++        super.onRestoreInstanceState(savedInstanceState);
++        if (mHostRedirect) return; // restores the nav's own highlight
+ 
+         if (savedInstanceState.getBoolean(STATE_YOU_SHOWING)) {
+             showYouPanel();
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/browse/VideoCardAdapter.java
+@@ -33,6 +33,20 @@
+  * and {@code MaterialCardView} elevation).
+  */
+ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder> {
++    private android.content.SharedPreferences layaPrefs;
++    private android.content.SharedPreferences.OnSharedPreferenceChangeListener layaListener;
++    @Override public void onAttachedToRecyclerView(@NonNull RecyclerView recycler) {
++        super.onAttachedToRecyclerView(recycler);
++        layaPrefs = com.harsh.laya.PolicyStore.get(recycler.getContext()).preferences();
++        layaListener = (prefs, key) -> { if (!"status".equals(key)) recycler.post(this::notifyDataSetChanged); };
++        layaPrefs.registerOnSharedPreferenceChangeListener(layaListener);
++    }
++    @Override public void onDetachedFromRecyclerView(@NonNull RecyclerView recycler) {
++        if(layaPrefs != null && layaListener != null) layaPrefs.unregisterOnSharedPreferenceChangeListener(layaListener);
++        layaListener = null;
++        super.onDetachedFromRecyclerView(recycler);
++    }
++
+     /** Regular video card (full-width thumbnail + title/meta). */
+     private static final int VIEW_TYPE_VIDEO = 0;
+     /** Channel result row (round avatar + name + subs) — e.g. channels in search results. */
+@@ -234,6 +248,7 @@
+             bindProgress(video);
+             bindReadiness(video);
+             bindThumbnail(context, video);
++            com.harsh.laya.FilteredCard.bind(itemView, mThumbnail, mTitle, "video:" + video.videoId, video.getTitle(), video.getAuthor());
+         }
+ 
+         /**
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/CommentsAdapter.java
+@@ -61,6 +61,20 @@
+  * button, and the person's own comments a ⋮ with Delete.</p>
+  */
+ final class CommentsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
++    private android.content.SharedPreferences layaPrefs;
++    private android.content.SharedPreferences.OnSharedPreferenceChangeListener layaListener;
++    @Override public void onAttachedToRecyclerView(@NonNull RecyclerView recycler) {
++        super.onAttachedToRecyclerView(recycler);
++        layaPrefs = com.harsh.laya.PolicyStore.get(recycler.getContext()).preferences();
++        layaListener = (prefs, key) -> { if (!"status".equals(key)) recycler.post(this::notifyDataSetChanged); };
++        layaPrefs.registerOnSharedPreferenceChangeListener(layaListener);
++    }
++    @Override public void onDetachedFromRecyclerView(@NonNull RecyclerView recycler) {
++        if(layaPrefs != null && layaListener != null) layaPrefs.unregisterOnSharedPreferenceChangeListener(layaListener);
++        layaListener = null;
++        super.onDetachedFromRecyclerView(recycler);
++    }
++
+ 
+     interface Listener {
+         void onLikeClicked(Entry entry);
+@@ -618,6 +632,7 @@
+             mMessage.setText(entry.mText);
+             mMessage.setVisibility(TextUtils.isEmpty(entry.mText) ? View.GONE : View.VISIBLE);
+             mMessage.setExpanded(mIsParent || entry.expanded, false);
++            com.harsh.laya.FilteredText.bind(mMessage, "comment:" + (item.getId() != null ? item.getId() : entry.id), entry.mText, item.getAuthorName(), "comment");
+ 
+             bindLike(false);
+ 
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/LiveChatAdapter.java
+@@ -27,6 +27,21 @@
+  * sheet can auto-scroll to the newest.
+  */
+ public class LiveChatAdapter extends RecyclerView.Adapter<LiveChatAdapter.VH> {
++
++    private android.content.SharedPreferences layaPrefs;
++    private android.content.SharedPreferences.OnSharedPreferenceChangeListener layaListener;
++    @Override public void onAttachedToRecyclerView(@NonNull RecyclerView recycler) {
++        super.onAttachedToRecyclerView(recycler);
++        layaPrefs = com.harsh.laya.PolicyStore.get(recycler.getContext()).preferences();
++        layaListener = (prefs, key) -> { if (!"status".equals(key)) recycler.post(this::notifyDataSetChanged); };
++        layaPrefs.registerOnSharedPreferenceChangeListener(layaListener);
++    }
++    @Override public void onDetachedFromRecyclerView(@NonNull RecyclerView recycler) {
++        if(layaPrefs != null && layaListener != null) layaPrefs.unregisterOnSharedPreferenceChangeListener(layaListener);
++        layaListener = null;
++        super.onDetachedFromRecyclerView(recycler);
++    }
++
+ 
+     private final List<ChatItem> mItems = new ArrayList<>();
+ 
+@@ -97,6 +112,7 @@
+             }
+             sb.append(message);
+             mMessage.setText(sb);
++            com.harsh.laya.FilteredText.bind(mMessage, "chat:" + item.getId(), sb, author, "chat");
+ 
+             String photo = item.getAuthorPhoto();
+             if (TextUtils.isEmpty(photo)) {
+@@ -112,6 +128,7 @@
+         }
+ 
+         void recycle() {
++            mMessage.setTag(com.harsh.laya.R.id.laya_binding, null);
+             Glide.with(itemView.getContext().getApplicationContext()).clear(mAvatar);
+         }
+     }
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/MobilePlaybackActivity.java
+@@ -1903,6 +1903,7 @@
+     private boolean mBackPreview;
+ 
+     private boolean canMinimizeByBack() {
++        if ("com.lastwave.app.LastWaveApplication".equals(getApplication().getClass().getName()) && MiniPlayerBridge.getMiniHost() == null) return false;
+         return mPlayer != null && mContainer != null && mVideoArea != null && !mIsInPip && !mPipEnterPending
+                 && !mScrubbing && mMorphAnimator == null && mMorphFraction == 0f
+                 && getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
+@@ -5658,6 +5659,10 @@
+      * player. Called once the release animation has landed on the mini-card rectangle.
+      */
+     private void minimizeByDrag() {
++        if ("com.lastwave.app.LastWaveApplication".equals(getApplication().getClass().getName()) && MiniPlayerBridge.getMiniHost() == null) {
++            closeFromMiniPlayer();
++            return;
++        }
+         // WHOLE-APP-IN-PIP GUARD: the host reorder below launches Browse into THIS activity's task.
+         // While the task is pinned that puts Browse on top of the PiP window, so the system renders
+         // the entire app - feed, tab bar and all - shrunk into the corner (and removeTop then leaves
+--- a/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java
++++ b/smarttubetv/src/stmobile/java/com/newtube/mobile/ui/playback/RelatedVideoAdapter.java
+@@ -34,6 +34,20 @@
+  * marks queue state and loads/plays the video in the same player.</p>
+  */
+ public class RelatedVideoAdapter extends ListAdapter<Video, RelatedVideoAdapter.RelatedViewHolder> {
++    private android.content.SharedPreferences layaPrefs;
++    private android.content.SharedPreferences.OnSharedPreferenceChangeListener layaListener;
++    @Override public void onAttachedToRecyclerView(@NonNull RecyclerView recycler) {
++        super.onAttachedToRecyclerView(recycler);
++        layaPrefs = com.harsh.laya.PolicyStore.get(recycler.getContext()).preferences();
++        layaListener = (prefs, key) -> { if (!"status".equals(key)) recycler.post(this::notifyDataSetChanged); };
++        layaPrefs.registerOnSharedPreferenceChangeListener(layaListener);
++    }
++    @Override public void onDetachedFromRecyclerView(@NonNull RecyclerView recycler) {
++        if(layaPrefs != null && layaListener != null) layaPrefs.unregisterOnSharedPreferenceChangeListener(layaListener);
++        layaListener = null;
++        super.onDetachedFromRecyclerView(recycler);
++    }
++
+ 
+     public interface OnRelatedClickListener {
+         /**
+@@ -196,6 +210,7 @@
+             bindBadge(video, isCurrent);
+             bindProgress(video);
+             bindThumbnail(context, video);
++            com.harsh.laya.FilteredCard.bind(itemView, mThumbnail, mTitle, "video:" + video.videoId, video.getTitle(), video.getAuthor());
+         }
+ 
+         private void bindBadge(Video video, boolean isCurrent) {
