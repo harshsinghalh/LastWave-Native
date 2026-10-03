@@ -192,6 +192,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":youtubeapi"))
     implementation(project(":mediaserviceinterfaces"))
+    implementation(project(":sharedutils"))
     implementation("io.reactivex.rxjava3:rxjava:3.1.12")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-rx3:1.11.0")
     implementation("androidx.media3:media3-ui:1.10.1")
