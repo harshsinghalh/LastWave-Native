@@ -72,11 +72,14 @@ try:
     feed = next((n for n in tree.iter("node") if n.get("text", "").lower() == "feed"), None)
     assert feed is not None, "LastWave Feed tab missing"
     tap(feed)
-    _, settings = wait_for("Settings", "main")
+    wait_for("Home", "main-music")
     screenshot("main")
-    checks.append("LastWave main shell renders")
-    tap(settings)
-    _, controls = wait_for("Laya Feed Control", "settings")
+    checks.append("LastWave music shell and video tab render")
+    tree = snapshot("main-music-navigation")
+    videos = next((n for n in tree.iter("node") if n.get("text", "").lower() == "videos"), None)
+    assert videos is not None, "Videos tab missing"
+    tap(videos)
+    _, controls = wait_for("Feed controls", "video-controls-entry")
     tap(controls)
     tree, label = wait_for("Filter videos and comments", "laya-controls")
     screenshot("laya-controls")
@@ -92,7 +95,7 @@ try:
     tap(min(switches, key=lambda pair: pair[0])[1])
     assert policy()["enabled"] is False, "Toggle was not persisted"
     adb("shell", "input", "keyevent", "4")
-    _, controls = wait_for("Laya Feed Control", "settings-return")
+    _, controls = wait_for("Feed controls", "settings-return")
     tap(controls)
     wait_for("Filter videos and comments", "laya-reopened")
     assert policy()["enabled"] is False, "Toggle changed on reopening settings"
