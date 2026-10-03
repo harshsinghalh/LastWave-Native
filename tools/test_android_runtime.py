@@ -110,7 +110,9 @@ finally:
     screenshot("final-state")
     process = adb("shell", "pidof", PACKAGE).strip()
     if process:
-        (OUT / "application.log").write_text(adb("logcat", "-d", "--pid=" + process.split()[0]))
+        application_log = adb("logcat", "-d", "--pid=" + process.split()[0])
+        (OUT / "application.log").write_text(application_log)
+        assert "GlobalPreferences isn't initialized" not in application_log, "NewTube media engine context was not initialized"
     (OUT / "crash.log").write_text(adb("logcat", "-b", "crash", "-d"))
     (OUT / "report.json").write_text(json.dumps({"completed_checks": checks}, indent=2))
 

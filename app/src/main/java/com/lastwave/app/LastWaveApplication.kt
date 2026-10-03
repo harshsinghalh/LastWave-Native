@@ -49,6 +49,11 @@ class LastWaveApplication : com.newtube.mobile.MobileMainApplication(), ImageLoa
     }
 
     override fun onCreate() {
+        // LastWave replaces NewTube's SplashActivity. Initialize the media
+        // engine's context/auth store before MobileMainApplication starts its
+        // network warmups, rather than relying on SplashPresenter to do it.
+        com.liskovsoft.sharedutils.prefs.GlobalPreferences.instance(this)
+        com.liskovsoft.sharedutils.rx.RxHelper.setupGlobalErrorHandler()
         super.onCreate()
         StartupTrail.mark("app.onCreate.start")
         // Sync per-app locale (Settings -> Language) before any UI is drawn.
