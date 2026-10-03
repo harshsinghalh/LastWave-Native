@@ -33,3 +33,5 @@ This preview does not scan video frames or audio, and model decisions can be wro
 See `../backend/README.md` for deployment and `../verification/` for the recorded checks.
 
 Saving a service address now checks `/healthz` off the UI thread and requires a ready Laya engine with both English and multilingual models. The readiness request sends no content metadata. Content and prompt requests require consent and do not follow redirects to another address.
+
+The merged app preserves NewTube's cleartext transport setting for local TV discovery (DIAL devices advertise HTTP endpoints). Laya service addresses are separately validated as HTTPS and are checked again before every request; metadata requests never follow redirects. Physical-TV discovery and playback still require device testing. Feed-request generations are separate from policy generations, so changing a filter during a request does not discard its returned videos.

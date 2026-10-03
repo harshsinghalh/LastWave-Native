@@ -83,7 +83,7 @@ public final class LayaClient {
     /** Readiness sends no video, comment or prompt metadata. */
     public void checkConnection() throws Exception {
         if(store.endpoint().isBlank()) throw new IllegalStateException("Enter your Laya HTTPS address first");
-        Request request=new Request.Builder().url(store.endpoint()+"/healthz").get().build();
+        Request request=new Request.Builder().url(ServiceAddress.normalize(store.endpoint())+"/healthz").get().build();
         try(Response response=http.newCall(request).execute()) {
             if(!response.isSuccessful()||response.body()==null) throw new java.io.IOException("Laya readiness response "+response.code());
             JSONObject body=new JSONObject(response.body().string());
@@ -94,7 +94,7 @@ public final class LayaClient {
 
     public JSONObject post(String path,JSONObject payload) throws Exception {
         if(!store.consent()||store.endpoint().isBlank()) throw new IllegalStateException("Connect your Laya service and allow metadata processing first");
-        Request request=new Request.Builder().url(store.endpoint()+path).post(RequestBody.create(payload.toString(),MediaType.get("application/json"))).build();
+        Request request=new Request.Builder().url(ServiceAddress.normalize(store.endpoint())+path).post(RequestBody.create(payload.toString(),MediaType.get("application/json"))).build();
         try(Response response=http.newCall(request).execute()) {
             if(!response.isSuccessful()||response.body()==null) throw new java.io.IOException("Laya service response "+response.code());
             return new JSONObject(response.body().string());

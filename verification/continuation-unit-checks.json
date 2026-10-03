@@ -1,12 +1,13 @@
 {
   "policy_tests": {
-    "total": 13,
-    "passed": 13,
+    "total": 16,
+    "passed": 16,
     "failed": 0,
     "scope": [
       "local content rules",
       "offline prompt commands",
-      "Laya readiness response contract"
+      "Laya readiness response contract",
+      "HTTPS service address validation independently of local casting transport"
     ]
   },
   "backend_contract_tests": {

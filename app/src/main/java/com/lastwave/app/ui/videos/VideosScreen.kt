@@ -56,7 +56,7 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
     val decisions = _decisions.asStateFlow()
     private var groups: List<MediaGroup> = emptyList()
     private var generation = 0
-    private var loadedQuery = ""
+    private var contentGeneration = 0
     private val client = LayaClient.get(context)
     private val store = PolicyStore.get(context)
     private val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -71,17 +71,20 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
         if (_busy.value) return
         _busy.value = true
         _error.value = null
-        val version = ++generation
-        loadedQuery = query
+        val version = ++contentGeneration
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
                     val service = YouTubeServiceManager.instance().contentService
                     if (query.isBlank()) service.home else service.getSearch(query)
                 }
-                groups = result?.filterNotNull().orEmpty()
-                val incoming = playableVideos(groups)
-                if (version == generation) { _videos.value = incoming; _decisions.value = emptyMap(); evaluate() }
+                if (version == contentGeneration) {
+                    groups = result?.filterNotNull().orEmpty()
+                    generation++
+                    _videos.value = playableVideos(groups)
+                    _decisions.value = emptyMap()
+                    evaluate()
+                }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { _error.value = "YouTube could not load. Check your connection and try again." }
             finally { _busy.value = false }
@@ -92,11 +95,11 @@ class VideosViewModel @Inject constructor(@ApplicationContext private val contex
         val candidates = groups.filter { !it.nextPageKey.isNullOrBlank() }
         if (candidates.isEmpty()) return
         _busy.value = true
-        val version = generation
+        val version = contentGeneration
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) { candidates.mapNotNull { YouTubeServiceManager.instance().contentService.continueGroup(it) } }
-                if(version == generation) {
+                if(version == contentGeneration) {
                     groups = result
                     _videos.value = (_videos.value + playableVideos(result)).distinctBy { it.videoId }
                     evaluate()

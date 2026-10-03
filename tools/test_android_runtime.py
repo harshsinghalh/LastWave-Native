@@ -86,6 +86,17 @@ def enter_text(node, value):
     adb("shell", "input", "text", value.replace(" ", "%s"))
     adb("shell", "input", "keyevent", "4")
 
+def switch_by_label(tree, label):
+    y = list(map(int, re.findall(r"\d+", label.get("bounds"))))
+    center = (y[1]+y[3])//2
+    switches = []
+    for node in tree.iter("node"):
+        bounds = list(map(int, re.findall(r"\d+", node.get("bounds", ""))))
+        if node.get("checkable") == "true" and len(bounds) == 4:
+            switches.append((abs((bounds[1]+bounds[3])//2-center), node))
+    assert switches, "No switch beside the requested setting"
+    return min(switches, key=lambda pair: pair[0])[1]
+
 try:
     adb("install", "-r", "-t", sys.argv[1])
     adb("logcat", "-c")
@@ -161,6 +172,24 @@ try:
     wait_for_exact("Playback", "video-playback-settings")
     wait_for_exact("Video settings", "video-playback-settings")
     screenshot("video-playback-settings")
+    _, ending = wait_for_exact("When a video ends", "playback-choice-entry")
+    tap(ending)
+    _, repeat = wait_for_exact("Repeat the video", "playback-choice-dialog")
+    tap(repeat)
+    tree, _ = wait_for_exact("Repeat the video", "playback-choice-saved")
+    assert find(tree, "Cancel") is None, "Choice dialog did not close after selection"
+    tree, seek_label = scroll_for("Swipe to seek", "playback-gesture-switch")
+    tap(switch_by_label(tree, seek_label))
+    prefs = ET.fromstring(adb("shell", "run-as", PACKAGE, "cat", "shared_prefs/newtube_gestures.xml"))
+    assert prefs.find("boolean[@name='seek_swipe']").get("value") == "false", "NewTube gesture preference was not persisted"
+    screenshot("playback-gesture-saved")
+    adb("shell", "input", "keyevent", "4")
+    _, playback = scroll_for("Playback", "playback-reopen-entry")
+    tap(playback)
+    wait_for_exact("Repeat the video", "playback-choice-reopened")
+    tree, seek_label = scroll_for("Swipe to seek", "playback-gesture-reopened")
+    assert switch_by_label(tree, seek_label).get("checked") == "false", "Reopened gesture switch lost the saved preference"
+    checks.append("LastWave choice dialogs and switches persist the original NewTube playback preferences")
     adb("shell", "input", "keyevent", "4")
     _, search = wait_for("Search video settings", "video-settings-search-entry")
     tap(search)

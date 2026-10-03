@@ -664,6 +664,16 @@ fun SettingsScreen(
                             )
                         }
                         item {
+                            SettingsActionCard(
+                                icon = Icons.Filled.PlayCircle,
+                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                title = "Video settings",
+                                subtitle = "Playback, quality, captions and YouTube account",
+                                onClick = { context.startActivity(android.content.Intent(context, com.newtube.mobile.ui.settings.MobileSettingsActivity::class.java)) },
+                            )
+                        }
+                        item {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 SectionLabel("Services & Addons")
                                 SettingsGroup(rowCount = 2) { index, position ->

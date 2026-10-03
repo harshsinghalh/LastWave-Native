@@ -32,13 +32,7 @@ public final class PolicyStore {
     public void save(JSONObject policy) { prefs.edit().putString("policy",policy.toString()).apply(); }
     public String endpoint() { return prefs.getString("endpoint",""); }
     public void setEndpoint(String url) {
-        url = url.trim();
-        if(!url.isBlank()) {
-            java.net.URI parsed=java.net.URI.create(url);
-            if(!"https".equalsIgnoreCase(parsed.getScheme()) || parsed.getHost()==null || parsed.getUserInfo()!=null || parsed.getQuery()!=null || parsed.getFragment()!=null)
-                throw new IllegalArgumentException("Enter an HTTPS service address without credentials, query or fragment");
-        }
-        String normalized=url.replaceAll("/+$", "");
+        String normalized=ServiceAddress.normalize(url);
         SharedPreferences.Editor edit=prefs.edit().putString("endpoint",normalized);
         if(!normalized.equals(endpoint())) edit.remove("status");
         edit.apply();
