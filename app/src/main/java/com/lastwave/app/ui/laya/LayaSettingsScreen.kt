@@ -37,6 +37,7 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
     DisposableEffect(store) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             status = store.status()
+            if (key == "policy") policy = store.snapshot()
         }
         store.preferences().registerOnSharedPreferenceChangeListener(listener)
         onDispose { store.preferences().unregisterOnSharedPreferenceChangeListener(listener) }
@@ -84,13 +85,18 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
                                 store.save(policy)
                                 status = "Controls updated on this device. Review the switches above."
                             } else {
+                                store.setEndpoint(endpoint)
+                                val submitted = store.requestState()
+                                val submittedPrompt = prompt
                                 val result = withContext(Dispatchers.IO) {
-                                    store.setEndpoint(endpoint)
-                                    LayaClient.get(context).post("/v1/policy/compile", JSONObject().put("prompt", prompt).put("policy", policy))
+                                    LayaClient.get(context).compilePrompt(submittedPrompt, submitted)
                                 }
-                                policy = result.getJSONObject("policy")
-                                store.save(policy)
-                                status = "Prompt applied. Review the controls above."
+                                if (store.saveIfUnchanged(result.getJSONObject("policy"), submitted)) {
+                                    policy = store.snapshot()
+                                    status = "Prompt applied. Review the controls above."
+                                } else {
+                                    status = "Your controls changed while the prompt was loading. Apply it again to use the latest settings."
+                                }
                             }
                             promptMessage = status
                         } catch (e: CancellationException) { throw e

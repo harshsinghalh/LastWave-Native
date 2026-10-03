@@ -17,6 +17,8 @@ Caddy obtains HTTPS certificates and forwards only to the private inference cont
 
 The provided Compose deployment has no user account system. Its request size and IP rate limits suit a preview; capacity, authentication and operational monitoring need to be configured for a public production service. Domain and server access were not provided in this session, so this repository does not claim an existing deployed URL.
 
+Backend cache entries incorporate active curated evidence. Removing, changing or expiring an evidence record prevents a fresh API request from reusing the old decision. Android caches decisions for at most five minutes and checks evidence expiry before reusing a cached result. These checks do not push updates to already displayed rows; they run when a row is evaluated again.
+
 ## API and verification
 
 - `GET /healthz`: readiness after both checkpoints load.

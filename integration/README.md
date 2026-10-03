@@ -4,6 +4,8 @@ The application keeps LastWave-Native's original Compose frontend, music player,
 
 One `laya-policy` module owns persistent preferences, local rules, the bounded HTTP queue, result cache, reasons and session reveals. Video feed items, native recommendations, comments and chat use that module. `backend/service.py` owns actual Laya inference and prompt compilation. No model weights or Python runtime are included in the APK.
 
+Every metadata request captures its policy, destination and consent. Changed preferences cancel obsolete work while retaining checks already queued for the current state. Late responses cannot overwrite current row decisions or newer prompt edits. Shared-client HTTPS integration tests exercise these paths using Android preferences and a local service fixture; this fixture does not measure Laya model accuracy.
+
 ## Build
 
 Use JDK 21, Android platform 37, build tools 37.0.0, NDK 29.0.14206865 and CMake 3.22.1.
