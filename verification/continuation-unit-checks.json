@@ -1,24 +1,40 @@
 {
+  "release": "laya-preview-12",
+  "source_commit": "2bbe94c08be46af0f2325d417055624328444429",
+  "workflow_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37148697974",
   "policy_tests": {
-    "total": 16,
-    "passed": 16,
+    "total": 27,
+    "passed": 27,
     "failed": 0,
+    "pure_policy_and_contract_tests": 16,
+    "https_and_android_preferences_integration_tests": 11,
+    "artifact_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37148697974/artifacts/11283391135",
     "scope": [
       "local content rules",
       "offline prompt commands",
-      "Laya readiness response contract",
-      "HTTPS service address validation independently of local casting transport"
+      "readiness and HTTPS address validation",
+      "consent revocation and stale request cancellation",
+      "delayed preference notification ordering",
+      "protection against prompt responses overwriting newer edits",
+      "response identity and redirect rejection",
+      "client evidence cache expiry"
     ]
   },
   "backend_contract_tests": {
-    "total": 20,
-    "passed": 20,
+    "total": 23,
+    "passed": 23,
     "failed": 0,
+    "result_log": "2026-10-03T19:40:47.6653732Z 23 passed in 0.42s",
     "inference": "explicit test double, not model accuracy"
   },
   "inherited_lastwave_tests": {
     "last_recorded_total": 229,
     "last_recorded_passed": 229,
     "rerun_in_this_continuation": false
+  },
+  "real_model_smokes": {
+    "rerun_for_preview_12": false,
+    "earlier_records_retained": true,
+    "sdk_and_model_pins_unchanged": true
   }
 }

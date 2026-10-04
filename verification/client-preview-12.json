@@ -1,0 +1,87 @@
+{
+  "release": "laya-preview-12",
+  "source_commit": "2bbe94c08be46af0f2325d417055624328444429",
+  "workflow_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37148697974",
+  "artifact_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37148697974/artifacts/11283391135",
+  "totals": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "suite": "com.harsh.laya.LayaClientIntegrationTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_cases": [
+        "expiredEvidenceIsNotReusedByTheAndroidCache",
+        "httpsEvaluationUsesSavedPolicyAndCachesTheMatchingItem",
+        "delayedPreferenceNotificationKeepsChecksForTheNewState",
+        "corruptStoredJsonRestoresCompleteDefaults",
+        "revokingConsentCancelsActiveWorkAndPreventsQueuedMetadata",
+        "completedPromptCannotReplaceNewerEdits",
+        "readinessWithoutConsentSendsNoMetadataAndEvaluationStaysLocal",
+        "anotherItemsDecisionCannotHideThisItem",
+        "unchangedPromptSavesAndChangedConsentRejectsIt",
+        "redirectedMetadataIsNotSentToAnotherPath",
+        "preferenceChangeCancelsTheActiveCallAndDropsObsoleteQueuedChecks"
+      ]
+    },
+    {
+      "suite": "com.harsh.laya.LocalPolicyTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_cases": [
+        "obfuscationAndBenignWords",
+        "permanentMetadataSafetySurvivesPause",
+        "canonicalUnicodeAndZeroWidthNormalize",
+        "requiredPhrasesWorkWithoutServiceAndAllowedCreatorsBypassThem",
+        "exclusionWinsAndUsesWholeWords"
+      ]
+    },
+    {
+      "suite": "com.harsh.laya.LocalPromptTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_cases": [
+        "pauseAndResumeKeepTopicsAndPreviousPreference",
+        "anUnknownClauseDoesNotPartiallyChangeThePolicy",
+        "ambiguousOrNegatedCommandsNeedTheService",
+        "pausingStillLeavesTheExplicitMetadataSafetyRule",
+        "multipleControlsAreAppliedTogether"
+      ]
+    },
+    {
+      "suite": "com.harsh.laya.ServiceAddressTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_cases": [
+        "httpsPrefixesAreNormalizedAndCanBeCleared",
+        "localCastingPermissionCannotMakeAMetadataAddressCleartext",
+        "credentialsAndUnrelatedUrlPartsAreRejected"
+      ]
+    },
+    {
+      "suite": "com.harsh.laya.ServiceReadinessTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_cases": [
+        "missingOrMalformedModelListFails",
+        "bothModelsMustBeLoaded",
+        "aDifferentServiceOrUnavailableWeightsCannotPass"
+      ]
+    }
+  ],
+  "inference": "Local HTTPS response fixtures; these tests do not measure model accuracy."
+}
