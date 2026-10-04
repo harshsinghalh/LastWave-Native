@@ -79,6 +79,19 @@ def scroll_for(label, name, attempts=10):
         time.sleep(1)
     raise AssertionError("Could not scroll to: " + label)
 
+def scroll_for_exact(label, name, attempts=10):
+    size = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
+    width, height = size
+    for _ in range(attempts):
+        tree = snapshot(name)
+        node = next((n for n in tree.iter("node") if n.get("text", "").lower() == label.lower()), None)
+        if node is not None:
+            return tree, node
+        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
+            str(width//2), str(int(height*.35)), "400")
+        time.sleep(1)
+    raise AssertionError("Could not scroll to exact label: " + label)
+
 def enter_text(node, value):
     tap(node)
     adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
@@ -226,7 +239,8 @@ try:
     screenshot("appearance-vaso")
     _, style = wait_for("LastWave", "appearance-lastwave-entry")
     tap(style)
-    _, preset = scroll_for("Frosted", "appearance-lastwave-preset")
+    screenshot("appearance-lastwave")
+    _, preset = scroll_for_exact("Frosted", "appearance-lastwave-preset")
     tap(preset)
     scroll_for("LastWave material", "appearance-lastwave-material")
     scroll_for("20 dp", "appearance-lastwave-frost")

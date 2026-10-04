@@ -23,6 +23,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -424,7 +425,7 @@ private fun FloatingNavBar(
         return
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .windowInsetsPadding(
                 WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
@@ -436,6 +437,9 @@ private fun FloatingNavBar(
         // the dock to a narrow rectangle and pushing the FAB over the pill.
         contentAlignment = Alignment.Center,
     ) {
+        val fixedWidth = (68 + (tabs.size - 1) * 48 + (tabs.size - 1) * 6 + 16).dp
+        val satelliteWidth = if (selectedIndex == tabs.indexOf(MainTab.PLAYLISTS)) 66.dp else 0.dp
+        val maxLabelWidth = (maxWidth - fixedWidth - satelliteWidth).coerceIn(0.dp, 100.dp)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -490,6 +494,7 @@ private fun FloatingNavBar(
                             label = androidx.compose.ui.res.stringResource(tab.labelRes),
                             icon = tab.icon(),
                             selected = selectedIndex == index,
+                            maxLabelWidth = maxLabelWidth,
                             onClick = onClick,
                         )
                     }
@@ -550,6 +555,7 @@ private fun FloatingNavItem(
     label: String,
     icon: ImageVector,
     selected: Boolean,
+    maxLabelWidth: Dp,
     onClick: () -> Unit,
 ) {
     val backgroundColor by animateColorAsState(
@@ -595,7 +601,7 @@ private fun FloatingNavItem(
                 modifier = Modifier.size(24.dp),
             )
             AnimatedVisibility(
-                visible = selected,
+                visible = selected && maxLabelWidth >= 40.dp,
                 enter = fadeIn(animationSpec = navSpring()) + expandHorizontally(
                     animationSpec = navSpring(),
                     expandFrom = Alignment.Start,
@@ -619,7 +625,7 @@ private fun FloatingNavItem(
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 100.dp),
+                        modifier = Modifier.widthIn(max = maxLabelWidth),
                     )
                 }
             }
