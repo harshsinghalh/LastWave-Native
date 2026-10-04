@@ -18,7 +18,15 @@ def adb(*arguments):
                           text=True, timeout=120).stdout
 
 def snapshot(name):
-    adb("shell", "uiautomator", "dump", "/sdcard/laya-ui.xml")
+    # A failed/transition-time dump must never reuse a previous screen's XML.
+    for _ in range(3):
+        adb("shell", "rm", "-f", "/sdcard/laya-ui.xml")
+        result = adb("shell", "uiautomator", "dump", "/sdcard/laya-ui.xml")
+        if "dumped to" in result.lower():
+            break
+        time.sleep(1)
+    else:
+        raise AssertionError("Android could not export a fresh UI hierarchy: " + name)
     xml = adb("shell", "cat", "/sdcard/laya-ui.xml")
     (OUT / (name + ".xml")).write_text(xml)
     return ET.fromstring(xml)
@@ -49,6 +57,16 @@ def wait_for(label, name, attempts=12):
             return tree, node
         time.sleep(2)
     raise AssertionError("UI element not visible: " + label)
+
+def wait_for_action(label, name, attempts=12):
+    for _ in range(attempts):
+        tree = snapshot(name)
+        node = next((n for n in tree.iter("node")
+                     if n.get("content-desc", "").lower() == label.lower()), None)
+        if node is not None:
+            return tree, node
+        time.sleep(2)
+    raise AssertionError("Navigation action not visible: " + label)
 
 def wait_for_exact(label, name, attempts=12):
     for _ in range(attempts):
@@ -120,7 +138,7 @@ def reopen_appearance():
                    (n.get("text", "") or n.get("content-desc", "")).lower() == "videos"), None)
     if videos is not None:
         tap(videos)
-    _, studio = wait_for("Appearance studio", "appearance-entry")
+    _, studio = wait_for_action("Appearance studio", "appearance-entry")
     tap(studio)
     wait_for("Make it yours", "appearance-studio")
 
@@ -156,7 +174,7 @@ try:
     videos = next((n for n in tree.iter("node") if (n.get("text", "") or n.get("content-desc", "")).lower() == "videos"), None)
     assert videos is not None, "Videos tab missing"
     tap(videos)
-    _, controls = wait_for("Feed controls", "video-controls-entry")
+    _, controls = wait_for_action("Feed controls", "video-controls-entry")
     tap(controls)
     tree, label = wait_for("Filter videos and comments", "laya-controls")
     screenshot("laya-controls")
@@ -172,7 +190,7 @@ try:
     tap(min(switches, key=lambda pair: pair[0])[1])
     assert policy()["enabled"] is False, "Toggle was not persisted"
     adb("shell", "input", "keyevent", "4")
-    _, controls = wait_for("Feed controls", "settings-return")
+    _, controls = wait_for_action("Feed controls", "settings-return")
     tap(controls)
     wait_for("Filter videos and comments", "laya-reopened")
     assert policy()["enabled"] is False, "Toggle changed on reopening settings"
@@ -191,7 +209,7 @@ try:
     checks.append("Prompt commands enable and disable filtering without a service URL")
     screenshot("offline-prompt")
     adb("shell", "input", "keyevent", "4")
-    wait_for("Feed controls", "video-feed")
+    wait_for_action("Feed controls", "video-feed")
     screenshot("video-feed")
     tree = snapshot("video-settings-entry")
     settings = find(tree, "Video settings")

@@ -13,3 +13,5 @@ Reduced motion removes glass press deformation and navigation-selection springs/
 Capability gates retain safe surfaces on Android 10/11, low-RAM or non-accelerated devices. Android 12 has blur and highlights; cached AGSL optical refraction is available on Android 13+. No effect is required for settings, playback controls or navigation to remain usable.
 
 The change concentrates on appearance. Existing content policies, inference and backend deployment are unchanged. It does not claim that every native NewTube Android View panel has been converted into Compose, or that all upstream device features were tested.
+
+UI verification waits for navigation action accessibility descriptions, rather than similarly named settings headings, and removes each prior hierarchy file before export. This prevents a stale or transitioning window from directing a tap into the following screen.
