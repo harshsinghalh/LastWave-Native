@@ -84,13 +84,19 @@ def policy():
     root = ET.fromstring(xml)
     return json.loads(root.find("string[@name='policy']").text)
 
+def on_screen(node, height):
+    bounds = list(map(int, re.findall(r"\d+", node.get("bounds", ""))))
+    # Compose exports partially clipped nodes. Do not tap text below the
+    # usable viewport or over Android's navigation bar.
+    return len(bounds) == 4 and bounds[3] > bounds[1] and .12 * height < (bounds[1] + bounds[3]) / 2 < .82 * height
+
 def scroll_for(label, name, attempts=10):
     size = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
     width, height = size
     for _ in range(attempts):
         tree = snapshot(name)
         node = find(tree, label)
-        if node is not None:
+        if node is not None and on_screen(node, height):
             return tree, node
         adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
             str(width//2), str(int(height*.35)), "400")
@@ -103,19 +109,44 @@ def scroll_for_exact(label, name, attempts=10):
     for _ in range(attempts):
         tree = snapshot(name)
         node = next((n for n in tree.iter("node") if n.get("text", "").lower() == label.lower()), None)
-        if node is not None:
+        if node is not None and on_screen(node, height):
             return tree, node
         adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
             str(width//2), str(int(height*.35)), "400")
         time.sleep(1)
     raise AssertionError("Could not scroll to exact label: " + label)
 
+def scroll_for_input(label, name, attempts=10):
+    width, height = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
+    for _ in range(attempts):
+        tree = snapshot(name)
+        field = next((n for n in tree.iter("node")
+                      if n.get("class") == "android.widget.EditText"
+                      and find(n, label) is not None), None)
+        if field is not None and on_screen(field, height):
+            return tree, field
+        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
+            str(width//2), str(int(height*.35)), "400")
+        time.sleep(1)
+    raise AssertionError("Could not scroll to input: " + label)
+
 def enter_text(node, value):
+    assert node.get("class") == "android.widget.EditText", "Text entry requires the actual input, not its label"
     tap(node)
+    tree = snapshot("text-input-focus")
+    assert any(n.get("class") == "android.widget.EditText" and n.get("focused") == "true"
+               for n in tree.iter("node")), "The text input did not receive focus"
     adb("shell", "input", "keyevent", "KEYCODE_MOVE_END")
     adb("shell", "input", "keyevent", *("KEYCODE_DEL" for _ in range(64)))
     adb("shell", "input", "text", value.replace(" ", "%s"))
-    adb("shell", "input", "keyevent", "4")
+    tree = snapshot("text-input-value")
+    assert any(n.get("class") == "android.widget.EditText" and n.get("text") == value
+               for n in tree.iter("node")), "Text entry did not update the requested input"
+    # A BACK event without an open keyboard would leave the settings activity.
+    ime = adb("shell", "dumpsys", "input_method")
+    if "mInputShown=true" in ime or "mIsInputViewShown=true" in ime:
+        adb("shell", "input", "keyevent", "4")
+        time.sleep(1)
 
 def switch_by_label(tree, label):
     y = list(map(int, re.findall(r"\d+", label.get("bounds"))))
@@ -196,12 +227,12 @@ try:
     assert policy()["enabled"] is False, "Toggle changed on reopening settings"
     checks.append("Laya settings render and toggle persists across reopening")
     screenshot("laya-reopened")
-    _, prompt = scroll_for("Your prompt", "offline-prompt")
+    _, prompt = scroll_for_input("Your prompt", "offline-prompt")
     enter_text(prompt, "enable filters")
     _, apply = scroll_for("Apply prompt", "offline-prompt-apply")
     tap(apply)
     assert policy()["enabled"] is True, "Offline enable prompt did not update the shared policy"
-    tree, prompt = scroll_for("Your prompt", "offline-prompt-enabled")
+    tree, prompt = scroll_for_input("Your prompt", "offline-prompt-enabled")
     enter_text(prompt, "disable filters")
     _, apply = scroll_for("Apply prompt", "offline-prompt-disable")
     tap(apply)

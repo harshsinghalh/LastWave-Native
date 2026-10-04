@@ -48,7 +48,8 @@ fun LayaSettingsScreen(onBack: () -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         ExpressiveHeader("Laya Feed Control", subtitle = "Your feed, your preferences", onBack = onBack)
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()
+            .verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             LiquidGlassCard {
                 Text("Feed controls", style = MaterialTheme.typography.titleLarge)
                 Text(status, style = MaterialTheme.typography.bodySmall)
