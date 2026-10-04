@@ -12,6 +12,25 @@ namespace {
 
 constexpr double kPi = 3.1415926535897932384626433832795;
 
+// DJ Energy v4.5 staged concert envelope.
+// A genuine three-second look-ahead is created in the decoded Media3 PCM
+// path. The levels below are linear volume ratios, not dB:
+//   T-3..T-2 = 70% (30% reduction)
+//   T-2..T-1 = 40% (60% reduction)
+//   T-1..T   = 10% (90% reduction)
+//   T onward = 100% normal level
+constexpr double kDjTrueLookAheadSeconds = 3.0;
+constexpr double kDjStageSeconds = 1.0;
+constexpr double kDjAnalysisBlockSeconds = 0.020;
+constexpr double kDjImpactCooldownSeconds = 5.0;
+constexpr float kDjStageOneGain = 0.70F;
+constexpr float kDjStageTwoGain = 0.40F;
+constexpr float kDjStageThreeGain = 0.10F;
+constexpr float kDjStrongSurgeDb = 4.5F;
+constexpr float kDjLoudSurgeDb = 2.5F;
+constexpr double kDjDuckRampSeconds = 0.010;
+constexpr double kDjRestoreRampSeconds = 0.006;
+
 soxr_t asSoxr(void* handle) noexcept {
     return static_cast<soxr_t>(handle);
 }
@@ -413,6 +432,14 @@ void AudioEngine::setEqualizer(
     mediaDsp_.setEqualizer(enabled, gainsDb, gainCount);
 }
 
+void AudioEngine::setDjEnergyEnabled(bool enabled) noexcept {
+    // The old short-buffer DJ rider intentionally stays disabled. The exact
+    // staged T-3s envelope is owned by the Media3 look-ahead queue below.
+    mediaDjEnergyEnabled_.store(enabled, std::memory_order_release);
+    oboeDsp_.setDjEnergyEnabled(false);
+    mediaDsp_.setDjEnergyEnabled(false);
+}
+
 bool AudioEngine::configureMediaProcessor(
     std::int32_t inputSampleRate,
     std::int32_t outputSampleRate,
@@ -433,7 +460,9 @@ bool AudioEngine::configureMediaProcessor(
     // Resample first, then run tone/peak processing at the actual output rate
     // so sinc overshoot is included in final peak protection.
     mediaDsp_.setPeakProtectionEnabled(true);
+    mediaDsp_.setDjEnergyEnabled(false);
     mediaDsp_.configure(outputSampleRate);
+    resetMediaDjLookaheadLocked();
     return configureMediaResamplerLocked();
 }
 
@@ -459,6 +488,25 @@ bool AudioEngine::processMediaPcm(
     if (bytesPerFrame == 0) return false;
 
     if (mediaResampler_ == nullptr && mediaInputSampleRate_ == mediaOutputSampleRate_) {
+        if (mediaDjSessionLookahead_) {
+            mediaDjProcessScratch_.resize(frameCount * channels);
+            if (!PcmConverter::toFloat(
+                    pcm,
+                    frameCount * channels,
+                    format,
+                    mediaDjProcessScratch_.data())) {
+                return false;
+            }
+            mediaDsp_.process(
+                mediaDjProcessScratch_.data(),
+                static_cast<std::int32_t>(frameCount),
+                mediaChannelCount_);
+            appendMediaDjFramesLocked(mediaDjProcessScratch_.data(), frameCount);
+            outputFrameCount = drainMediaDjFramesLocked(
+                output, outputCapacityFrames, false);
+            return true;
+        }
+
         if (outputCapacityFrames < frameCount ||
             !PcmConverter::toFloat(pcm, frameCount * channels, format, output)) {
             return false;
@@ -468,6 +516,10 @@ bool AudioEngine::processMediaPcm(
         return true;
     }
     if (mediaResampler_ == nullptr) return false;
+
+    if (mediaDjSessionLookahead_) {
+        mediaDjProcessScratch_.resize(kMaxResampledFrames * channels);
+    }
 
     const auto* inputBytes = static_cast<const std::uint8_t*>(pcm);
     std::size_t consumedFrames = 0;
@@ -482,38 +534,66 @@ bool AudioEngine::processMediaPcm(
                 mediaScratch_.data())) {
             return false;
         }
+
         std::size_t chunkConsumed = 0;
         while (chunkConsumed < chunkFrames) {
             std::size_t inputDone = 0;
             std::size_t outputDone = 0;
-            const std::size_t remainingOutput = outputCapacityFrames - outputFrameCount;
-            if (remainingOutput == 0) break;
+            float* destination = nullptr;
+            std::size_t destinationCapacity = 0;
+
+            if (mediaDjSessionLookahead_) {
+                destination = mediaDjProcessScratch_.data();
+                destinationCapacity = kMaxResampledFrames;
+            } else {
+                const std::size_t remainingOutput =
+                    outputCapacityFrames - outputFrameCount;
+                if (remainingOutput == 0) break;
+                destination =
+                    output + outputFrameCount * channels;
+                destinationCapacity = remainingOutput;
+            }
+
             const soxr_error_t error = soxr_process(
                 asSoxr(mediaResampler_),
                 mediaScratch_.data() + chunkConsumed * channels,
                 chunkFrames - chunkConsumed,
                 &inputDone,
-                output + outputFrameCount * channels,
-                remainingOutput,
+                destination,
+                destinationCapacity,
                 &outputDone);
             if (error != nullptr) return false;
+
             if (outputDone > 0) {
                 mediaDsp_.process(
-                    output + outputFrameCount * channels,
+                    destination,
                     static_cast<std::int32_t>(outputDone),
                     mediaChannelCount_);
-                outputFrameCount += outputDone;
+                if (mediaDjSessionLookahead_) {
+                    appendMediaDjFramesLocked(destination, outputDone);
+                } else {
+                    outputFrameCount += outputDone;
+                }
             }
-            if (inputDone == 0 && outputDone == 0) {
-                // Soxr completed buffering for this pass
-                break;
-            }
+
+            if (inputDone == 0 && outputDone == 0) break;
             chunkConsumed += inputDone;
             consumedFrames += inputDone;
         }
-        if (chunkConsumed < chunkFrames && outputCapacityFrames == outputFrameCount) {
+
+        if (!mediaDjSessionLookahead_ &&
+            chunkConsumed < chunkFrames &&
+            outputCapacityFrames == outputFrameCount) {
             break;
         }
+        if (mediaDjSessionLookahead_ && chunkConsumed < chunkFrames) {
+            return false;
+        }
+    }
+
+    if (mediaDjSessionLookahead_) {
+        outputFrameCount = drainMediaDjFramesLocked(
+            output, outputCapacityFrames, false);
     }
     return true;
 }
@@ -525,8 +605,39 @@ bool AudioEngine::flushMediaProcessor(
     outputFrameCount = 0;
     if (output == nullptr || outputCapacityFrames == 0) return false;
     std::lock_guard<std::mutex> processorLock(mediaProcessorMutex_);
-    if (mediaResampler_ == nullptr) return true;
     const std::size_t channels = static_cast<std::size_t>(mediaChannelCount_);
+    if (channels == 0) return false;
+
+    if (mediaDjSessionLookahead_) {
+        mediaDjProcessScratch_.resize(kMaxResampledFrames * channels);
+        if (mediaResampler_ != nullptr) {
+            while (true) {
+                std::size_t outputDone = 0;
+                const soxr_error_t error = soxr_process(
+                    asSoxr(mediaResampler_),
+                    nullptr,
+                    0,
+                    nullptr,
+                    mediaDjProcessScratch_.data(),
+                    kMaxResampledFrames,
+                    &outputDone);
+                if (error != nullptr) return false;
+                if (outputDone == 0) break;
+                mediaDsp_.process(
+                    mediaDjProcessScratch_.data(),
+                    static_cast<std::int32_t>(outputDone),
+                    mediaChannelCount_);
+                appendMediaDjFramesLocked(
+                    mediaDjProcessScratch_.data(), outputDone);
+            }
+        }
+
+        outputFrameCount = drainMediaDjFramesLocked(
+            output, outputCapacityFrames, true);
+        return mediaDjBufferedFrames_ == 0;
+    }
+
+    if (mediaResampler_ == nullptr) return true;
     while (outputFrameCount < outputCapacityFrames) {
         std::size_t outputDone = 0;
         const soxr_error_t error = soxr_process(
@@ -551,11 +662,279 @@ bool AudioEngine::flushMediaProcessor(
 void AudioEngine::resetMediaProcessor() {
     std::lock_guard<std::mutex> processorLock(mediaProcessorMutex_);
     mediaDsp_.reset();
+    mediaDsp_.setDjEnergyEnabled(false);
     if (mediaResampler_ != nullptr) {
         soxr_delete(asSoxr(mediaResampler_));
         mediaResampler_ = nullptr;
     }
+    resetMediaDjLookaheadLocked();
     (void) configureMediaResamplerLocked();
+}
+
+void AudioEngine::resetMediaDjLookaheadLocked() noexcept {
+    mediaDjSessionLookahead_ =
+        mediaDjEnergyEnabled_.load(std::memory_order_acquire) &&
+        mediaOutputSampleRate_ > 0 &&
+        mediaChannelCount_ > 0;
+    mediaDjLookaheadFrames_ = mediaDjSessionLookahead_
+        ? static_cast<std::size_t>(std::llround(
+            static_cast<double>(mediaOutputSampleRate_) * kDjTrueLookAheadSeconds))
+        : 0U;
+    mediaDjAnalysisBlockFrames_ = mediaDjSessionLookahead_
+        ? std::max<std::size_t>(
+            1U,
+            static_cast<std::size_t>(std::llround(
+                static_cast<double>(mediaOutputSampleRate_) *
+                kDjAnalysisBlockSeconds)))
+        : 0U;
+
+    mediaDjBufferCapacityFrames_ = 0;
+    mediaDjReadFrame_ = 0;
+    mediaDjWriteFrame_ = 0;
+    mediaDjBufferedFrames_ = 0;
+    mediaDjAbsoluteReadFrame_ = 0;
+    mediaDjAbsoluteWriteFrame_ = 0;
+    mediaDjImpactFrames_.clear();
+    mediaDjLastImpactFrame_ = 0;
+    mediaDjAnalysisFrames_ = 0;
+    mediaDjFullPowerSum_ = 0.0;
+    mediaDjMidPowerSum_ = 0.0;
+    mediaDjSidePowerSum_ = 0.0;
+    mediaDjDiffPowerSum_ = 0.0;
+    mediaDjPreviousMid_ = 0.0F;
+    mediaDjBaselineDb_ = -60.0F;
+    mediaDjBaselineReady_ = false;
+    mediaDjEnvelopeGain_ = 1.0F;
+    mediaDjLookaheadBuffer_.clear();
+
+    if (mediaDjSessionLookahead_) {
+        ensureMediaDjCapacityLocked(
+            mediaDjLookaheadFrames_ + kMaxResampledFrames * 2U);
+    }
+}
+
+void AudioEngine::ensureMediaDjCapacityLocked(std::size_t requiredFrames) {
+    if (!mediaDjSessionLookahead_ || mediaChannelCount_ <= 0 ||
+        requiredFrames <= mediaDjBufferCapacityFrames_) {
+        return;
+    }
+    const std::size_t channels = static_cast<std::size_t>(mediaChannelCount_);
+    const std::size_t newCapacity = std::max(
+        requiredFrames,
+        std::max<std::size_t>(
+            mediaDjBufferCapacityFrames_ * 2U,
+            mediaDjLookaheadFrames_ + kMaxResampledFrames * 2U));
+    std::vector<float> replacement(newCapacity * channels, 0.0F);
+
+    if (mediaDjBufferCapacityFrames_ > 0) {
+        for (std::size_t frame = 0; frame < mediaDjBufferedFrames_; ++frame) {
+            const std::size_t oldFrame =
+                (mediaDjReadFrame_ + frame) % mediaDjBufferCapacityFrames_;
+            std::memcpy(
+                replacement.data() + frame * channels,
+                mediaDjLookaheadBuffer_.data() + oldFrame * channels,
+                channels * sizeof(float));
+        }
+    }
+
+    mediaDjLookaheadBuffer_.swap(replacement);
+    mediaDjBufferCapacityFrames_ = newCapacity;
+    mediaDjReadFrame_ = 0;
+    mediaDjWriteFrame_ = mediaDjBufferedFrames_;
+}
+
+void AudioEngine::analyzeMediaDjFrameLocked(
+    float left,
+    float right,
+    std::uint64_t absoluteFrame) {
+    if (!mediaDjSessionLookahead_ || mediaDjAnalysisBlockFrames_ == 0) return;
+
+    const float mid = 0.5F * (left + right);
+    const float side = 0.5F * (left - right);
+    const float diff = mid - mediaDjPreviousMid_;
+    mediaDjPreviousMid_ = mid;
+
+    mediaDjFullPowerSum_ +=
+        0.5 * (static_cast<double>(left) * left +
+               static_cast<double>(right) * right);
+    mediaDjMidPowerSum_ += static_cast<double>(mid) * mid;
+    mediaDjSidePowerSum_ += static_cast<double>(side) * side;
+    mediaDjDiffPowerSum_ += static_cast<double>(diff) * diff;
+    ++mediaDjAnalysisFrames_;
+
+    if (mediaDjAnalysisFrames_ < mediaDjAnalysisBlockFrames_) return;
+
+    constexpr double epsilon = 1.0e-12;
+    const double divisor = static_cast<double>(mediaDjAnalysisFrames_);
+    const double fullPower = std::max(mediaDjFullPowerSum_ / divisor, epsilon);
+    const double midPower = mediaDjMidPowerSum_ / divisor;
+    const double sidePower = mediaDjSidePowerSum_ / divisor;
+    const double diffPower = mediaDjDiffPowerSum_ / divisor;
+    const float blockDb =
+        static_cast<float>(10.0 * std::log10(fullPower));
+    const float centerRatio = static_cast<float>(
+        midPower / std::max(midPower + sidePower, epsilon));
+    const float transientRatio = static_cast<float>(
+        diffPower / std::max(fullPower, epsilon));
+
+    if (!mediaDjBaselineReady_) {
+        mediaDjBaselineDb_ = blockDb;
+        mediaDjBaselineReady_ = true;
+    } else {
+        const float surgeDb = blockDb - mediaDjBaselineDb_;
+        const bool beatOrVocalPresence =
+            centerRatio >= 0.52F || transientRatio >= 0.08F;
+        const bool strongRise =
+            surgeDb >= kDjStrongSurgeDb &&
+            blockDb > -26.0F &&
+            beatOrVocalPresence;
+        const bool loudRise =
+            surgeDb >= kDjLoudSurgeDb &&
+            blockDb > -11.0F;
+
+        const std::uint64_t cooldownFrames = static_cast<std::uint64_t>(
+            std::llround(
+                static_cast<double>(mediaOutputSampleRate_) *
+                kDjImpactCooldownSeconds));
+        const bool outsideCooldown =
+            mediaDjLastImpactFrame_ == 0 ||
+            absoluteFrame >= mediaDjLastImpactFrame_ + cooldownFrames;
+
+        if (outsideCooldown && (strongRise || loudRise)) {
+            mediaDjImpactFrames_.push_back(absoluteFrame);
+            mediaDjLastImpactFrame_ = absoluteFrame;
+        }
+
+        // Slow baseline: loud hits stay visible as rises instead of instantly
+        // teaching the baseline that the chorus is normal.
+        const float baselineWeight =
+            surgeDb > kDjStrongSurgeDb ? 0.015F : 0.045F;
+        mediaDjBaselineDb_ +=
+            (blockDb - mediaDjBaselineDb_) * baselineWeight;
+    }
+
+    mediaDjAnalysisFrames_ = 0;
+    mediaDjFullPowerSum_ = 0.0;
+    mediaDjMidPowerSum_ = 0.0;
+    mediaDjSidePowerSum_ = 0.0;
+    mediaDjDiffPowerSum_ = 0.0;
+}
+
+void AudioEngine::appendMediaDjFramesLocked(
+    const float* interleaved,
+    std::size_t frameCount) {
+    if (!mediaDjSessionLookahead_ || interleaved == nullptr ||
+        frameCount == 0 || mediaChannelCount_ <= 0) {
+        return;
+    }
+    const std::size_t channels = static_cast<std::size_t>(mediaChannelCount_);
+    ensureMediaDjCapacityLocked(mediaDjBufferedFrames_ + frameCount + 1U);
+
+    for (std::size_t frame = 0; frame < frameCount; ++frame) {
+        const std::size_t src = frame * channels;
+        const float left = interleaved[src];
+        const float right = channels == 2 ? interleaved[src + 1U] : left;
+        analyzeMediaDjFrameLocked(
+            left, right, mediaDjAbsoluteWriteFrame_);
+
+        const std::size_t dst = mediaDjWriteFrame_ * channels;
+        std::memcpy(
+            mediaDjLookaheadBuffer_.data() + dst,
+            interleaved + src,
+            channels * sizeof(float));
+        mediaDjWriteFrame_ =
+            (mediaDjWriteFrame_ + 1U) % mediaDjBufferCapacityFrames_;
+        ++mediaDjBufferedFrames_;
+        ++mediaDjAbsoluteWriteFrame_;
+    }
+}
+
+std::size_t AudioEngine::drainMediaDjFramesLocked(
+    float* output,
+    std::size_t outputCapacityFrames,
+    bool flushing) {
+    if (!mediaDjSessionLookahead_ || output == nullptr ||
+        outputCapacityFrames == 0 || mediaChannelCount_ <= 0) {
+        return 0;
+    }
+
+    const std::size_t keepFrames = flushing ? 0U : mediaDjLookaheadFrames_;
+    if (mediaDjBufferedFrames_ <= keepFrames) return 0;
+
+    const std::size_t channels = static_cast<std::size_t>(mediaChannelCount_);
+    const std::size_t availableFrames = mediaDjBufferedFrames_ - keepFrames;
+    const std::size_t framesToWrite =
+        std::min(outputCapacityFrames, availableFrames);
+    const std::uint64_t oneSecondFrames =
+        static_cast<std::uint64_t>(mediaOutputSampleRate_);
+    const std::uint64_t twoSecondFrames = oneSecondFrames * 2U;
+    const std::uint64_t threeSecondFrames = oneSecondFrames * 3U;
+    const bool shapingEnabled =
+        mediaDjEnergyEnabled_.load(std::memory_order_acquire);
+
+    const float duckAlpha = static_cast<float>(
+        1.0 - std::exp(
+            -1.0 /
+            std::max(
+                1.0,
+                static_cast<double>(mediaOutputSampleRate_) *
+                    kDjDuckRampSeconds)));
+    const float restoreAlpha = static_cast<float>(
+        1.0 - std::exp(
+            -1.0 /
+            std::max(
+                1.0,
+                static_cast<double>(mediaOutputSampleRate_) *
+                    kDjRestoreRampSeconds)));
+
+    for (std::size_t frame = 0; frame < framesToWrite; ++frame) {
+        const std::uint64_t absoluteFrame = mediaDjAbsoluteReadFrame_;
+        while (!mediaDjImpactFrames_.empty() &&
+               mediaDjImpactFrames_.front() <= absoluteFrame) {
+            mediaDjImpactFrames_.pop_front();
+        }
+
+        float targetGain = 1.0F;
+        if (shapingEnabled && !mediaDjImpactFrames_.empty()) {
+            const std::uint64_t impactFrame = mediaDjImpactFrames_.front();
+            const std::uint64_t framesUntilImpact =
+                impactFrame > absoluteFrame
+                    ? impactFrame - absoluteFrame
+                    : 0U;
+            if (framesUntilImpact > 0U &&
+                framesUntilImpact <= threeSecondFrames) {
+                if (framesUntilImpact > twoSecondFrames) {
+                    targetGain = kDjStageOneGain;
+                } else if (framesUntilImpact > oneSecondFrames) {
+                    targetGain = kDjStageTwoGain;
+                } else {
+                    targetGain = kDjStageThreeGain;
+                }
+            }
+        }
+
+        const float alpha =
+            targetGain < mediaDjEnvelopeGain_ ? duckAlpha : restoreAlpha;
+        mediaDjEnvelopeGain_ +=
+            (targetGain - mediaDjEnvelopeGain_) * alpha;
+        if (std::abs(targetGain - mediaDjEnvelopeGain_) < 0.00001F) {
+            mediaDjEnvelopeGain_ = targetGain;
+        }
+
+        const std::size_t src = mediaDjReadFrame_ * channels;
+        const std::size_t dst = frame * channels;
+        for (std::size_t channel = 0; channel < channels; ++channel) {
+            output[dst + channel] =
+                mediaDjLookaheadBuffer_[src + channel] *
+                mediaDjEnvelopeGain_;
+        }
+
+        mediaDjReadFrame_ =
+            (mediaDjReadFrame_ + 1U) % mediaDjBufferCapacityFrames_;
+        --mediaDjBufferedFrames_;
+        ++mediaDjAbsoluteReadFrame_;
+    }
+    return framesToWrite;
 }
 
 bool AudioEngine::configureMediaResamplerLocked() {
