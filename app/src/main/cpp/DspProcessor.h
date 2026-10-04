@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 namespace lastwave::audio {
 
@@ -48,6 +49,16 @@ public:
     // so clearing the flag restores the previous mix without clicks.
     void setClarityAtmosBypass(bool bypass) noexcept;
     void setDjEnergyEnabled(bool enabled) noexcept;
+    // The media-decoder path enables a true three-second delay so the DSP can
+    // react to an incoming high-energy hit while outputting audio from three
+    // seconds earlier. The direct Oboe path leaves this false to avoid
+    // double-processing already-processed Media3 PCM.
+    void setLongLookAheadMode(bool enabled) noexcept;
+    // Drains the delayed tail after end-of-stream. Returns frames written.
+    std::size_t flushLookAhead(
+        float* interleaved,
+        std::size_t frameCapacity,
+        std::int32_t channelCount) noexcept;
     // Process-wide broadcast helpers for the JNI layer, which owns the
     // engine handle but not the individual DSP instances. Each call
     // forwards to every live instance (playback and media paths). Control
@@ -222,18 +233,27 @@ private:
     float djGain_{1.0F};
     float djTargetGain_{1.0F};
 
-    // Concert-style impact shaper. The processor scans a short amount of
-    // decoded PCM ahead inside each Media3 buffer, dips just before a strong
-    // energy surge, then snaps to the +5 dB ceiling at the detected impact.
-    // No heap allocation or future blocking occurs on the audio thread.
-    float djPerformanceDb_{0.0F};
-    float djPreDuckSmoothing_{0.01F};
-    float djImpactAttackSmoothing_{0.05F};
-    float djImpactReleaseSmoothing_{0.001F};
-    std::int32_t djImpactCountdown_{-1};
-    std::int32_t djImpactHoldFrames_{0};
-    std::int32_t djImpactCooldownFrames_{0};
+    // True 3-second concert look-ahead. The media DSP stores already
+    // processed future PCM in a fixed ring allocated during configure().
+    // When an energy/vocal impact reaches the analyzer, the audible output is
+    // still exactly three seconds earlier, so the requested 30/60/90 percent
+    // pre-drop can be applied without guessing.
+    bool longLookAheadMode_{false};
+    std::unique_ptr<float[]> djLookAheadBuffer_{};
+    std::size_t djLookAheadCapacityFrames_{0};
+    std::size_t djLookAheadReadFrame_{0};
+    std::size_t djLookAheadWriteFrame_{0};
+    std::size_t djLookAheadFramesStored_{0};
+    std::int32_t djLookAheadChannelCount_{0};
+    float djBaselineEnergy_{0.0F};
+    float djBaselineAlpha_{0.0001F};
+    float djAppliedDropGain_{1.0F};
+    float djDropGainSmoothing_{0.01F};
+    std::int64_t djPreDropFramesRemaining_{0};
+    std::int64_t djTriggerCooldownFrames_{0};
     std::int32_t djControlCountdown_{0};
+
+    [[nodiscard]] float nextDjPreDropGain() noexcept;
     Biquad subBassHighPass_{};
     Biquad bassFoundation_{};
     Biquad lowMidSeparation_{};
