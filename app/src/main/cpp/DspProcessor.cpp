@@ -246,6 +246,9 @@ void DspProcessor::configure(double sampleRate) noexcept {
 void DspProcessor::reset() noexcept {
     highlights_.configure(sampleRate_);
     highlightWasEnabled_ = false;
+    layaWasEnabled_ = false;
+    featureCountdown_ = 0;
+    for (auto& feature : featureSnapshot_) feature.store(0.0F);
     djVolume_ = djVolumeTarget_.load();
     djEnergy_ = djVocals_ = djBeats_ = 0.0F;
     djEnergyGain_ = 1.0F;
@@ -533,6 +536,19 @@ void DspProcessor::setDjHighlights(bool enabled, int focus, int spacing,
     highlightEnabled_.store(enabled, std::memory_order_release);
 }
 
+void DspProcessor::setDjLayaDecision(int generation, int candidate, bool accepted) noexcept {
+    layaAccepted_.store(false, std::memory_order_release);
+    layaGeneration_.store(generation);
+    layaCandidate_.store(candidate);
+    layaAccepted_.store(accepted, std::memory_order_release);
+}
+
+std::array<float, 8> DspProcessor::djFeatures() const noexcept {
+    std::array<float, 8> result{};
+    for (std::size_t i = 0; i < result.size(); ++i) result[i] = featureSnapshot_[i].load();
+    return result;
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
@@ -540,6 +556,7 @@ void DspProcessor::process(
     if (samples == nullptr || frameCount <= 0 || (channelCount != 1 && channelCount != 2)) return;
     if (bitPerfectEnabled_.load(std::memory_order_acquire)) {
         highlights_.reset();
+        for (auto& feature : featureSnapshot_) feature.store(0.0F);
         return;
     }
     // Atmos-aware bypass forces the clarity chain off independent of the
@@ -559,12 +576,19 @@ void DspProcessor::process(
     // output a second time. The older three-second DJ Energy keeps priority.
     const bool highlightEnabled = highlightEnabled_.load(std::memory_order_acquire) &&
         longLookAheadMode_ && !djEnabled && !atmosBypassed;
-    if (highlightEnabled != highlightWasEnabled_) {
-        highlights_.reset();
-        highlightWasEnabled_ = highlightEnabled;
-    }
+    const bool layaEnabled = layaEnabled_.load() && highlightEnabled;
     const int highlightFocus = highlightFocus_.load();
     const int highlightSpacing = highlightSpacing_.load();
+    if (highlightEnabled != highlightWasEnabled_ || layaEnabled != layaWasEnabled_ ||
+        highlightFocus != highlightWasFocus_ || highlightSpacing != highlightWasSpacing_) {
+        highlights_.reset();
+        highlightWasEnabled_ = highlightEnabled;
+        layaWasEnabled_ = layaEnabled;
+        highlightWasFocus_ = highlightFocus;
+        highlightWasSpacing_ = highlightSpacing;
+        featureCountdown_ = 0;
+        for (auto& feature : featureSnapshot_) feature.store(0.0F);
+    }
     const float highlightEnergy = highlightEnergy_.load();
     const float highlightVocals = highlightVocals_.load();
     const float highlightBeats = highlightBeats_.load();
@@ -613,9 +637,16 @@ void DspProcessor::process(
 
     for (std::int32_t frame = 0; frame < frameCount; ++frame) {
         const std::size_t rawOffset = static_cast<std::size_t>(frame) * static_cast<std::size_t>(channelCount);
+        const bool layaApproved = layaAccepted_.load(std::memory_order_acquire) &&
+            layaGeneration_.load() == highlights_.generation() && layaCandidate_.load() == highlights_.candidateId();
         const auto highlight = highlightEnabled ? highlights_.tick(samples[rawOffset],
-            channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing)
+            channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing, layaEnabled, layaApproved)
             : DjHighlightDetector::Mix{};
+        if (highlightEnabled && featureCountdown_-- <= 0) {
+            const auto features = highlights_.features();
+            for (std::size_t i = 0; i < features.size(); ++i) featureSnapshot_[i].store(features[i]);
+            featureCountdown_ = 127;
+        }
         const bool highlightActive = highlight.volume != 1.0F || highlight.boost != 0.0F;
         const bool cueReleasing = djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
         // Analyze untouched audio without sending ordinary passages through

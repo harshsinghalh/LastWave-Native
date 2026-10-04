@@ -23,6 +23,9 @@ public:
     // Independent automation layer; never modifies saved EQ or clarity settings.
     void setDjCue(float volume, float energyDb, float vocalsDb, float beatsDb) noexcept;
     void setDjHighlights(bool enabled, int focus, int spacing, float energyDb, float vocalsDb, float beatsDb) noexcept;
+    void setDjLayaMode(bool enabled) noexcept { layaEnabled_.store(enabled); }
+    void setDjLayaDecision(int generation, int candidate, bool accepted) noexcept;
+    [[nodiscard]] std::array<float, 8> djFeatures() const noexcept;
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     void setPeakProtectionEnabled(bool enabled) noexcept;
@@ -91,6 +94,12 @@ private:
     std::atomic<float> highlightEnergy_{2.0F}, highlightVocals_{2.0F}, highlightBeats_{3.0F};
     DjHighlightDetector highlights_;
     bool highlightWasEnabled_{false};
+    int highlightWasFocus_{-1}, highlightWasSpacing_{-1};
+    std::atomic<bool> layaEnabled_{false}, layaAccepted_{false};
+    std::atomic<int> layaGeneration_{-1}, layaCandidate_{-1};
+    std::array<std::atomic<float>, 8> featureSnapshot_{};
+    bool layaWasEnabled_{false};
+    int featureCountdown_{0};
     std::atomic<float> djVolumeTarget_{1.0F}, djEnergyTarget_{0.0F}, djVocalsTarget_{0.0F}, djBeatsTarget_{0.0F};
     float djVolume_{1.0F}, djEnergy_{0.0F}, djVocals_{0.0F}, djBeats_{0.0F};
     float djEnergyGain_{1.0F};

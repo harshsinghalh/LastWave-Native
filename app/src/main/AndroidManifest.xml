@@ -183,8 +183,8 @@
             android:name=".data.download.DownloadCancelReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.lastwave.app.ACTION_CANCEL_DOWNLOAD" />
-                <action android:name="com.lastwave.app.ACTION_RECONNECT_DOWNLOAD" />
+                <action android:name="com.lastwave.dj.ACTION_CANCEL_DOWNLOAD" />
+                <action android:name="com.lastwave.dj.ACTION_RECONNECT_DOWNLOAD" />
             </intent-filter>
         </receiver>
 

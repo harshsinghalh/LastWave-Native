@@ -57,12 +57,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.lastwave.app"
+        applicationId = "com.lastwave.dj"
         minSdk = (project.findProperty("minSdk") as? String)?.toIntOrNull() ?: 29
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 28
-        versionName = "4.5.2"
+        versionCode = 29
+        versionName = "4.6.0"
 
         // Native secrets (addon client lock) live strictly in native .so via
         // SecretsBridge_generated.h (tools/generate_native_secrets.py).
@@ -182,6 +182,7 @@ android {
 }
 
 dependencies {
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
     implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation(libs.androidx.core.ktx)

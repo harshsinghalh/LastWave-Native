@@ -12,7 +12,7 @@
  *   - APK signing cert gate: re-signed / patched APKs fail signature verification,
  *     and if bypassed, produce corrupted keys resulting in invalid signatures.
  *   - Anti-debugging / ptrace detection (`/proc/self/status` TracerPid).
- *   - Caller package verification (`com.lastwave.app`).
+ *   - Caller package verification (`com.lastwave.dj`).
  *   - Strict volatile stack scrubbing of secret buffers immediately after HMAC calculation.
  */
 
@@ -206,7 +206,7 @@ static bool isBeingDebugged() {
 }
 
 /**
- * Verifies that the caller is genuine com.lastwave.app signed by the expected certificate.
+ * Verifies that the caller is com.lastwave.dj signed by the expected certificate.
  * Extracts the 32-byte SHA-256 certificate digest into outCertSha256.
  */
 static bool verifyCallerSignature(JNIEnv* env, jobject context, uint8_t outCertSha256[32]) {
@@ -220,9 +220,9 @@ static bool verifyCallerSignature(JNIEnv* env, jobject context, uint8_t outCertS
     auto packageName = (jstring)env->CallObjectMethod(context, getPackageName);
     if (!packageName) return false;
 
-    // Package allowlist: only com.lastwave.app may call.
+    // Package allowlist: only this fork may call.
     const char* pkgChars = env->GetStringUTFChars(packageName, nullptr);
-    bool pkgOk = pkgChars && strcmp(pkgChars, "com.lastwave.app") == 0;
+    bool pkgOk = pkgChars && strcmp(pkgChars, "com.lastwave.dj") == 0;
     if (pkgChars) env->ReleaseStringUTFChars(packageName, pkgChars);
     if (!pkgOk) return false;
 

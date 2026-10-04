@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <array>
 
 namespace lastwave::audio {
 
@@ -20,15 +21,27 @@ public:
         reset();
     }
     void reset() noexcept {
+        generation_ = generation_ % 16'000'000 + 1; // exactly representable in JNI's float snapshot
+        candidateId_ = 0;
+        pendingFrame_ = -1;
         frames_ = candidate_ = events_ = 0;
         lastEvent_ = -static_cast<std::int64_t>(rate_ * 60.0);
         eventFrame_ = -1;
         fast_ = slow_ = bass_ = vocal_ = bassPower_ = vocalPower_ = 0.0F;
     }
     [[nodiscard]] std::int64_t eventCount() const noexcept { return events_; }
+    [[nodiscard]] int generation() const noexcept { return generation_; }
+    [[nodiscard]] int candidateId() const noexcept { return candidateId_; }
+    [[nodiscard]] std::array<float, 8> features() const noexcept {
+        const auto p = pendingFrame_ >= 0 ? pendingFeatures_ : std::array<float, 4>{fast_, slow_,
+            bassPower_ / std::max(fast_, 1.0e-9F), vocalPower_ / std::max(fast_, 1.0e-9F)};
+        return {p[0], p[1], p[2], p[3], static_cast<float>(generation_),
+            static_cast<float>(candidateId_), pendingFrame_ >= 0 ? 1.0F : 0.0F,
+            static_cast<float>(static_cast<double>(frames_) / rate_)};
+    }
     // focus: 0 any strong energy rise, 1 bass-led, 2 vocal-range-led.
     // spacing: 0 at least 35 seconds, 1 at least 60 seconds between starts.
-    Mix tick(float left, float right, int focus, int spacing) noexcept {
+    Mix tick(float left, float right, int focus, int spacing, bool requireModel = false, bool approved = false) noexcept {
         if (!std::isfinite(left)) left = 0.0F;
         if (!std::isfinite(right)) right = 0.0F;
         ++frames_;
@@ -43,20 +56,41 @@ public:
         vocalPower_ += fastAlpha_ * (voice * voice - vocalPower_);
 
         if (eventFrame_ < 0) {
+            if (pendingFrame_ >= 0) {
+                // Wait for background inference without stalling PCM. Only a
+                // still-energetic section and the matching decision may start.
+                ++pendingFrame_;
+                if (pendingFrame_ > static_cast<std::int64_t>(rate_ * 5.0) || fast_ < pendingFeatures_[0] * 0.65F) {
+                    pendingFrame_ = -1;
+                    candidate_ = 0;
+                } else if (!requireModel || approved) {
+                    eventFrame_ = 0;
+                    lastEvent_ = frames_;
+                    pendingFrame_ = -1;
+                    ++events_;
+                }
+            }
             const double gap = spacing == 1 ? 60.0 : 35.0;
             const float contrast = spacing == 1 ? 3.981072F : 2.818383F; // 6 / 4.5 dB
             const bool focusMatches = focus == 1 ? bassPower_ > fast_ * 0.35F
                 : focus == 2 ? vocalPower_ > fast_ * 0.35F && bassPower_ < fast_ * 0.25F : true;
-            const bool candidate = frames_ >= static_cast<std::int64_t>(rate_ * 10.0) &&
+            const bool candidate = eventFrame_ < 0 && pendingFrame_ < 0 && frames_ >= static_cast<std::int64_t>(rate_ * 10.0) &&
                 frames_ - lastEvent_ >= static_cast<std::int64_t>(rate_ * gap) &&
                 fast_ > 0.002512F && fast_ > std::max(slow_, 1.0e-9F) * contrast && focusMatches;
             candidate_ = candidate ? candidate_ + 1 : 0;
             // Reject isolated clicks/transients; require a sustained rise.
             if (candidate_ >= static_cast<std::int64_t>(rate_ * 0.18)) {
-                eventFrame_ = 0;
-                lastEvent_ = frames_;
+                ++candidateId_;
+                pendingFrame_ = 0;
+                pendingFeatures_ = {fast_, slow_, bassPower_ / std::max(fast_, 1.0e-9F),
+                    vocalPower_ / std::max(fast_, 1.0e-9F)};
                 candidate_ = 0;
-                ++events_;
+                if (!requireModel) {
+                    eventFrame_ = 0;
+                    lastEvent_ = frames_;
+                    pendingFrame_ = -1;
+                    ++events_;
+                }
             }
         }
         if (eventFrame_ < 0) return {};
@@ -85,5 +119,8 @@ private:
     float fast_{}, slow_{}, bass_{}, vocal_{}, bassPower_{}, vocalPower_{};
     std::int64_t frames_{}, candidate_{}, events_{}, lastEvent_{};
     std::int64_t eventFrame_{-1};
+    int generation_{0}, candidateId_{0};
+    std::int64_t pendingFrame_{-1};
+    std::array<float, 4> pendingFeatures_{};
 };
 }

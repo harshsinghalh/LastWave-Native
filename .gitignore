@@ -58,6 +58,11 @@ app/src/main/assets/modules/
 *.lwp
 tools/*
 !tools/generate_native_secrets.py
+!tools/generate_laya_tokens.py
+!tools/verify_laya_model.py
+!tools/download_laya_model.py
+!tools/test_laya_android.sh
+!docs/fork-certificate.pem
 provider.js
 # Single raw provider source at repo base only (plaintext JSON, encrypted at build)
 provider.json
@@ -71,4 +76,3 @@ app/src/main/cpp/SecretsBridge_generated.h
 lastwave-addon-service/
 *.zip
 credentials_backup*
-

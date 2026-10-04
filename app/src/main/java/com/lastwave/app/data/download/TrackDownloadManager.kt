@@ -145,9 +145,9 @@ class TrackDownloadManager @Inject constructor(
 ) {
     companion object {
         const val CHANNEL_ID = "lastwave_downloads"
-        const val ACTION_CANCEL_DOWNLOAD = "com.lastwave.app.ACTION_CANCEL_DOWNLOAD"
-        const val ACTION_RECONNECT_DOWNLOAD = "com.lastwave.app.ACTION_RECONNECT_DOWNLOAD"
-        const val ACTION_VIEW_DOWNLOADS = "com.lastwave.app.ACTION_VIEW_DOWNLOADS"
+        const val ACTION_CANCEL_DOWNLOAD = "com.lastwave.dj.ACTION_CANCEL_DOWNLOAD"
+        const val ACTION_RECONNECT_DOWNLOAD = "com.lastwave.dj.ACTION_RECONNECT_DOWNLOAD"
+        const val ACTION_VIEW_DOWNLOADS = "com.lastwave.dj.ACTION_VIEW_DOWNLOADS"
         const val EXTRA_DOWNLOAD_KEY = "download_key"
         const val EXTRA_DOWNLOAD_TITLE = "download_title"
         const val EXTRA_DOWNLOAD_ARTIST = "download_artist"

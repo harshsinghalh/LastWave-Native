@@ -205,6 +205,7 @@ class MusicPlayer @Inject constructor(
     private val songPlayStatsRepository: dagger.Lazy<com.lastwave.app.data.repository.SongPlayStatsRepository>,
 ) {
     private val appContext = context.applicationContext
+    private val layaDjController by lazy { LayaDjController(appContext, applicationScope) }
     private val streamResolutionWakeLock by lazy {
         (appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -1474,8 +1475,11 @@ class MusicPlayer @Inject constructor(
                     val mix = dj.mixAt(pos, djAllowed)
                     val djEngine = nativeAudioEngine.get()
                     djEngine.setDjCue(mix[0], mix[1], mix[2], mix[3])
-                    djEngine.setDjHighlights(djAllowed && dj.mode == DjCueMode.HIGHLIGHTS,
+                    val layaActive = djAllowed && dj.mode == DjCueMode.LAYA
+                    djEngine.setDjLayaMode(layaActive)
+                    djEngine.setDjHighlights(djAllowed && dj.mode != DjCueMode.TIMED,
                         dj.focus.ordinal, dj.spacing.ordinal, dj.energyDb, dj.vocalsDb, dj.beatsDb)
+                    layaDjController.update(layaActive && healthPlaying, dj, djEngine)
                     val previous = _state.value
                     val unchanged = !_state.value.isPlaying &&
                         previous.positionMs == pos &&
@@ -2408,6 +2412,7 @@ class MusicPlayer @Inject constructor(
                 runCatching { engine.setDjEnergyEnabled(false) }
                 runCatching { engine.setDjCue(1f, 0f, 0f, 0f) }
                 runCatching { engine.setDjHighlights(false, 0, 0, 0f, 0f, 0f) }
+                runCatching { engine.setDjLayaMode(false); engine.setDjLayaDecision(-1, -1, false) }
                 engine.systemFlattened = true
             }
         } else {

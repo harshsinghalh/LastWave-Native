@@ -533,3 +533,24 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjHighlights(
     jfloat energy, jfloat vocals, jfloat beats) {
     if (auto* engine = fromHandle(handle)) engine->setDjHighlights(enabled == JNI_TRUE, focus, spacing, energy, vocals, beats);
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjLayaMode(
+    JNIEnv*, jobject, jlong handle, jboolean enabled) {
+    if (auto* engine = fromHandle(handle)) engine->setDjLayaMode(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjLayaDecision(
+    JNIEnv*, jobject, jlong handle, jint generation, jint candidate, jboolean accepted) {
+    if (auto* engine = fromHandle(handle)) engine->setDjLayaDecision(generation, candidate, accepted == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeDjFeatures(JNIEnv* env, jobject, jlong handle) {
+    const auto* engine = fromHandle(handle);
+    const auto data = engine == nullptr ? std::array<float, 8>{} : engine->djFeatures();
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(data.size()));
+    if (result != nullptr) env->SetFloatArrayRegion(result, 0, static_cast<jsize>(data.size()), data.data());
+    return result;
+}

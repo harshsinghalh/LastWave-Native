@@ -83,6 +83,33 @@ class DjCueNativeDeviceTest {
             engine.setBitPerfect(true)
             val selectiveBypass = process()
             for (i in selectiveBypass.indices) assertEquals(input.getFloat(i * 4), selectiveBypass[i], 0f)
+
+            // Real measured PCM -> real Laya score -> matching JNI approval.
+            engine.setBitPerfect(false)
+            engine.setDjLayaMode(true)
+            engine.resetMediaProcessor()
+            fill(.03f)
+            repeat(12) { process() }
+            fill(.18f)
+            assertArrayEquals(FloatArray(frames * 2) { input.getFloat(it * 4) }, process(), 0f)
+            val candidate = engine.djFeatures()
+            assertEquals(1f, candidate[6], 0f)
+            engine.setDjLayaDecision(candidate[4].toInt() - 1, candidate[5].toInt(), true)
+            assertArrayEquals("A stale model decision must not affect PCM",
+                FloatArray(frames * 2) { input.getFloat(it * 4) }, process(), 0f)
+            val probability = runBlocking {
+                val model = LayaModel.get(context)
+                withTimeout(90_000) { while (!model.state.value.ready) delay(100) }
+                requireNotNull(model.score(requireNotNull(LayaFeatures.key(candidate, DjHighlightFocus.ENERGY))))
+            }
+            val accepted = probability >= .55f
+            engine.setDjLayaDecision(candidate[4].toInt(), candidate[5].toInt(), accepted)
+            val first = process()
+            val second = process()
+            val dry = FloatArray(frames * 2) { input.getFloat(it * 4) }
+            if (accepted) assertFalse("Real model approval must reach the packaged DSP", second.contentEquals(dry))
+            else { assertArrayEquals(dry, first, 0f); assertArrayEquals(dry, second, 0f) }
+            assertTrue(second.all { it.isFinite() && abs(it) <= 1f })
         } finally {
             engine.close(); storeScope.cancel()
         }

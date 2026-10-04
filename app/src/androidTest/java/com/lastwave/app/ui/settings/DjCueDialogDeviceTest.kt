@@ -85,4 +85,22 @@ class DjCueDialogDeviceTest {
         assertEquals(4_000L, DjCuePreferences.read(context).rampMs)
         assertEquals(.65f, DjCuePreferences.read(context).after, 0f)
     }
+
+    @Test fun layaChoiceAndQuestionsPersistWithoutChangingTimedDefaults() {
+        show()
+        compose.onNode(isToggleable()).performClick()
+        compose.onNodeWithText("Laya AI highlights").performScrollTo().performClick()
+        compose.onNodeWithText("Bass-led drops").performScrollTo().performClick()
+        compose.onNodeWithText("Rare (60 seconds apart)").performScrollTo().performClick()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle {
+            val p = DjCuePreferences.read(context)
+            assertEquals(DjCueMode.LAYA, p.mode)
+            assertEquals(DjHighlightFocus.BEATS, p.focus)
+            assertEquals(DjHighlightSpacing.RARE, p.spacing)
+            assertEquals(.55f, p.layaThreshold, 0f)
+            assertEquals(1_500L, p.rampMs)
+            assertEquals(.8f, p.after, 0f)
+        }
+    }
 }

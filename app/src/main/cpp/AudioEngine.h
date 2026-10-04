@@ -62,6 +62,11 @@ public:
     void setDjHighlights(bool enabled, int focus, int spacing, float energy, float vocals, float beats) noexcept {
         mediaDsp_.setDjHighlights(enabled, focus, spacing, energy, vocals, beats);
     }
+    void setDjLayaMode(bool enabled) noexcept { mediaDsp_.setDjLayaMode(enabled); }
+    void setDjLayaDecision(int generation, int candidate, bool accepted) noexcept {
+        mediaDsp_.setDjLayaDecision(generation, candidate, accepted);
+    }
+    [[nodiscard]] std::array<float, 8> djFeatures() const noexcept { return mediaDsp_.djFeatures(); }
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     // Read-back for UI truthfulness: true only when both DSP instances

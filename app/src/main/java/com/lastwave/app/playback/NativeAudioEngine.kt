@@ -121,6 +121,14 @@ class NativeAudioEngine @Inject constructor(
     }
     private external fun nativeSetDjHighlights(handle: Long, enabled: Boolean, focus: Int, spacing: Int,
         energy: Float, vocals: Float, beats: Float)
+    fun setDjLayaMode(enabled: Boolean) { withHandle(Unit) { nativeSetDjLayaMode(it, enabled) } }
+    fun setDjLayaDecision(generation: Int, candidate: Int, accepted: Boolean) {
+        withHandle(Unit) { nativeSetDjLayaDecision(it, generation, candidate, accepted) }
+    }
+    fun djFeatures(): FloatArray = withHandle(FloatArray(8)) { nativeDjFeatures(it) }
+    private external fun nativeSetDjLayaMode(handle: Long, enabled: Boolean)
+    private external fun nativeSetDjLayaDecision(handle: Long, generation: Int, candidate: Int, accepted: Boolean)
+    private external fun nativeDjFeatures(handle: Long): FloatArray
 
     internal fun setOutputVolume(volume: Float) {
         withHandle(Unit) { nativeSetOutputVolume(it, volume.coerceIn(0f, 1f)) }

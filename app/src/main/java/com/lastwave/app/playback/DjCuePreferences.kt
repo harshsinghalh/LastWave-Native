@@ -2,7 +2,7 @@ package com.lastwave.app.playback
 
 import android.content.Context
 
-enum class DjCueMode { TIMED, HIGHLIGHTS }
+enum class DjCueMode { TIMED, HIGHLIGHTS, LAYA }
 enum class DjHighlightFocus { ENERGY, BEATS, VOCALS }
 enum class DjHighlightSpacing { OCCASIONAL, RARE }
 
@@ -19,6 +19,7 @@ data class DjCueProfile(
     val mode: DjCueMode = DjCueMode.TIMED,
     val focus: DjHighlightFocus = DjHighlightFocus.ENERGY,
     val spacing: DjHighlightSpacing = DjHighlightSpacing.OCCASIONAL,
+    val layaThreshold: Float = .55f,
 ) {
     fun mixAt(positionMs: Long, active: Boolean): FloatArray {
         if (!active || mode != DjCueMode.TIMED) return floatArrayOf(1f, 0f, 0f, 0f)
@@ -45,13 +46,15 @@ object DjCuePreferences {
             safe("energy", 2f, 6f), safe("vocals", 2f, 6f), safe("beats", 3f, 6f),
             DjCueMode.entries.getOrNull(p.getInt("mode", 0)) ?: DjCueMode.TIMED,
             DjHighlightFocus.entries.getOrNull(p.getInt("focus", 0)) ?: DjHighlightFocus.ENERGY,
-            DjHighlightSpacing.entries.getOrNull(p.getInt("spacing", 0)) ?: DjHighlightSpacing.OCCASIONAL)
+            DjHighlightSpacing.entries.getOrNull(p.getInt("spacing", 0)) ?: DjHighlightSpacing.OCCASIONAL,
+            safe("laya_threshold", .55f, .95f).coerceAtLeast(.4f))
     }
     fun save(context: Context, value: DjCueProfile) {
         prefs(context).edit().putBoolean("enabled", value.enabled).putLong("cue", value.cueMs)
             .putLong("ramp", value.rampMs).putFloat("before", value.before).putFloat("after", value.after)
             .putFloat("energy", value.energyDb).putFloat("vocals", value.vocalsDb)
             .putFloat("beats", value.beatsDb).putInt("revision", 2).putInt("mode", value.mode.ordinal)
-            .putInt("focus", value.focus.ordinal).putInt("spacing", value.spacing.ordinal).apply()
+            .putInt("focus", value.focus.ordinal).putInt("spacing", value.spacing.ordinal)
+            .putFloat("laya_threshold", value.layaThreshold).apply()
     }
 }
