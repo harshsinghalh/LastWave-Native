@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -62,6 +63,7 @@ public:
     // bitPerfectRequested from bitPerfectActuallyActive.
     [[nodiscard]] bool isBitPerfect() const noexcept;
     void setEqualizer(bool enabled, const float* gainsDb, std::size_t gainCount) noexcept;
+    void setDjEnergyEnabled(bool enabled) noexcept;
 
     [[nodiscard]] bool configureMediaProcessor(
         std::int32_t inputSampleRate,
@@ -122,6 +124,14 @@ private:
     [[nodiscard]] bool configureResamplerLocked(std::int32_t inputSampleRate);
     [[nodiscard]] bool configureMediaResamplerLocked();
     void buildFadeCurve(std::int32_t sampleRate);
+    void resetMediaDjLookaheadLocked() noexcept;
+    void ensureMediaDjCapacityLocked(std::size_t requiredFrames);
+    void appendMediaDjFramesLocked(const float* interleaved, std::size_t frameCount);
+    std::size_t drainMediaDjFramesLocked(
+        float* output,
+        std::size_t outputCapacityFrames,
+        bool flushing);
+    void analyzeMediaDjFrameLocked(float left, float right, std::uint64_t absoluteFrame);
 
     static constexpr std::int32_t kOutputChannels = 2;
     static constexpr std::int32_t kRingMilliseconds = 750;
@@ -170,6 +180,34 @@ private:
     std::int32_t mediaOutputSampleRate_{0};
     std::int32_t mediaChannelCount_{0};
     std::vector<float> mediaScratch_;
+
+    // DJ Energy v4.5: true 3-second decoded-PCM look-ahead for the user's
+    // staged concert pre-drop. This intentionally lives at the Media3 PCM
+    // processor layer rather than pretending a tiny renderer buffer contains
+    // three seconds of future audio.
+    std::atomic<bool> mediaDjEnergyEnabled_{false};
+    bool mediaDjSessionLookahead_{false};
+    std::size_t mediaDjLookaheadFrames_{0};
+    std::size_t mediaDjAnalysisBlockFrames_{0};
+    std::vector<float> mediaDjProcessScratch_;
+    std::vector<float> mediaDjLookaheadBuffer_;
+    std::size_t mediaDjBufferCapacityFrames_{0};
+    std::size_t mediaDjReadFrame_{0};
+    std::size_t mediaDjWriteFrame_{0};
+    std::size_t mediaDjBufferedFrames_{0};
+    std::uint64_t mediaDjAbsoluteReadFrame_{0};
+    std::uint64_t mediaDjAbsoluteWriteFrame_{0};
+    std::deque<std::uint64_t> mediaDjImpactFrames_;
+    std::uint64_t mediaDjLastImpactFrame_{0};
+    std::size_t mediaDjAnalysisFrames_{0};
+    double mediaDjFullPowerSum_{0.0};
+    double mediaDjMidPowerSum_{0.0};
+    double mediaDjSidePowerSum_{0.0};
+    double mediaDjDiffPowerSum_{0.0};
+    float mediaDjPreviousMid_{0.0F};
+    float mediaDjBaselineDb_{-60.0F};
+    bool mediaDjBaselineReady_{false};
+    float mediaDjEnvelopeGain_{1.0F};
 
     // Callback-only state. Storage is built before requestStart(), so the
     // real-time callback performs no allocation or locking.
