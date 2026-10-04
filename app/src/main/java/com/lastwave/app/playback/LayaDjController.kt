@@ -27,7 +27,7 @@ internal class LayaDjController(context: Context, private val scope: CoroutineSc
         val key = LayaFeatures.key(features, profile.focus) ?: return
         lastCandidate = candidate
         val token = revision
-        job = scope.launch {
+        job = scope.launch(Dispatchers.Main.immediate) {
             val probability = model.score(key) ?: return@launch
             ensureActive()
             val current = engine.djFeatures()

@@ -56,7 +56,7 @@ internal fun DjCueDialog(onDismiss: () -> Unit, onEnable: () -> Unit) {
                         LinearProgressIndicator(progress = { (layaState.downloadedBytes.toFloat() / LayaModel.MODEL_BYTES).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                         TextButton(onClick = { laya.cancelDownload() }) { Text("Cancel download") }
                     } else if (!layaState.ready) {
-                        TextButton(onClick = { laya.download() }) { Text("Download Laya (424 MB)") }
+                        TextButton(enabled = !layaState.checking, onClick = { laya.download() }) { Text("Download Laya (424 MB)") }
                     }
                     layaState.lastProbability?.let { Text("Last highlight score: ${(it * 100).roundToInt()}%") }
                     DjCueSlider("Minimum Laya score", profile.layaThreshold * 100, 40f..95f, "%") { profile = profile.copy(layaThreshold = it / 100) }

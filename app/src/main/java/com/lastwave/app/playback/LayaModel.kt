@@ -18,6 +18,7 @@ import kotlin.math.exp
 
 data class LayaModelState(
     val ready: Boolean = false,
+    val checking: Boolean = false,
     val downloading: Boolean = false,
     val downloadedBytes: Long = 0,
     val message: String = "Download Laya to enable AI highlights.",
@@ -31,7 +32,7 @@ class LayaModel private constructor(private val context: Context) {
     private val directory = File(context.filesDir, "laya")
     private val model = File(directory, "model.onnx")
     private val partial = File(directory, "model.onnx.part")
-    private val mutableState = MutableStateFlow(LayaModelState())
+    private val mutableState = MutableStateFlow(LayaModelState(checking = model.isFile))
     val state = mutableState.asStateFlow()
     private var downloadJob: Job? = null
     @Volatile private var connection: HttpURLConnection? = null
@@ -43,7 +44,7 @@ class LayaModel private constructor(private val context: Context) {
     init {
         scope.launch {
             if (model.isFile) {
-                mutableState.value = LayaModelState(message = "Checking downloaded Laya model…")
+                mutableState.value = LayaModelState(checking = true, message = "Checking downloaded Laya model…")
                 val valid = model.length() == MODEL_BYTES && sha256(model) == MODEL_SHA256
                 mutableState.value = LayaModelState(ready = valid,
                     message = if (valid) "Laya ready. Scoring runs offline." else "Model check failed. Download Laya again.")
@@ -53,7 +54,7 @@ class LayaModel private constructor(private val context: Context) {
     }
 
     fun download() {
-        if (downloadJob?.isActive == true || state.value.ready) return
+        if (downloadJob?.isActive == true || state.value.ready || state.value.checking) return
         downloadJob = scope.launch {
             try {
                 directory.mkdirs()

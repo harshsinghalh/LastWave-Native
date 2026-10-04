@@ -73,7 +73,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          emulator-options: -memory 4096 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash tools/test_laya_android.sh
       - name: Upload verification reports
         if: always()
@@ -84,3 +84,4 @@ jobs:
             app/build/reports/tests/
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
+            app/build/outputs/release-startup.txt
