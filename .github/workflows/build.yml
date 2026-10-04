@@ -224,11 +224,11 @@ jobs:
           git push --force origin "refs/tags/$TAG"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" \
-              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
-              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
+              --title "LastWave v${VERSION} - 3-Second Concert Pre-Drop" \
+              --notes "Android DJ Energy now uses a true 3-second PCM look-ahead. When a high-energy vocal/beat/instrument impact is detected, audible volume is reduced by about 30% for the first second, 60% for the second, 90% for the third, then returns to normal at the impact. Includes a short de-click ramp, full delayed-tail draining, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           else
             gh release create "$TAG" \
-              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
-              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
+              --title "LastWave v${VERSION} - 3-Second Concert Pre-Drop" \
+              --notes "Android DJ Energy now uses a true 3-second PCM look-ahead. When a high-energy vocal/beat/instrument impact is detected, audible volume is reduced by about 30% for the first second, 60% for the second, 90% for the third, then returns to normal at the impact. Includes a short de-click ramp, full delayed-tail draining, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           fi
           gh release upload "$TAG" final_apk/* --clobber

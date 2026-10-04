@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <new>
 #include <vector>
 
 namespace lastwave::audio {
@@ -32,13 +33,19 @@ constexpr float kClarityMakeupGain = 1.04F;
 constexpr float kClarityStereoWidth = 1.22F;
 constexpr float kAirExciterAmount = 0.18F;
 constexpr std::int32_t kDjControlIntervalFrames = 256;
-constexpr float kDjMaxBoostDb = personal_dj::kMaximumDb;
-constexpr float kDjMaxVocalDuckDb = -personal_dj::kMinimumDb;
-constexpr float kDjPreDropDb = personal_dj::kPreDropDb;
-constexpr float kDjImpactDb = personal_dj::kImpactDb;
-constexpr double kDjLookAheadSeconds = personal_dj::kLookAheadSeconds;
-constexpr double kDjImpactHoldSeconds = personal_dj::kImpactHoldSeconds;
-constexpr double kDjImpactCooldownSeconds = personal_dj::kCooldownSeconds;
+// User-requested concert envelope:
+// T-3s..T-2s: 30% quieter (70% gain)
+// T-2s..T-1s: 60% quieter (40% gain)
+// T-1s..impact: 90% quieter (10% gain)
+// impact: return to normal 100% gain.
+constexpr double kDjLongLookAheadSeconds = 3.0;
+constexpr double kDjDropStepSeconds = 1.0;
+constexpr float kDjDropGainStage1 = 0.70F;
+constexpr float kDjDropGainStage2 = 0.40F;
+constexpr float kDjDropGainStage3 = 0.10F;
+constexpr double kDjDropTransitionSeconds = 0.006;
+constexpr double kDjBaselineSeconds = 1.25;
+constexpr double kDjTriggerCooldownSeconds = 4.5;
 constexpr float kDjStrongSurgeDb = personal_dj::kStrongSurgeDb;
 constexpr float kDjLoudSurgeDb = personal_dj::kLoudSurgeDb;
 // Studio Master Clarity design gains (dB). Single source for configure()
@@ -168,14 +175,23 @@ void DspProcessor::configure(double sampleRate) noexcept {
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.080)));
     djRelease_ = static_cast<float>(
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.350)));
-    // Performance-envelope timings: a noticeable pre-drop ramp, near-instant
-    // impact lift, then a musical release back to the normal DJ rider.
-    djPreDuckSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kPreDuckSeconds)));
-    djImpactAttackSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactAttackSeconds)));
-    djImpactReleaseSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactReleaseSeconds)));
+    djBaselineAlpha_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * kDjBaselineSeconds)));
+    djDropGainSmoothing_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * kDjDropTransitionSeconds)));
+
+    // Allocate once, outside the renderer loop. Two floats per frame cover
+    // stereo; mono uses the left lane. Allocation failure safely disables the
+    // long-look-ahead path instead of risking an audio-thread allocation.
+    djLookAheadCapacityFrames_ = static_cast<std::size_t>(
+        std::max<std::int64_t>(1, std::llround(sampleRate_ * kDjLongLookAheadSeconds)));
+    const std::size_t lookAheadSamples = djLookAheadCapacityFrames_ * 2U;
+    djLookAheadBuffer_.reset(new (std::nothrow) float[lookAheadSamples]);
+    if (djLookAheadBuffer_ != nullptr) {
+        std::fill_n(djLookAheadBuffer_.get(), lookAheadSamples, 0.0F);
+    } else {
+        djLookAheadCapacityFrames_ = 0;
+    }
     dcBlockerR_ = static_cast<float>(
         std::exp(-2.0 * kPi * 10.0 / sampleRate_));
     microFadeFrameCount_ = std::max(
@@ -246,11 +262,21 @@ void DspProcessor::reset() noexcept {
     djSideEnergy_ = 0.0F;
     djGain_ = 1.0F;
     djTargetGain_ = 1.0F;
-    djPerformanceDb_ = 0.0F;
-    djImpactCountdown_ = -1;
-    djImpactHoldFrames_ = 0;
-    djImpactCooldownFrames_ = 0;
+    djBaselineEnergy_ = 0.0F;
+    djAppliedDropGain_ = 1.0F;
+    djPreDropFramesRemaining_ = 0;
+    djTriggerCooldownFrames_ = 0;
     djControlCountdown_ = 0;
+    djLookAheadReadFrame_ = 0;
+    djLookAheadWriteFrame_ = 0;
+    djLookAheadFramesStored_ = 0;
+    djLookAheadChannelCount_ = 0;
+    if (djLookAheadBuffer_ != nullptr && djLookAheadCapacityFrames_ > 0) {
+        std::fill_n(
+            djLookAheadBuffer_.get(),
+            djLookAheadCapacityFrames_ * 2U,
+            0.0F);
+    }
     microFadePosition_ = 0;
     dcXPrev_.fill(0.0);
     dcYPrev_.fill(0.0);
@@ -328,6 +354,24 @@ void DspProcessor::setDjEnergyEnabled(bool enabled) noexcept {
     targetDjEnergyEnabled_.store(enabled, std::memory_order_release);
 }
 
+void DspProcessor::setLongLookAheadMode(bool enabled) noexcept {
+    if (longLookAheadMode_ == enabled) return;
+    longLookAheadMode_ = enabled;
+    djLookAheadReadFrame_ = 0;
+    djLookAheadWriteFrame_ = 0;
+    djLookAheadFramesStored_ = 0;
+    djLookAheadChannelCount_ = 0;
+    djPreDropFramesRemaining_ = 0;
+    djTriggerCooldownFrames_ = 0;
+    djAppliedDropGain_ = 1.0F;
+    if (djLookAheadBuffer_ != nullptr && djLookAheadCapacityFrames_ > 0) {
+        std::fill_n(
+            djLookAheadBuffer_.get(),
+            djLookAheadCapacityFrames_ * 2U,
+            0.0F);
+    }
+}
+
 void DspProcessor::broadcastClarityWet(float wet) {
     std::lock_guard<std::mutex> registryLock(clarityRegistryMutex());
     for (auto* instance : clarityRegistry()) {
@@ -397,6 +441,70 @@ void DspProcessor::applyClarityTrim(std::size_t stage, float trimDb) noexcept {
     }
 }
 
+float DspProcessor::nextDjPreDropGain() noexcept {
+    float targetGain = 1.0F;
+    if (djPreDropFramesRemaining_ > 0 && sampleRate_ > 0.0) {
+        const auto stepFrames = std::max<std::int64_t>(
+            1,
+            static_cast<std::int64_t>(std::llround(sampleRate_ * kDjDropStepSeconds)));
+        if (djPreDropFramesRemaining_ > stepFrames * 2) {
+            targetGain = kDjDropGainStage1;
+        } else if (djPreDropFramesRemaining_ > stepFrames) {
+            targetGain = kDjDropGainStage2;
+        } else {
+            targetGain = kDjDropGainStage3;
+        }
+        --djPreDropFramesRemaining_;
+    }
+
+    // A 6 ms de-click ramp is perceptually instantaneous at the hit but avoids
+    // a waveform discontinuity when moving between 70/40/10/100 percent.
+    djAppliedDropGain_ +=
+        (targetGain - djAppliedDropGain_) * djDropGainSmoothing_;
+    if (std::abs(targetGain - djAppliedDropGain_) < 0.0001F) {
+        djAppliedDropGain_ = targetGain;
+    }
+    return djAppliedDropGain_;
+}
+
+std::size_t DspProcessor::flushLookAhead(
+    float* interleaved,
+    std::size_t frameCapacity,
+    std::int32_t channelCount) noexcept {
+    if (interleaved == nullptr || frameCapacity == 0 ||
+        (channelCount != 1 && channelCount != 2) ||
+        djLookAheadBuffer_ == nullptr ||
+        djLookAheadCapacityFrames_ == 0 ||
+        djLookAheadFramesStored_ == 0) {
+        return 0;
+    }
+
+    const std::size_t framesToWrite =
+        std::min(frameCapacity, djLookAheadFramesStored_);
+    for (std::size_t frame = 0; frame < framesToWrite; ++frame) {
+        const std::size_t readOffset = djLookAheadReadFrame_ * 2U;
+        const float gain = nextDjPreDropGain();
+        const std::size_t outputOffset =
+            frame * static_cast<std::size_t>(channelCount);
+        interleaved[outputOffset] = djLookAheadBuffer_[readOffset] * gain;
+        if (channelCount == 2) {
+            interleaved[outputOffset + 1U] =
+                djLookAheadBuffer_[readOffset + 1U] * gain;
+        }
+        djLookAheadReadFrame_ =
+            (djLookAheadReadFrame_ + 1U) % djLookAheadCapacityFrames_;
+        --djLookAheadFramesStored_;
+    }
+
+    if (djLookAheadFramesStored_ == 0U) {
+        djLookAheadReadFrame_ = 0;
+        djLookAheadWriteFrame_ = 0;
+        djPreDropFramesRemaining_ = 0;
+        djAppliedDropGain_ = 1.0F;
+    }
+    return framesToWrite;
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
@@ -411,7 +519,11 @@ void DspProcessor::process(
         ? 1.0F
         : 0.0F;
     const bool peakProtectionEnabled = peakProtectionEnabled_.load(std::memory_order_acquire);
-    const bool djEnabled = targetDjEnergyEnabled_.load(std::memory_order_acquire);
+    const bool djEnabled =
+        targetDjEnergyEnabled_.load(std::memory_order_acquire) &&
+        longLookAheadMode_ &&
+        djLookAheadBuffer_ != nullptr &&
+        djLookAheadCapacityFrames_ > 0;
     const auto equalizerRevision = targetEqualizerRevision_.load(std::memory_order_acquire);
     if (equalizerRevision != appliedEqualizerRevision_) {
         appliedEqualizerRevision_ = equalizerRevision;
@@ -601,6 +713,10 @@ void DspProcessor::process(
         const float dryRight = equalizedRight;
 
         if (djEnabled) {
+            // Analyze the CURRENT (future-to-the-listener) frame while the
+            // listener hears PCM delayed by three seconds below. This turns
+            // a detected impact at source time T into an exact pre-drop that
+            // begins at audible time T-3s.
             const float mid = channelCount == 2 ? (dryLeft + dryRight) * 0.5F : dryLeft;
             const float side = channelCount == 2 ? (dryLeft - dryRight) * 0.5F : 0.0F;
             djBassState_ += djBassAlpha_ * (mid - djBassState_);
@@ -614,10 +730,14 @@ void DspProcessor::process(
             djFullEnergy_ += djEnvelopeAlpha_ * (fullPower - djFullEnergy_);
             djVocalEnergy_ += djEnvelopeAlpha_ * (vocalPower - djVocalEnergy_);
             djSideEnergy_ += djEnvelopeAlpha_ * (sidePower - djSideEnergy_);
+            djBaselineEnergy_ += djBaselineAlpha_ * (fullPower - djBaselineEnergy_);
+
+            if (djTriggerCooldownFrames_ > 0) --djTriggerCooldownFrames_;
 
             if (--djControlCountdown_ <= 0) {
                 constexpr float epsilon = 1.0e-10F;
                 const float total = std::max(djFullEnergy_, epsilon);
+                const float baseline = std::max(djBaselineEnergy_, epsilon);
                 const float vocalRatio = std::clamp(djVocalEnergy_ / total, 0.0F, 1.5F);
                 const float centerRatio = djVocalEnergy_ /
                     std::max(djVocalEnergy_ + 0.85F * djSideEnergy_, epsilon);
@@ -625,124 +745,45 @@ void DspProcessor::process(
                 const float centerScore = std::clamp((centerRatio - 0.52F) / 0.38F, 0.0F, 1.0F);
                 const float vocalProbability = std::clamp(
                     bandScore * (0.30F + 0.70F * centerScore), 0.0F, 1.0F);
-                const float rmsDb = 10.0F * std::log10(total);
-                const float energy = std::clamp((rmsDb + 42.0F) / 24.0F, 0.0F, 1.0F);
-                const float instrumental = 1.0F - vocalProbability;
-                float targetDb = instrumental * (0.75F + 4.25F * energy) -
-                    vocalProbability * kDjMaxVocalDuckDb;
-                if (rmsDb < -52.0F) targetDb = 0.0F;
-                targetDb = std::clamp(targetDb, personal_dj::kMinimumDb, kDjMaxBoostDb);
-                djTargetGain_ = std::pow(10.0F, targetDb / 20.0F);
+                const float currentDb = 10.0F * std::log10(total);
+                const float baselineDb = 10.0F * std::log10(baseline);
+                const float surgeDb = currentDb - baselineDb;
 
-                // Short in-buffer look-ahead: inspect untouched decoded PCM
-                // ahead of the current frame. This creates the concert/DJ
-                // "pull back before the drop" without adding global playback
-                // latency or disturbing lyric/video synchronization.
-                if (djImpactCooldownFrames_ <= 0 &&
-                    djImpactCountdown_ < 0 &&
-                    djImpactHoldFrames_ <= 0) {
-                    const std::int32_t availableFrames = frameCount - frame - 1;
-                    const std::int32_t lookAheadFrames = std::min(
-                        availableFrames,
-                        static_cast<std::int32_t>(std::llround(
-                            sampleRate_ * kDjLookAheadSeconds)));
-                    constexpr std::int32_t scanStep = 32;
-                    constexpr std::int32_t rmsWindow = 32;
-                    float strongestFuturePower = total;
-                    std::int32_t strongestFutureOffset = -1;
+                const bool delayPrimed =
+                    djLookAheadFramesStored_ >= djLookAheadCapacityFrames_;
+                const bool strongEnergyImpact =
+                    surgeDb >= kDjStrongSurgeDb && currentDb > -24.0F;
+                const bool vocalImpact =
+                    vocalProbability >= 0.45F &&
+                    surgeDb >= kDjLoudSurgeDb &&
+                    currentDb > -20.0F;
+                const bool veryLoudImpact =
+                    surgeDb >= 1.5F && currentDb > -8.0F;
 
-                    for (std::int32_t ahead = 64;
-                         ahead + rmsWindow < lookAheadFrames;
-                         ahead += scanStep) {
-                        float windowPower = 0.0F;
-                        for (std::int32_t w = 0; w < rmsWindow; ++w) {
-                            const auto futureOffset =
-                                static_cast<std::size_t>(frame + ahead + w) *
-                                static_cast<std::size_t>(channelCount);
-                            const float futureLeft = samples[futureOffset];
-                            const float futureRight = channelCount == 2
-                                ? samples[futureOffset + 1U]
-                                : futureLeft;
-                            windowPower += 0.5F *
-                                (futureLeft * futureLeft + futureRight * futureRight);
-                        }
-                        windowPower /= static_cast<float>(rmsWindow);
-                        if (windowPower > strongestFuturePower) {
-                            strongestFuturePower = windowPower;
-                            strongestFutureOffset = ahead;
-                        }
-                    }
-
-                    if (strongestFutureOffset > 0) {
-                        const float futureDb =
-                            10.0F * std::log10(std::max(strongestFuturePower, epsilon));
-                        const float surgeDb = futureDb - rmsDb;
-                        const bool strongRise =
-                            surgeDb >= kDjStrongSurgeDb && futureDb > -24.0F;
-                        const bool loudRise =
-                            surgeDb >= kDjLoudSurgeDb && futureDb > -10.0F;
-                        if (strongRise || loudRise) {
-                            djImpactCountdown_ = strongestFutureOffset;
-                        }
-                    }
+                if (delayPrimed &&
+                    djTriggerCooldownFrames_ <= 0 &&
+                    djPreDropFramesRemaining_ <= 0 &&
+                    (strongEnergyImpact || vocalImpact || veryLoudImpact)) {
+                    // Because output is delayed by exactly this many frames,
+                    // starting the envelope NOW means the listener hears:
+                    //   first second  -> 70% gain  (30% reduction)
+                    //   second second -> 40% gain  (60% reduction)
+                    //   third second  -> 10% gain  (90% reduction)
+                    // and the source impact itself returns to 100%.
+                    djPreDropFramesRemaining_ =
+                        static_cast<std::int64_t>(djLookAheadCapacityFrames_);
+                    djTriggerCooldownFrames_ = static_cast<std::int64_t>(
+                        std::llround(sampleRate_ * kDjTriggerCooldownSeconds));
                 }
 
                 djControlCountdown_ = kDjControlIntervalFrames;
             }
         } else {
-            djTargetGain_ = 1.0F;
             djControlCountdown_ = 0;
+            djPreDropFramesRemaining_ = 0;
+            djTriggerCooldownFrames_ = 0;
+            djAppliedDropGain_ = 1.0F;
         }
-
-        const float djSmoothing = djTargetGain_ < djGain_ ? djAttack_ : djRelease_;
-        djGain_ += (djTargetGain_ - djGain_) * djSmoothing;
-        if (std::abs(djTargetGain_ - djGain_) < 0.00001F) djGain_ = djTargetGain_;
-
-        if (djImpactCooldownFrames_ > 0) --djImpactCooldownFrames_;
-        if (djEnabled && djImpactCountdown_ >= 0) {
-            if (djImpactCountdown_ == 0) {
-                djImpactCountdown_ = -1;
-                djImpactHoldFrames_ = std::max(
-                    1,
-                    static_cast<std::int32_t>(std::llround(
-                        sampleRate_ * kDjImpactHoldSeconds)));
-                djImpactCooldownFrames_ = std::max(
-                    1,
-                    static_cast<std::int32_t>(std::llround(
-                        sampleRate_ * kDjImpactCooldownSeconds)));
-            } else {
-                --djImpactCountdown_;
-            }
-        }
-
-        const float baseDjDb = 20.0F * std::log10(std::max(djGain_, 1.0e-6F));
-        float performanceTargetDb = baseDjDb;
-        float performanceSmoothing = djImpactReleaseSmoothing_;
-        if (djEnabled && djImpactCountdown_ >= 0) {
-            // Absolute -2 dB pre-drop target creates contrast even if the
-            // steady-state rider was already boosting the passage.
-            performanceTargetDb = kDjPreDropDb;
-            performanceSmoothing = djPreDuckSmoothing_;
-        } else if (djEnabled && djImpactHoldFrames_ > 0) {
-            // Snap to the top of the established 7 dB operating window at
-            // impact. The limiter/soft knee below still owns clip protection.
-            performanceTargetDb = kDjImpactDb;
-            performanceSmoothing = djImpactAttackSmoothing_;
-            --djImpactHoldFrames_;
-        }
-        performanceTargetDb = std::clamp(
-            performanceTargetDb, kDjPreDropDb, kDjImpactDb);
-        djPerformanceDb_ +=
-            (performanceTargetDb - djPerformanceDb_) * performanceSmoothing;
-        if (std::abs(performanceTargetDb - djPerformanceDb_) < 0.001F) {
-            djPerformanceDb_ = performanceTargetDb;
-        }
-        if (!djEnabled &&
-            std::abs(djPerformanceDb_ - baseDjDb) < 0.001F) {
-            djPerformanceDb_ = baseDjDb;
-        }
-        const float djPerformanceGain =
-            std::pow(10.0F, djPerformanceDb_ / 20.0F);
 
         float outputLeft = dryLeft;
         float outputRight = dryRight;
@@ -803,9 +844,6 @@ void DspProcessor::process(
             outputRight += (wetRight - dryRight) * clarityMix;
         }
 
-        outputLeft *= djPerformanceGain;
-        outputRight *= djPerformanceGain;
-
         // Analog soft-knee saturation: provides clean headroom without squashing the track
         auto softSaturate = [](float x) noexcept -> float {
             const float absX = std::abs(x);
@@ -848,8 +886,56 @@ void DspProcessor::process(
         outputRight = std::isfinite(outputRight)
             ? std::clamp(outputRight, -kOutputCeiling, kOutputCeiling)
             : 0.0F;
-        samples[offset] = outputLeft;
-        if (channelCount == 2) samples[offset + 1U] = outputRight;
+        if (djEnabled) {
+            if (djLookAheadChannelCount_ != channelCount) {
+                djLookAheadReadFrame_ = 0;
+                djLookAheadWriteFrame_ = 0;
+                djLookAheadFramesStored_ = 0;
+                djLookAheadChannelCount_ = channelCount;
+                djPreDropFramesRemaining_ = 0;
+                djAppliedDropGain_ = 1.0F;
+                std::fill_n(
+                    djLookAheadBuffer_.get(),
+                    djLookAheadCapacityFrames_ * 2U,
+                    0.0F);
+            }
+
+            float audibleLeft = 0.0F;
+            float audibleRight = 0.0F;
+            if (djLookAheadFramesStored_ >= djLookAheadCapacityFrames_) {
+                const std::size_t readOffset = djLookAheadReadFrame_ * 2U;
+                audibleLeft = djLookAheadBuffer_[readOffset];
+                audibleRight = djLookAheadBuffer_[readOffset + 1U];
+                djLookAheadReadFrame_ =
+                    (djLookAheadReadFrame_ + 1U) % djLookAheadCapacityFrames_;
+                --djLookAheadFramesStored_;
+            }
+
+            const std::size_t writeOffset = djLookAheadWriteFrame_ * 2U;
+            djLookAheadBuffer_[writeOffset] = outputLeft;
+            djLookAheadBuffer_[writeOffset + 1U] =
+                channelCount == 2 ? outputRight : outputLeft;
+            djLookAheadWriteFrame_ =
+                (djLookAheadWriteFrame_ + 1U) % djLookAheadCapacityFrames_;
+            ++djLookAheadFramesStored_;
+
+            const float stagedGain = nextDjPreDropGain();
+            samples[offset] = audibleLeft * stagedGain;
+            if (channelCount == 2) {
+                samples[offset + 1U] = audibleRight * stagedGain;
+            }
+        } else {
+            // Turning the feature off is immediate and never leaks stale
+            // delayed PCM into normal playback.
+            if (djLookAheadFramesStored_ != 0U) {
+                djLookAheadReadFrame_ = 0;
+                djLookAheadWriteFrame_ = 0;
+                djLookAheadFramesStored_ = 0;
+                djLookAheadChannelCount_ = 0;
+            }
+            samples[offset] = outputLeft;
+            if (channelCount == 2) samples[offset + 1U] = outputRight;
+        }
     }
 
     if (target == 0.0F && currentWet_ == 0.0F && clarityChainActive_) {
