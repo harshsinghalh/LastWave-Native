@@ -1,0 +1,41 @@
+name: Export compiled Laya APK
+on:
+  push:
+    branches: [build/laya-apk-export]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release application source
+        run: |
+          git fetch origin 93bbb49f76af5f2ed0037060e1391b12a3dbfa68 --depth=1
+          git diff --exit-code 93bbb49f76af5f2ed0037060e1391b12a3dbfa68 HEAD -- app/src/main app/build.gradle.kts app/proguard-rules.pro audio build.gradle.kts settings.gradle.kts gradle.properties gradle tools/generate_native_secrets.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: LastWave-DJ-v4.6.0-Laya-APK
+          run-id: 37224111437
+          github-token: ${{ github.token }}
+          path: compiled
+      - name: Split APK for transfer
+        run: |
+          mkdir parts
+          split -b 25M -d compiled/LastWave-DJ-v4.6.0-Laya.apk parts/apk.part.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-00
+          path: parts/apk.part.00
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-01
+          path: parts/apk.part.01
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-tools
+          path: |
+            compiled/apksigner.jar
+            compiled/signature-verification.txt
+            compiled/SHA256SUMS.txt
