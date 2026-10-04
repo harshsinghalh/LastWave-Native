@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <new>
 #include <vector>
 
 namespace lastwave::audio {
@@ -32,13 +33,19 @@ constexpr float kClarityMakeupGain = 1.04F;
 constexpr float kClarityStereoWidth = 1.22F;
 constexpr float kAirExciterAmount = 0.18F;
 constexpr std::int32_t kDjControlIntervalFrames = 256;
-constexpr float kDjMaxBoostDb = personal_dj::kMaximumDb;
-constexpr float kDjMaxVocalDuckDb = -personal_dj::kMinimumDb;
-constexpr float kDjPreDropDb = personal_dj::kPreDropDb;
-constexpr float kDjImpactDb = personal_dj::kImpactDb;
-constexpr double kDjLookAheadSeconds = personal_dj::kLookAheadSeconds;
-constexpr double kDjImpactHoldSeconds = personal_dj::kImpactHoldSeconds;
-constexpr double kDjImpactCooldownSeconds = personal_dj::kCooldownSeconds;
+// User-requested concert envelope:
+// T-3s..T-2s: 30% quieter (70% gain)
+// T-2s..T-1s: 60% quieter (40% gain)
+// T-1s..impact: 90% quieter (10% gain)
+// impact: return to normal 100% gain.
+constexpr double kDjLongLookAheadSeconds = 3.0;
+constexpr double kDjDropStepSeconds = 1.0;
+constexpr float kDjDropGainStage1 = 0.70F;
+constexpr float kDjDropGainStage2 = 0.40F;
+constexpr float kDjDropGainStage3 = 0.10F;
+constexpr double kDjDropTransitionSeconds = 0.006;
+constexpr double kDjBaselineSeconds = 1.25;
+constexpr double kDjTriggerCooldownSeconds = 4.5;
 constexpr float kDjStrongSurgeDb = personal_dj::kStrongSurgeDb;
 constexpr float kDjLoudSurgeDb = personal_dj::kLoudSurgeDb;
 // Studio Master Clarity design gains (dB). Single source for configure()
@@ -168,14 +175,23 @@ void DspProcessor::configure(double sampleRate) noexcept {
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.080)));
     djRelease_ = static_cast<float>(
         1.0 - std::exp(-1.0 / (sampleRate_ * 0.350)));
-    // Performance-envelope timings: a noticeable pre-drop ramp, near-instant
-    // impact lift, then a musical release back to the normal DJ rider.
-    djPreDuckSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kPreDuckSeconds)));
-    djImpactAttackSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactAttackSeconds)));
-    djImpactReleaseSmoothing_ = static_cast<float>(
-        1.0 - std::exp(-1.0 / (sampleRate_ * personal_dj::kImpactReleaseSeconds)));
+    djBaselineAlpha_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * kDjBaselineSeconds)));
+    djDropGainSmoothing_ = static_cast<float>(
+        1.0 - std::exp(-1.0 / (sampleRate_ * kDjDropTransitionSeconds)));
+
+    // Allocate once, outside the renderer loop. Two floats per frame cover
+    // stereo; mono uses the left lane. Allocation failure safely disables the
+    // long-look-ahead path instead of risking an audio-thread allocation.
+    djLookAheadCapacityFrames_ = static_cast<std::size_t>(
+        std::max<std::int64_t>(1, std::llround(sampleRate_ * kDjLongLookAheadSeconds)));
+    const std::size_t lookAheadSamples = djLookAheadCapacityFrames_ * 2U;
+    djLookAheadBuffer_.reset(new (std::nothrow) float[lookAheadSamples]);
+    if (djLookAheadBuffer_ != nullptr) {
+        std::fill_n(djLookAheadBuffer_.get(), lookAheadSamples, 0.0F);
+    } else {
+        djLookAheadCapacityFrames_ = 0;
+    }
     dcBlockerR_ = static_cast<float>(
         std::exp(-2.0 * kPi * 10.0 / sampleRate_));
     microFadeFrameCount_ = std::max(
@@ -246,11 +262,21 @@ void DspProcessor::reset() noexcept {
     djSideEnergy_ = 0.0F;
     djGain_ = 1.0F;
     djTargetGain_ = 1.0F;
-    djPerformanceDb_ = 0.0F;
-    djImpactCountdown_ = -1;
-    djImpactHoldFrames_ = 0;
-    djImpactCooldownFrames_ = 0;
+    djBaselineEnergy_ = 0.0F;
+    djAppliedDropGain_ = 1.0F;
+    djPreDropFramesRemaining_ = 0;
+    djTriggerCooldownFrames_ = 0;
     djControlCountdown_ = 0;
+    djLookAheadReadFrame_ = 0;
+    djLookAheadWriteFrame_ = 0;
+    djLookAheadFramesStored_ = 0;
+    djLookAheadChannelCount_ = 0;
+    if (djLookAheadBuffer_ != nullptr && djLookAheadCapacityFrames_ > 0) {
+        std::fill_n(
+            djLookAheadBuffer_.get(),
+            djLookAheadCapacityFrames_ * 2U,
+            0.0F);
+    }
     microFadePosition_ = 0;
     dcXPrev_.fill(0.0);
     dcYPrev_.fill(0.0);
@@ -326,6 +352,24 @@ void DspProcessor::setClarityAtmosBypass(bool bypass) noexcept {
 
 void DspProcessor::setDjEnergyEnabled(bool enabled) noexcept {
     targetDjEnergyEnabled_.store(enabled, std::memory_order_release);
+}
+
+void DspProcessor::setLongLookAheadMode(bool enabled) noexcept {
+    if (longLookAheadMode_ == enabled) return;
+    longLookAheadMode_ = enabled;
+    djLookAheadReadFrame_ = 0;
+    djLookAheadWriteFrame_ = 0;
+    djLookAheadFramesStored_ = 0;
+    djLookAheadChannelCount_ = 0;
+    djPreDropFramesRemaining_ = 0;
+    djTriggerCooldownFrames_ = 0;
+    djAppliedDropGain_ = 1.0F;
+    if (djLookAheadBuffer_ != nullptr && djLookAheadCapacityFrames_ > 0) {
+        std::fill_n(
+            djLookAheadBuffer_.get(),
+            djLookAheadCapacityFrames_ * 2U,
+            0.0F);
+    }
 }
 
 void DspProcessor::broadcastClarityWet(float wet) {
