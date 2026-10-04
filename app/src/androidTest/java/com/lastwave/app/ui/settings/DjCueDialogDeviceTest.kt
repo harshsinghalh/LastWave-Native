@@ -98,7 +98,7 @@ class DjCueDialogDeviceTest {
             assertEquals(DjCueMode.LAYA, p.mode)
             assertEquals(DjHighlightFocus.BEATS, p.focus)
             assertEquals(DjHighlightSpacing.RARE, p.spacing)
-            assertEquals(.55f, p.layaThreshold, 0f)
+            assertEquals(.50f, p.layaThreshold, 0f)
             assertEquals(1_500L, p.rampMs)
             assertEquals(.8f, p.after, 0f)
         }

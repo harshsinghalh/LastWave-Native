@@ -19,7 +19,7 @@ data class DjCueProfile(
     val mode: DjCueMode = DjCueMode.TIMED,
     val focus: DjHighlightFocus = DjHighlightFocus.ENERGY,
     val spacing: DjHighlightSpacing = DjHighlightSpacing.OCCASIONAL,
-    val layaThreshold: Float = .55f,
+    val layaThreshold: Float = .50f,
 ) {
     fun mixAt(positionMs: Long, active: Boolean): FloatArray {
         if (!active || mode != DjCueMode.TIMED) return floatArrayOf(1f, 0f, 0f, 0f)
@@ -47,7 +47,7 @@ object DjCuePreferences {
             DjCueMode.entries.getOrNull(p.getInt("mode", 0)) ?: DjCueMode.TIMED,
             DjHighlightFocus.entries.getOrNull(p.getInt("focus", 0)) ?: DjHighlightFocus.ENERGY,
             DjHighlightSpacing.entries.getOrNull(p.getInt("spacing", 0)) ?: DjHighlightSpacing.OCCASIONAL,
-            safe("laya_threshold", .55f, .95f).coerceAtLeast(.4f))
+            safe("laya_threshold", .50f, .95f).coerceAtLeast(.4f))
     }
     fun save(context: Context, value: DjCueProfile) {
         prefs(context).edit().putBoolean("enabled", value.enabled).putLong("cue", value.cueMs)

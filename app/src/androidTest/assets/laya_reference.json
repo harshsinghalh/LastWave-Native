@@ -1,30 +1,56 @@
 {
   "model_sha256": "1e8906f3ce8551f0c9e153c740505b6c99946d47db6fb69b9c87f16da7ec55d1",
+  "onnxruntime_version": "1.22.0",
+  "optimization_level": "basic",
+  "android_reference": {
+    "model_sha256": "1e8906f3ce8551f0c9e153c740505b6c99946d47db6fb69b9c87f16da7ec55d1",
+    "onnxruntime_version": "1.22.0",
+    "optimization_level": "basic",
+    "platform": "Android 35 x86_64 emulator",
+    "measurement_run_url": "https://github.com/harshsinghalh/LastWave-Native/actions/runs/37231042093",
+    "cases": [
+      {
+        "key": "0.0.1.0.0",
+        "probability": 0.17662524710273103,
+        "inputs_sha256": "480bb0bf3eefc82d02ab7d19c0a1a556f661e868f198a7ab6e2a66f508b8f64b"
+      },
+      {
+        "key": "0.2.2.2.2",
+        "probability": 0.5430540242312473,
+        "inputs_sha256": "8f2169cafa08b4cb572f5bf4f5a28d73925beb9885fc5223c51daa4907c0bdf9"
+      },
+      {
+        "key": "0.2.1.2.2",
+        "probability": 0.40708891428183563,
+        "inputs_sha256": "ec31433c07adece94980813e67add159f9460621b3e92d1618c62d813729edd6"
+      }
+    ]
+  },
   "cases": [
     {
       "key": "0.0.1.0.0",
-      "probability": 0.18500155581955907,
-      "seconds": 1.2730991939997693
+      "probability": 0.12265937112444279,
+      "seconds": 1.357572547000018
     },
     {
       "key": "0.2.2.2.2",
-      "probability": 0.6873752363206913,
-      "seconds": 1.3176272579999022
+      "probability": 0.7087532541952993,
+      "seconds": 1.292032029999973
     },
     {
       "key": "0.2.1.2.2",
-      "probability": 0.4261430896033568,
-      "seconds": 1.4235993860002054
+      "probability": 0.5483953790397891,
+      "seconds": 1.5988937550000628
     },
     {
       "key": "1.2.2.2.0",
-      "probability": 0.5838189041505116,
-      "seconds": 1.4056292180002856
+      "probability": 0.5978860395459639,
+      "seconds": 1.5813291009999375
     },
     {
       "key": "2.2.2.0.2",
-      "probability": 0.45933552294185587,
-      "seconds": 1.3722300449999238
+      "probability": 0.4750279912772232,
+      "seconds": 1.6100262959998872
     }
   ]
 }

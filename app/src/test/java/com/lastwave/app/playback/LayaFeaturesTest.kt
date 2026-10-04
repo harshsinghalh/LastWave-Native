@@ -18,6 +18,6 @@ class LayaFeaturesTest {
     @Test fun layaModeDoesNotReduceTheWholeTrack() {
         val p = DjCueProfile(enabled = true, mode = DjCueMode.LAYA)
         assertArrayEquals(floatArrayOf(1f, 0f, 0f, 0f), p.mixAt(200_000, true), 0f)
-        assertEquals(.55f, p.layaThreshold, 0f)
+        assertEquals(.50f, p.layaThreshold, 0f)
     }
 }

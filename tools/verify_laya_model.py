@@ -18,8 +18,10 @@ with args.model.open('rb') as file:
 root = Path(__file__).resolve().parents[1]
 bank = json.loads((root / 'app/src/main/assets/laya/dj_tokens.json').read_text())
 options = ort.SessionOptions()
+options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
 options.intra_op_num_threads = 2
 options.inter_op_num_threads = 1
+options.add_session_config_entry('session.intra_op.allow_spinning', '0')
 session = ort.InferenceSession(str(args.model), sess_options=options, providers=['CPUExecutionProvider'])
 results = []
 for key in ['0.0.1.0.0', '0.2.2.2.2', '0.2.1.2.2', '1.2.2.2.0', '2.2.2.0.2']:
@@ -37,5 +39,8 @@ print(json.dumps(results, indent=2))
 assert results[0]['probability'] < results[1]['probability']
 assert results[2]['probability'] < results[1]['probability']
 args.output.parent.mkdir(parents=True, exist_ok=True)
+android_reference = json.loads((root / 'tests/dj/laya_android_reference.json').read_text())
+assert android_reference['model_sha256'] == expected and android_reference['optimization_level'] == 'basic'
 args.output.write_text(json.dumps({'model_sha256': expected,
-    'cases': results}, indent=2) + '\n')
+    'onnxruntime_version': ort.__version__, 'optimization_level': 'basic',
+    'android_reference': android_reference, 'cases': results}, indent=2) + '\n')

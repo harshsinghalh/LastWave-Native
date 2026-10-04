@@ -10,16 +10,22 @@ internal class LayaDjController(context: Context, private val scope: CoroutineSc
     private var previous: Triple<DjHighlightFocus, DjHighlightSpacing, Float>? = null
     private var lastCandidate: Pair<Int, Int>? = null
     private var revision = 0L
+    private var warmed = false
 
     fun update(enabled: Boolean, profile: DjCueProfile, engine: NativeAudioEngine) {
         val config = if (enabled) Triple(profile.focus, profile.spacing, profile.layaThreshold) else null
         if (config != previous) {
-            revision++; job?.cancel(); job = null; lastCandidate = null
+            revision++; job?.cancel(); job = null; lastCandidate = null; warmed = false
             engine.setDjLayaDecision(-1, -1, false)
             if (!enabled) model.releaseWhenIdle()
             previous = config
         }
         if (!enabled || !model.state.value.ready || job?.isActive == true) return
+        if (!warmed) {
+            warmed = true
+            job = scope.launch(Dispatchers.Main.immediate) { model.warmup() }
+            return
+        }
         val features = engine.djFeatures()
         if (features.size != 8 || features[6] != 1f) return
         val candidate = features[4].toInt() to features[5].toInt()

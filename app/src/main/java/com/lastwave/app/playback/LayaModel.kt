@@ -108,11 +108,20 @@ class LayaModel private constructor(private val context: Context) {
 
     fun cancelDownload() { downloadJob?.cancel(); connection?.disconnect() }
 
-    internal suspend fun score(key: String): Float? = withContext(Dispatchers.IO) {
+    internal suspend fun score(key: String): Float? = scoreInternal(key, publish = true, force = false)
+
+    /** Warm the real session before a musical candidate's five-second deadline. */
+    internal suspend fun warmup() { scoreInternal("0.0.1.0.0", publish = false, force = true) }
+
+    private suspend fun scoreInternal(key: String, publish: Boolean, force: Boolean): Float? = withContext(Dispatchers.IO) {
         releaseJob?.cancel()
         lock.withLock {
             if (!state.value.ready) return@withLock null
-            cache[key]?.let { return@withLock it }
+            if (!force) cache[key]?.let { probability ->
+                if (publish) mutableState.value = state.value.copy(lastProbability = probability,
+                    message = "Laya ready. Scoring runs offline.")
+                return@withLock probability
+            }
             try {
                 val entry = tokens.getJSONObject("entries").getJSONObject(key)
                 val idsJson = entry.getJSONArray("ids")
@@ -128,7 +137,8 @@ class LayaModel private constructor(private val context: Context) {
                     options.setIntraOpNumThreads(2)
                     options.setInterOpNumThreads(1)
                     options.addConfigEntry("session.intra_op.allow_spinning", "0")
-                    options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    // Keep the export's explicit attention/masking operations.
+                    options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
                     environment.createSession(model.absolutePath, options).also { session = it }
                 }
                 val inputs = linkedMapOf<String, OnnxTensor>()
@@ -145,7 +155,8 @@ class LayaModel private constructor(private val context: Context) {
                         val probability = (1.0 / (1.0 + exp((logits[1] - logits[0]) / tokens.getDouble("temperature")))).toFloat()
                         if (cache.size >= 64) cache.remove(cache.keys.first())
                         cache[key] = probability
-                        mutableState.value = state.value.copy(lastProbability = probability, message = "Laya ready. Scoring runs offline.")
+                        if (publish) mutableState.value = state.value.copy(lastProbability = probability,
+                            message = "Laya ready. Scoring runs offline.")
                         probability
                     }
                 } finally { inputs.values.forEach { it.close() } }
