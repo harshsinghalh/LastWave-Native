@@ -176,8 +176,9 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjEnergyEnabled(
     jobject,
     jlong handle,
     jboolean enabled) {
-    if (fromHandle(handle) == nullptr) return;
-    lastwave::audio::DspProcessor::broadcastDjEnergyEnabled(enabled == JNI_TRUE);
+    if (auto* engine = fromHandle(handle); engine != nullptr) {
+        engine->setDjEnergyEnabled(enabled == JNI_TRUE);
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

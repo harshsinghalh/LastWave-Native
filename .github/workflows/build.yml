@@ -224,11 +224,11 @@ jobs:
           git push --force origin "refs/tags/$TAG"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" \
-              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
-              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
+              --title "LastWave v${VERSION} - Android DJ Energy 3s Pre-Drop" \
+              --notes "Android DJ Energy now uses a genuine 3-second decoded-PCM look-ahead. Before a detected high-energy beat/vocal/instrument impact it stages the overall signal to 70% for one second, 40% for one second, then 10% for the final second, and returns to the normal 100% level at the impact. No +5 dB spike is applied. Includes end-of-track look-ahead draining, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           else
             gh release create "$TAG" \
-              --title "LastWave v${VERSION} - Android + Windows Personal DJ" \
-              --notes "Multi-platform Personal DJ release. Android keeps the native predictive pre-drop and +5 dB impact DSP with limiter protection; Windows 11 assets are published by the companion Windows workflow. Laya is used at build time to tune the personal trigger profile while the requested -2 dB to +5 dB operating window remains fixed."
+              --title "LastWave v${VERSION} - Android DJ Energy 3s Pre-Drop" \
+              --notes "Android DJ Energy now uses a genuine 3-second decoded-PCM look-ahead. Before a detected high-energy beat/vocal/instrument impact it stages the overall signal to 70% for one second, 40% for one second, then 10% for the final second, and returns to the normal 100% level at the impact. No +5 dB spike is applied. Includes end-of-track look-ahead draining, limiter protection, Android 10+ release/raw APKs, and Android 7+ legacy APK."
           fi
           gh release upload "$TAG" final_apk/* --clobber

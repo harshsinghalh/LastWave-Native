@@ -221,8 +221,15 @@ class NativePcmAudioProcessor(
         if (outputAudioFormat == AudioProcessor.AudioFormat.NOT_SET) return
         // The retained input frames are encoder padding and are intentionally discarded.
         retainedEndBytes = 0
+        // DJ Energy may intentionally retain three seconds of decoded future
+        // PCM. End-of-stream must drain that delayed tail instead of truncating
+        // the final three seconds of the track.
+        val lookAheadDrainFrames =
+            nativeOutputSampleRate.coerceAtLeast(0) * DJ_LOOKAHEAD_FLUSH_SECONDS
+        val flushCapacityFrames =
+            RESAMPLER_FLUSH_CAPACITY_FRAMES + lookAheadDrainFrames
         val output = replaceOutputBuffer(
-            RESAMPLER_FLUSH_CAPACITY_FRAMES * outputAudioFormat.bytesPerFrame,
+            flushCapacityFrames * outputAudioFormat.bytesPerFrame,
         ).order(ByteOrder.nativeOrder())
         val outputFrames = engine.flushMediaProcessor(output, outputAudioFormat.channelCount)
         check(outputFrames >= 0) { "Native PCM flush failed" }
@@ -262,5 +269,6 @@ class NativePcmAudioProcessor(
         const val MAX_TRIM_FRAMES = 1_000_000
         const val RESAMPLER_OUTPUT_HEADROOM_FRAMES = 4_096
         const val RESAMPLER_FLUSH_CAPACITY_FRAMES = 65_536
+        const val DJ_LOOKAHEAD_FLUSH_SECONDS = 4
     }
 }
