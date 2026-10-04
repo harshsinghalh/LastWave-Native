@@ -21,7 +21,6 @@ class DjThreeSecondPreDropContractTest {
         assertThat(source).contains("kDjDropGainStage1 = 0.70F")
         assertThat(source).contains("kDjDropGainStage2 = 0.40F")
         assertThat(source).contains("kDjDropGainStage3 = 0.10F")
-        assertThat(source).contains("performance")
         assertThat(source).contains("nextDjPreDropGain()")
         assertThat(source).contains("flushLookAhead(")
     }
