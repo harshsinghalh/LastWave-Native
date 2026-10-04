@@ -434,6 +434,10 @@ bool AudioEngine::configureMediaProcessor(
     // so sinc overshoot is included in final peak protection.
     mediaDsp_.setPeakProtectionEnabled(true);
     mediaDsp_.configure(outputSampleRate);
+    // Only the Media3 decoder path owns the true 3-second look-ahead buffer.
+    // Oboe receives already-processed PCM from this path and must not delay it
+    // a second time.
+    mediaDsp_.setLongLookAheadMode(true);
     return configureMediaResamplerLocked();
 }
 
@@ -525,25 +529,46 @@ bool AudioEngine::flushMediaProcessor(
     outputFrameCount = 0;
     if (output == nullptr || outputCapacityFrames == 0) return false;
     std::lock_guard<std::mutex> processorLock(mediaProcessorMutex_);
-    if (mediaResampler_ == nullptr) return true;
+    if (mediaInputSampleRate_ <= 0 || mediaOutputSampleRate_ <= 0 ||
+        (mediaChannelCount_ != 1 && mediaChannelCount_ != 2)) {
+        return false;
+    }
+
     const std::size_t channels = static_cast<std::size_t>(mediaChannelCount_);
-    while (outputFrameCount < outputCapacityFrames) {
-        std::size_t outputDone = 0;
-        const soxr_error_t error = soxr_process(
-            asSoxr(mediaResampler_),
-            nullptr,
-            0,
-            nullptr,
+
+    // First drain any samples still buffered by libsoxr. Those samples still
+    // pass through the DSP and therefore enter/advance the 3-second delay.
+    if (mediaResampler_ != nullptr) {
+        while (outputFrameCount < outputCapacityFrames) {
+            std::size_t outputDone = 0;
+            const soxr_error_t error = soxr_process(
+                asSoxr(mediaResampler_),
+                nullptr,
+                0,
+                nullptr,
+                output + outputFrameCount * channels,
+                outputCapacityFrames - outputFrameCount,
+                &outputDone);
+            if (error != nullptr) return false;
+            if (outputDone > 0) {
+                mediaDsp_.process(
+                    output + outputFrameCount * channels,
+                    static_cast<std::int32_t>(outputDone),
+                    mediaChannelCount_);
+                outputFrameCount += outputDone;
+            }
+            if (outputDone == 0) break;
+        }
+    }
+
+    // Finally emit every already-processed frame still held by the true
+    // look-ahead delay. This prevents the last ~3 seconds of a track from
+    // being truncated at end-of-stream.
+    if (outputFrameCount < outputCapacityFrames) {
+        outputFrameCount += mediaDsp_.flushLookAhead(
             output + outputFrameCount * channels,
             outputCapacityFrames - outputFrameCount,
-            &outputDone);
-        if (error != nullptr) return false;
-        mediaDsp_.process(
-            output + outputFrameCount * channels,
-            static_cast<std::int32_t>(outputDone),
             mediaChannelCount_);
-        outputFrameCount += outputDone;
-        if (outputDone == 0) break;
     }
     return true;
 }
