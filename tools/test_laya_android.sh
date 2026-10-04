@@ -6,7 +6,8 @@ adb shell chmod 644 /data/local/tmp/laya-model.onnx
 adb shell run-as com.lastwave.dj mkdir -p files/laya
 adb shell run-as com.lastwave.dj cp /data/local/tmp/laya-model.onnx files/laya/model.onnx
 ./gradlew :app:connectedDebugAndroidTest --stacktrace
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb uninstall com.lastwave.dj
+adb install app/build/outputs/apk/release/app-release.apk
 adb shell am force-stop com.lastwave.dj
 adb logcat -c
 adb shell am start -W -n com.lastwave.dj/com.lastwave.app.MainActivity

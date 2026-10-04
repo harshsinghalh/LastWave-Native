@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: dj-cue-${{ github.ref }}
   cancel-in-progress: true
@@ -26,6 +27,14 @@ jobs:
           java-version: '17'
           distribution: temurin
           cache: gradle
+      - name: Retrieve previously compiled release
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: LastWave-DJ-v4.6.0-Laya-APK
+          run-id: 37224111437
+          github-token: ${{ github.token }}
+          path: previously_compiled
       - name: Native DSP regression checks
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_dsp_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_test
@@ -44,7 +53,16 @@ jobs:
       - name: Download pinned Laya test model
         run: python3 tools/download_laya_model.py /tmp/laya-model.onnx
       - name: Unit tests and Android packages
-        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+        run: |
+          git fetch origin 93bbb49f76af5f2ed0037060e1391b12a3dbfa68 --depth=1
+          if test -f previously_compiled/LastWave-DJ-v4.6.0-Laya.apk && test -z "$SIGNING_KEY$ADDON_CLIENT_SECRET" && git diff --quiet 93bbb49f76af5f2ed0037060e1391b12a3dbfa68 HEAD -- app/src/main app/build.gradle.kts app/proguard-rules.pro audio build.gradle.kts settings.gradle.kts gradle.properties gradle tools/generate_native_secrets.py; then
+            ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest -Pandroid.injected.build.abi=x86_64 --stacktrace
+            mkdir -p app/build/outputs/apk/release
+            cp previously_compiled/LastWave-DJ-v4.6.0-Laya.apk app/build/outputs/apk/release/app-release.apk
+            echo 'Release application source is unchanged; verified compiled release reused.'
+          else
+            ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+          fi
       - name: Validate release APK signature
         run: |
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
@@ -55,6 +73,26 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.0-Laya.apk > final_apk/signature-verification.txt
           cp "$(dirname "$APKSIGNER")/lib/apksigner.jar" final_apk/apksigner.jar
           (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
+          mkdir -p apk_parts
+          split -b 25M -d final_apk/LastWave-DJ-v4.6.0-Laya.apk apk_parts/apk.part.
+      - name: Upload APK part 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-00
+          path: apk_parts/apk.part.00
+      - name: Upload APK part 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-01
+          path: apk_parts/apk.part.01
+      - name: Upload APK verification tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-tools
+          path: |
+            final_apk/apksigner.jar
+            final_apk/signature-verification.txt
+            final_apk/SHA256SUMS.txt
       - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
