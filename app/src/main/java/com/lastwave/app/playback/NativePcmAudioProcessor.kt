@@ -261,6 +261,12 @@ class NativePcmAudioProcessor(
         const val DEFAULT_OUTPUT_SAMPLE_RATE_HZ = 48_000
         const val MAX_TRIM_FRAMES = 1_000_000
         const val RESAMPLER_OUTPUT_HEADROOM_FRAMES = 4_096
-        const val RESAMPLER_FLUSH_CAPACITY_FRAMES = 65_536
+        // Worst-case tail capacity: 3 seconds at the supported 384 kHz
+        // output rate plus existing resampler headroom. This lets one
+        // BaseAudioProcessor end-of-stream buffer drain the full DJ look-ahead
+        // tail without truncating the song ending.
+        const val DJ_LONG_LOOKAHEAD_SECONDS = 3
+        const val RESAMPLER_FLUSH_CAPACITY_FRAMES =
+            MAX_OUTPUT_SAMPLE_RATE_HZ * DJ_LONG_LOOKAHEAD_SECONDS + 65_536
     }
 }
