@@ -46,13 +46,43 @@ class DjCueNativeDeviceTest {
             engine.setDjCue(.7f, 0f, 0f, 0f)
             val quiet = process()
             assertEquals(.7 / sqrt(2.0) * .1, rms(quiet), .0003)
-            engine.setDjCue(.9f, 2f, 2f, 3f)
+            engine.setDjCue(.8f, 2f, 2f, 3f)
             val lifted = process()
             assertTrue(rms(lifted) > rms(quiet))
             assertTrue(lifted.all { it.isFinite() && abs(it) <= 1f })
             engine.setBitPerfect(true)
             val bypass = process()
             for (i in bypass.indices) assertEquals(input.getFloat(i * 4), bypass[i], 0f)
+            // Exercise the new packaged JNI path with warm-up, sustained rise,
+            // bounded event, silence and Bit-Perfect. No mocks of native DSP.
+            engine.setBitPerfect(false)
+            engine.setDjCue(1f, 0f, 0f, 0f)
+            engine.setDjHighlights(true, 0, 0, 2f, 2f, 3f)
+            engine.resetMediaProcessor()
+            fun fill(amplitude: Float) {
+                input.clear()
+                repeat(frames) { n ->
+                    val x = (amplitude * sin(n * 90.0 * 2 * PI / 48_000)).toFloat()
+                    input.putFloat(x); input.putFloat(x)
+                }
+                input.rewind()
+            }
+            fill(.03f)
+            repeat(12) {
+                val ordinary = process()
+                for (i in ordinary.indices) assertEquals(input.getFloat(i * 4), ordinary[i], 0f)
+            }
+            fill(.18f)
+            val highlighted = ArrayList<FloatArray>()
+            repeat(8) { highlighted += process() }
+            val dryRms = .18 / sqrt(2.0)
+            assertTrue("Selected bass highlight must lift energy", rms(highlighted[3]) > dryRms * 1.15)
+            assertTrue(highlighted.all { block -> block.all { it.isFinite() && abs(it) <= 1f } })
+            assertArrayEquals("A steady loud passage must return to untouched PCM",
+                FloatArray(frames * 2) { input.getFloat(it * 4) }, highlighted.last(), 0f)
+            engine.setBitPerfect(true)
+            val selectiveBypass = process()
+            for (i in selectiveBypass.indices) assertEquals(input.getFloat(i * 4), selectiveBypass[i], 0f)
         } finally {
             engine.close(); storeScope.cancel()
         }

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include "DjHighlightDetector.h"
 
 namespace lastwave::audio {
 
@@ -21,6 +22,7 @@ public:
     void reset() noexcept;
     // Independent automation layer; never modifies saved EQ or clarity settings.
     void setDjCue(float volume, float energyDb, float vocalsDb, float beatsDb) noexcept;
+    void setDjHighlights(bool enabled, int focus, int spacing, float energyDb, float vocalsDb, float beatsDb) noexcept;
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     void setPeakProtectionEnabled(bool enabled) noexcept;
@@ -84,6 +86,11 @@ public:
     }
 
 private:
+    std::atomic<bool> highlightEnabled_{false};
+    std::atomic<int> highlightFocus_{0}, highlightSpacing_{0};
+    std::atomic<float> highlightEnergy_{2.0F}, highlightVocals_{2.0F}, highlightBeats_{3.0F};
+    DjHighlightDetector highlights_;
+    bool highlightWasEnabled_{false};
     std::atomic<float> djVolumeTarget_{1.0F}, djEnergyTarget_{0.0F}, djVocalsTarget_{0.0F}, djBeatsTarget_{0.0F};
     float djVolume_{1.0F}, djEnergy_{0.0F}, djVocals_{0.0F}, djBeats_{0.0F};
     float djEnergyGain_{1.0F};

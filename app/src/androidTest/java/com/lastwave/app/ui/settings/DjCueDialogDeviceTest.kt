@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lastwave.app.playback.DjCuePreferences
 import com.lastwave.app.playback.DjCueProfile
+import com.lastwave.app.playback.DjCueMode
+import com.lastwave.app.playback.DjHighlightFocus
+import com.lastwave.app.playback.DjHighlightSpacing
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -23,7 +26,7 @@ class DjCueDialogDeviceTest {
 
     @Test fun invalidTimeCannotBeSaved() {
         show()
-        compose.onNode(hasSetTextAction()).performTextReplacement("2:99")
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("2:99")
         compose.onNodeWithText("Save").assertIsNotEnabled()
         assertEquals(165_000L, DjCuePreferences.read(context).cueMs)
     }
@@ -33,7 +36,7 @@ class DjCueDialogDeviceTest {
         var dismissed = false
         show(onEnable = { enabledCallback = true }, onDismiss = { dismissed = true })
         compose.onNode(isToggleable()).performClick()
-        compose.onNode(hasSetTextAction()).performTextReplacement("0:10")
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("0:10")
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
             val saved = DjCuePreferences.read(context)
@@ -47,8 +50,39 @@ class DjCueDialogDeviceTest {
     @Test fun cancelDiscardsDraft() {
         show()
         compose.onNode(isToggleable()).performClick()
-        compose.onNode(hasSetTextAction()).performTextReplacement("0:10")
+        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("0:10")
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(DjCueProfile(), DjCuePreferences.read(context))
+    }
+
+    @Test fun automaticQuestionsPersistAndTimedFieldsReturn() {
+        show()
+        compose.onNode(isToggleable()).performClick()
+        compose.onNodeWithText("Automatic highlights").performScrollTo().performClick()
+        compose.onNodeWithText("Vocal-led lifts").performScrollTo().performClick()
+        compose.onNodeWithText("Rare (60 seconds apart)").performScrollTo().performClick()
+        compose.onNodeWithText("Timed cue").performScrollTo().performClick()
+        compose.onNode(hasSetTextAction()).assertExists()
+        compose.onNodeWithText("Automatic highlights").performScrollTo().performClick()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle {
+            val p = DjCuePreferences.read(context)
+            assertTrue(p.enabled)
+            assertEquals(DjCueMode.HIGHLIGHTS, p.mode)
+            assertEquals(DjHighlightFocus.VOCALS, p.focus)
+            assertEquals(DjHighlightSpacing.RARE, p.spacing)
+            assertEquals(1_500L, p.rampMs)
+            assertEquals(.8f, p.after, 0f)
+        }
+    }
+
+    @Test fun previousDefaultsUpgradeButCustomValuesSurvive() {
+        val raw = context.getSharedPreferences("lastwave_dj_cue", 0)
+        raw.edit().clear().putLong("ramp", 2_000).putFloat("after", .9f).commit()
+        assertEquals(1_500L, DjCuePreferences.read(context).rampMs)
+        assertEquals(.8f, DjCuePreferences.read(context).after, 0f)
+        raw.edit().putLong("ramp", 4_000).putFloat("after", .65f).commit()
+        assertEquals(4_000L, DjCuePreferences.read(context).rampMs)
+        assertEquals(.65f, DjCuePreferences.read(context).after, 0f)
     }
 }

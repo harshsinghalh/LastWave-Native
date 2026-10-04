@@ -526,3 +526,10 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjCue(
     JNIEnv*, jobject, jlong handle, jfloat volume, jfloat energy, jfloat vocals, jfloat beats) {
     if (auto* engine = fromHandle(handle)) engine->setDjCue(volume, energy, vocals, beats);
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjHighlights(
+    JNIEnv*, jobject, jlong handle, jboolean enabled, jint focus, jint spacing,
+    jfloat energy, jfloat vocals, jfloat beats) {
+    if (auto* engine = fromHandle(handle)) engine->setDjHighlights(enabled == JNI_TRUE, focus, spacing, energy, vocals, beats);
+}

@@ -116,6 +116,11 @@ class NativeAudioEngine @Inject constructor(
         withHandle(Unit) { nativeSetDjCue(it, volume, energy, vocals, beats) }
     }
     private external fun nativeSetDjCue(handle: Long, volume: Float, energy: Float, vocals: Float, beats: Float)
+    fun setDjHighlights(enabled: Boolean, focus: Int, spacing: Int, energy: Float, vocals: Float, beats: Float) {
+        withHandle(Unit) { nativeSetDjHighlights(it, enabled, focus, spacing, energy, vocals, beats) }
+    }
+    private external fun nativeSetDjHighlights(handle: Long, enabled: Boolean, focus: Int, spacing: Int,
+        energy: Float, vocals: Float, beats: Float)
 
     internal fun setOutputVolume(volume: Float) {
         withHandle(Unit) { nativeSetOutputVolume(it, volume.coerceIn(0f, 1f)) }

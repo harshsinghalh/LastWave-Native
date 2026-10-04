@@ -1,7 +1,7 @@
-name: DJ Cue Android verification
+name: Selective DJ Android verification
 on:
   push:
-    branches: [feature/android-dj-cue-4.5.1]
+    branches: [feature/android-selective-dj-4.5.2]
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,6 +29,8 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_dsp_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_test
           /tmp/dj_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_highlight_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_highlight_test
+          /tmp/dj_highlight_test
       - name: Prepare build and fallback signing
         run: |
           chmod +x gradlew
@@ -44,13 +46,13 @@ jobs:
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n1)
           test -n "$APKSIGNER"
           mkdir -p final_apk
-          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-v4.5.1-DJ-Cue.apk
-          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-v4.5.1-DJ-Cue.apk > final_apk/signature-verification.txt
+          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-v4.5.2-Selective-DJ.apk
+          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-v4.5.2-Selective-DJ.apk > final_apk/signature-verification.txt
           (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
       - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-v4.5.1-DJ-Cue-APK
+          name: LastWave-v4.5.2-Selective-DJ-APK
           path: final_apk/
           if-no-files-found: error
       - name: Enable emulator KVM
@@ -71,7 +73,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: DJ-Cue-test-reports
+          name: Selective-DJ-test-reports
           path: |
             app/build/reports/tests/
             app/build/reports/androidTests/

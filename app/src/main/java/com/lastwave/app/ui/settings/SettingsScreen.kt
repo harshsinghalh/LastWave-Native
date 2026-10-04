@@ -1026,7 +1026,7 @@ fun SettingsScreen(
                                 iconContainer = MaterialTheme.colorScheme.secondaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 title = "DJ Cue",
-                                subtitle = "Timed volume rise, energy, vocal presence and beats",
+                                subtitle = "Timed cue or selective highlights with a 1.5 s / 80% preset",
                                 onClick = { showDjCue = true },
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "audio.dj_cue"),

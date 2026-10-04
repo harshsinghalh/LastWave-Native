@@ -1469,9 +1469,13 @@ class MusicPlayer @Inject constructor(
 
                     // Follows media position (not wall clock), so pause, speed and seek keep the cue aligned.
                     val dj = DjCuePreferences.read(appContext)
-                    val mix = dj.mixAt(pos, dj.enabled && !djEnergyModePref && !isCasting && !bitPerfectEnabled &&
-                        !systemEffectsModePref && !usbExclusiveSinkActive && !isSpatialAudioCodec(_state.value.audioCodec))
-                    nativeAudioEngine.get().setDjCue(mix[0], mix[1], mix[2], mix[3])
+                    val djAllowed = dj.enabled && !djEnergyModePref && !isCasting && !bitPerfectEnabled &&
+                        !systemEffectsModePref && !usbExclusiveSinkActive && !isSpatialAudioCodec(_state.value.audioCodec)
+                    val mix = dj.mixAt(pos, djAllowed)
+                    val djEngine = nativeAudioEngine.get()
+                    djEngine.setDjCue(mix[0], mix[1], mix[2], mix[3])
+                    djEngine.setDjHighlights(djAllowed && dj.mode == DjCueMode.HIGHLIGHTS,
+                        dj.focus.ordinal, dj.spacing.ordinal, dj.energyDb, dj.vocalsDb, dj.beatsDb)
                     val previous = _state.value
                     val unchanged = !_state.value.isPlaying &&
                         previous.positionMs == pos &&
@@ -2402,6 +2406,8 @@ class MusicPlayer @Inject constructor(
                 runCatching { engine.setEqualizer(false, zeros) }
                 runCatching { engine.setStudioMasterClarity(false) }
                 runCatching { engine.setDjEnergyEnabled(false) }
+                runCatching { engine.setDjCue(1f, 0f, 0f, 0f) }
+                runCatching { engine.setDjHighlights(false, 0, 0, 0f, 0f, 0f) }
                 engine.systemFlattened = true
             }
         } else {

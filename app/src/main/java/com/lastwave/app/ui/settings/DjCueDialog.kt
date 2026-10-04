@@ -3,12 +3,16 @@ package com.lastwave.app.ui.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lastwave.app.playback.DjCuePreferences
+import com.lastwave.app.playback.DjCueMode
+import com.lastwave.app.playback.DjHighlightFocus
+import com.lastwave.app.playback.DjHighlightSpacing
 import kotlin.math.roundToInt
 
 @Composable
@@ -23,30 +27,56 @@ internal fun DjCueDialog(onDismiss: () -> Unit, onEnable: () -> Unit) {
         (minutes * 60 + seconds) * 1000 else null
     AlertDialog(onDismissRequest = onDismiss, title = { Text("DJ Cue") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("One saved cue repeats on each track. Pause and seek follow the song's timeline.")
+            Text("Choose a timed cue or occasional automatic highlights. Both are optional.")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Enable DJ Cue")
                 Switch(profile.enabled, { profile = profile.copy(enabled = it) })
             }
-            OutlinedTextField(cue, { cue = it }, label = { Text("Cue time (minutes:seconds)") },
+            Text("How should the DJ boost start?")
+            DjChoice("Timed cue", profile.mode == DjCueMode.TIMED) { profile = profile.copy(mode = DjCueMode.TIMED) }
+            DjChoice("Automatic highlights", profile.mode == DjCueMode.HIGHLIGHTS) { profile = profile.copy(mode = DjCueMode.HIGHLIGHTS) }
+            if (profile.mode == DjCueMode.HIGHLIGHTS) {
+                Text("Which moments should stand out?")
+                DjChoice("Strong energy rises", profile.focus == DjHighlightFocus.ENERGY) { profile = profile.copy(focus = DjHighlightFocus.ENERGY) }
+                DjChoice("Bass-led drops", profile.focus == DjHighlightFocus.BEATS) { profile = profile.copy(focus = DjHighlightFocus.BEATS) }
+                DjChoice("Vocal-led lifts", profile.focus == DjHighlightFocus.VOCALS) { profile = profile.copy(focus = DjHighlightFocus.VOCALS) }
+                Text("How often should boosts happen?")
+                DjChoice("Occasional (35 seconds apart)", profile.spacing == DjHighlightSpacing.OCCASIONAL) { profile = profile.copy(spacing = DjHighlightSpacing.OCCASIONAL) }
+                DjChoice("Rare (60 seconds apart)", profile.spacing == DjHighlightSpacing.RARE) { profile = profile.copy(spacing = DjHighlightSpacing.RARE) }
+                Text("After 10 seconds of listening, sustained energy rises can trigger a five-second highlight. Volume dips briefly to 70%, rises to 80% within 1.5 seconds, then returns to normal. Ordinary passages keep their original level. Quiet, steady and short tracks may have no boost.")
+                Text("Selection uses on-device audio energy and frequency activity. It estimates highlights, not popularity; vocal activity is not isolated vocals. No song or audio is uploaded.")
+            } else {
+                Text("One saved cue repeats on each track. Pause and seek follow the song's timeline.")
+                OutlinedTextField(cue, { cue = it }, label = { Text("Cue time (minutes:seconds)") },
                 singleLine = true, isError = validCue == null, modifier = Modifier.fillMaxWidth())
-            if (validCue == null) Text("Enter a valid time, such as 2:45.", color = MaterialTheme.colorScheme.error)
-            DjCueSlider("Before cue volume", profile.before * 100, 0f..100f, "%") { profile = profile.copy(before = it / 100) }
-            DjCueSlider("After cue volume", profile.after * 100, 0f..100f, "%") { profile = profile.copy(after = it / 100) }
-            DjCueSlider("Transition", profile.rampMs / 1000f, .1f..30f, "s") { profile = profile.copy(rampMs = (it * 1000).toLong()) }
+                if (validCue == null) Text("Enter a valid time, such as 2:45.", color = MaterialTheme.colorScheme.error)
+                DjCueSlider("Before cue volume", profile.before * 100, 0f..100f, "%") { profile = profile.copy(before = it / 100) }
+                DjCueSlider("After cue volume", profile.after * 100, 0f..100f, "%") { profile = profile.copy(after = it / 100) }
+                DjCueSlider("Transition", profile.rampMs / 1000f, .1f..30f, "s") { profile = profile.copy(rampMs = (it * 1000).toLong()) }
+                TextButton(onClick = { profile = profile.copy(before = .7f, after = .8f, rampMs = 1_500) }) { Text("Use 1.5 s / 80% preset") }
+            }
             DjCueSlider("Energy gain", profile.energyDb, 0f..6f, "dB") { profile = profile.copy(energyDb = it) }
             DjCueSlider("Vocal presence", profile.vocalsDb, 0f..6f, "dB") { profile = profile.copy(vocalsDb = it) }
             DjCueSlider("Beat / bass emphasis", profile.beatsDb, 0f..6f, "dB") { profile = profile.copy(beatsDb = it) }
             Text("Volume is relative to the current output: 70% means a 30% amplitude reduction. Vocal presence also affects instruments in the same frequency range. Peak protection can reduce the boost on loud songs.")
-            Text("Saving an enabled cue switches off automatic DJ Energy. Re-enabling DJ Energy suspends the cue. Also suspended during Bit-Perfect, USB Exclusive, System Audio Effects, casting, and spatial playback. Songs shorter than the cue keep the before-cue level.")
+            Text("Saving enabled DJ Cue switches off the separate DJ Energy mode. Re-enabling DJ Energy suspends DJ Cue. Also suspended during Bit-Perfect, USB Exclusive, System Audio Effects, casting, and spatial playback. Timed mode keeps short songs at the before-cue level.")
         }
     }, confirmButton = {
-        TextButton(enabled = validCue != null, onClick = {
-            DjCuePreferences.save(context, profile.copy(cueMs = validCue!!))
+        TextButton(enabled = profile.mode == DjCueMode.HIGHLIGHTS || validCue != null, onClick = {
+            DjCuePreferences.save(context, profile.copy(cueMs = validCue ?: profile.cueMs))
             if (profile.enabled) onEnable()
             onDismiss()
         }) { Text("Save") }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+@Composable
+private fun DjChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().selectable(selected = selected, onClick = onClick),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label)
+    }
 }
 
 @Composable

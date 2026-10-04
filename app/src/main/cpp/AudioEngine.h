@@ -59,6 +59,9 @@ public:
         oboeDsp_.setDjCue(volume, energy, vocals, beats);
         mediaDsp_.setDjCue(volume, energy, vocals, beats);
     }
+    void setDjHighlights(bool enabled, int focus, int spacing, float energy, float vocals, float beats) noexcept {
+        mediaDsp_.setDjHighlights(enabled, focus, spacing, energy, vocals, beats);
+    }
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     // Read-back for UI truthfulness: true only when both DSP instances

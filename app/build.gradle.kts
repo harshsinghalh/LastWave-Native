@@ -61,8 +61,8 @@ android {
         minSdk = (project.findProperty("minSdk") as? String)?.toIntOrNull() ?: 29
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 27
-        versionName = "4.5.1"
+        versionCode = 28
+        versionName = "4.5.2"
 
         // Native secrets (addon client lock) live strictly in native .so via
         // SecretsBridge_generated.h (tools/generate_native_secrets.py).
@@ -327,4 +327,3 @@ val generateNativeSecrets by tasks.registering(Exec::class) {
 tasks.matching { it.name.startsWith("preBuild") || it.name.startsWith("configureCMake") }.configureEach {
     dependsOn(generateNativeSecrets)
 }
-

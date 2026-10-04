@@ -244,6 +244,8 @@ void DspProcessor::configure(double sampleRate) noexcept {
 }
 
 void DspProcessor::reset() noexcept {
+    highlights_.configure(sampleRate_);
+    highlightWasEnabled_ = false;
     djVolume_ = djVolumeTarget_.load();
     djEnergy_ = djVocals_ = djBeats_ = 0.0F;
     djEnergyGain_ = 1.0F;
@@ -520,12 +522,26 @@ void DspProcessor::setDjCue(float volume, float energyDb, float vocalsDb, float 
     djBeatsTarget_.store(safe(beatsDb, 0.0F, 0.0F, 6.0F));
 }
 
+void DspProcessor::setDjHighlights(bool enabled, int focus, int spacing,
+    float energyDb, float vocalsDb, float beatsDb) noexcept {
+    auto safe = [](float x) { return std::isfinite(x) ? std::clamp(x, 0.0F, 6.0F) : 0.0F; };
+    highlightFocus_.store(std::clamp(focus, 0, 2));
+    highlightSpacing_.store(std::clamp(spacing, 0, 1));
+    highlightEnergy_.store(safe(energyDb));
+    highlightVocals_.store(safe(vocalsDb));
+    highlightBeats_.store(safe(beatsDb));
+    highlightEnabled_.store(enabled, std::memory_order_release);
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
     std::int32_t channelCount) noexcept {
     if (samples == nullptr || frameCount <= 0 || (channelCount != 1 && channelCount != 2)) return;
-    if (bitPerfectEnabled_.load(std::memory_order_acquire)) return;
+    if (bitPerfectEnabled_.load(std::memory_order_acquire)) {
+        highlights_.reset();
+        return;
+    }
     // Atmos-aware bypass forces the clarity chain off independent of the
     // on/off toggle, keeping multichannel/spatial content untouched while
     // preserving the toggle state for stereo afterwards.
@@ -539,6 +555,19 @@ void DspProcessor::process(
         longLookAheadMode_ &&
         djLookAheadBuffer_ != nullptr &&
         djLookAheadCapacityFrames_ > 0;
+    // Selective automation runs once, on decoded PCM; never on the Oboe
+    // output a second time. The older three-second DJ Energy keeps priority.
+    const bool highlightEnabled = highlightEnabled_.load(std::memory_order_acquire) &&
+        longLookAheadMode_ && !djEnabled && !atmosBypassed;
+    if (highlightEnabled != highlightWasEnabled_) {
+        highlights_.reset();
+        highlightWasEnabled_ = highlightEnabled;
+    }
+    const int highlightFocus = highlightFocus_.load();
+    const int highlightSpacing = highlightSpacing_.load();
+    const float highlightEnergy = highlightEnergy_.load();
+    const float highlightVocals = highlightVocals_.load();
+    const float highlightBeats = highlightBeats_.load();
     const auto equalizerRevision = targetEqualizerRevision_.load(std::memory_order_acquire);
     if (equalizerRevision != appliedEqualizerRevision_) {
         appliedEqualizerRevision_ = equalizerRevision;
@@ -580,9 +609,20 @@ void DspProcessor::process(
         std::abs(limiterGain_ - 1.0F) < 0.00001F;
     // With every enhancement disabled, decoded PCM stays transparent. This
     // avoids the old unconditional -1 dB attenuation and limiter/clamp pass.
-    if (controlsBypassed && stateBypassed) return;
+    if (controlsBypassed && stateBypassed && !highlightEnabled) return;
 
     for (std::int32_t frame = 0; frame < frameCount; ++frame) {
+        const std::size_t rawOffset = static_cast<std::size_t>(frame) * static_cast<std::size_t>(channelCount);
+        const auto highlight = highlightEnabled ? highlights_.tick(samples[rawOffset],
+            channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing)
+            : DjHighlightDetector::Mix{};
+        const bool highlightActive = highlight.volume != 1.0F || highlight.boost != 0.0F;
+        const bool cueReleasing = djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
+        // Analyze untouched audio without sending ordinary passages through
+        // the DC blocker, saturation or limiter. This is sample-transparent.
+        if (controlsBypassed && stateBypassed && !highlightActive && !cueReleasing) continue;
+        const bool frameProtectionRequired = protectionRequired ||
+            (peakProtectionEnabled && (highlightActive || cueReleasing));
         if (currentWet_ < target) {
             currentWet_ = std::min(target, currentWet_ + rampPerFrame_);
         } else if (currentWet_ > target) {
@@ -862,7 +902,7 @@ void DspProcessor::process(
             outputRight += (wetRight - dryRight) * clarityMix;
         }
 
-        if (djActive) {
+        if (djActive || highlightEnabled) {
             if (djCountdown_-- <= 0) {
                 // 30 ms exponential smoothing, independent of buffer size/rate.
                 const float blend = static_cast<float>(1.0 - std::exp(-128.0 / (sampleRate_ * 0.03)));
@@ -870,16 +910,17 @@ void DspProcessor::process(
                     value += (goal - value) * blend;
                     if (std::abs(goal - value) < 0.00001F) value = goal;
                 };
-                ease(djEnergy_, djEnergyTarget_.load());
-                ease(djVocals_, djVocalsTarget_.load());
-                ease(djBeats_, djBeatsTarget_.load());
+                ease(djEnergy_, highlightEnabled ? highlightEnergy * highlight.boost : djEnergyTarget_.load());
+                ease(djVocals_, highlightEnabled ? highlightVocals * highlight.boost : djVocalsTarget_.load());
+                ease(djBeats_, highlightEnabled ? highlightBeats * highlight.boost : djBeatsTarget_.load());
                 djEnergyGain_ = std::pow(10.0F, djEnergy_ / 20.0F);
                 djVocalBand_.setPeaking(sampleRate_, std::min(2200.0, sampleRate_ * 0.3), 0.7, djVocals_);
                 djBeatBand_.setPeaking(sampleRate_, 90.0, 0.7, djBeats_);
                 djCountdown_ = 127;
             }
             const float step = static_cast<float>(1.0 / (sampleRate_ * 0.03));
-            djVolume_ += std::clamp(djVolumeTarget_.load() - djVolume_, -step, step);
+            const float volumeGoal = highlightEnabled ? highlight.volume : djVolumeTarget_.load();
+            djVolume_ += std::clamp(volumeGoal - djVolume_, -step, step);
             outputLeft = djBeatBand_.tick(djVocalBand_.tick(outputLeft, 0), 0) * djVolume_ * djEnergyGain_;
             if (channelCount == 2) {
                 outputRight = djBeatBand_.tick(djVocalBand_.tick(outputRight, 1), 1) * djVolume_ * djEnergyGain_;
@@ -900,7 +941,7 @@ void DspProcessor::process(
         const float peak = std::max(std::abs(outputLeft), std::abs(outputRight));
         // Envelope limiter for extreme overloads (> 1.25 peak), preserving dynamic punch
         constexpr float kLimiterEngageThreshold = 1.25F;
-        const float requiredLimiterGain = protectionRequired && peak > kLimiterEngageThreshold
+        const float requiredLimiterGain = frameProtectionRequired && peak > kLimiterEngageThreshold
             ? kLimiterEngageThreshold / peak
             : 1.0F;
         if (requiredLimiterGain < limiterGain_) {
@@ -918,7 +959,7 @@ void DspProcessor::process(
         }
         outputLeft *= finalGain;
         outputRight *= finalGain;
-        if (protectionRequired) {
+        if (frameProtectionRequired) {
             outputLeft = softSaturate(outputLeft);
             outputRight = softSaturate(outputRight);
         }
