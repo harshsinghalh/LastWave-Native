@@ -67,7 +67,7 @@ fun AppearanceStudioScreen(theme: ThemeUiState, viewModel: AppearanceViewModel, 
             }
             item { GlassPreview() }
             item {
-                ToggleRow("Liquid glass", "Apply your selected style across the app", theme.liquidGlass, viewModel::enabled)
+                ToggleRow("Liquid glass", "Apply your selected style across the app", theme.liquidGlass, onChange = viewModel::enabled)
                 Text("Changes save automatically. Each style keeps its own glass tuning.", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
@@ -115,8 +115,8 @@ fun AppearanceStudioScreen(theme: ThemeUiState, viewModel: AppearanceViewModel, 
                     viewModel.option(AppearanceOption.VIDEO_SIZE, it.name) } }
                 item { ToggleRow("Glass cards", "Use glass for cards and video settings", prefs.glassCards) {
                     viewModel.option(AppearanceOption.GLASS_CARDS, it.toString()) } }
-                item { ToggleRow("Application font", "LastWave's rounded typeface; turn off for the system font", theme.useCustomFont, viewModel::font) }
-                item { ToggleRow("Black backgrounds", "A deeper black in dark mode", theme.amoled, viewModel::amoled, enabled = theme.themeMode != ThemeMode.LIGHT) }
+                item { ToggleRow("Application font", "LastWave's rounded typeface; turn off for the system font", theme.useCustomFont, onChange = viewModel::font) }
+                item { ToggleRow("Black backgrounds", "A deeper black in dark mode", theme.amoled, onChange = viewModel::amoled, enabled = theme.themeMode != ThemeMode.LIGHT) }
             }
             if (tab == StudioTab.COMFORT) {
                 item { SectionTitle("Easy on the eyes", "Keep the look you love, with less movement or more contrast.") }
@@ -229,7 +229,7 @@ private fun <T> ChoiceGroup(title: String, choices: List<T>, value: T, label: (T
 }
 
 @Composable
-private fun ToggleRow(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
+private fun ToggleRow(title: String, subtitle: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     LiquidGlassCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {

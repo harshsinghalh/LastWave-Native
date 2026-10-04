@@ -759,7 +759,8 @@ fun Modifier.liquidGlassChrome(
     return this.liquidGlass(
         backdrop = backdrop,
         shape = shape,
-        interactive = true,
+        interactive = preset == LiquidGlassPreset.FloatingControls || preset == LiquidGlassPreset.PlayerControls ||
+            preset == LiquidGlassPreset.BottomNavigation || preset == LiquidGlassPreset.MiniPlayer,
         highlight = Highlight.Default,
     )
 }
