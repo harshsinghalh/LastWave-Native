@@ -389,10 +389,10 @@ object SettingsSearchIndex {
             add(
                 SettingsEntry(
                     id = "appearance.liquid_glass",
-                    title = "Liquid Glass",
-                    subtitle = "Dynamic translucent frosted glass backgrounds and blur effects",
+                    title = "Appearance studio",
+                    subtitle = "Vaso and LastWave glass, presets, colors, layout and comfort",
                     keywords = listOf(
-                        "liquid glass", "glassmorphism", "blur", "frosted glass", "translucent",
+                        "vaso", "lastwave", "appearance studio", "refraction", "dispersion", "reduced motion", "contrast", "liquid glass", "glassmorphism", "blur", "frosted glass", "translucent",
                         "acrylic", "transparency", "visual effect"
                     ),
                     icon = Icons.Filled.BubbleChart,
@@ -400,7 +400,7 @@ object SettingsSearchIndex {
                     iconTint = { MaterialTheme.colorScheme.onPrimaryContainer },
                     parentTab = SettingsTab.APPEARANCE,
                     section = "Appearance",
-                    type = EntryType.TOGGLE,
+                    type = EntryType.ACTION,
                 )
             )
             add(

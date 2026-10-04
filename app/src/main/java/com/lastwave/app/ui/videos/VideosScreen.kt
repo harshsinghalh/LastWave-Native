@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -142,8 +143,10 @@ fun VideosScreen(onOpenLaya: () -> Unit, viewModel: VideosViewModel = hiltViewMo
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val appearance = com.lastwave.app.ui.theme.LocalAppearance.current
     Column(Modifier.fillMaxSize()) {
         ExpressiveHeader("Videos", subtitle = "Your video feed", actions = {
+            HeaderActionIcon(Icons.Filled.Palette, "Appearance studio") { com.lastwave.app.ui.appearance.AppearanceActivity.open(context) }
             HeaderActionIcon(Icons.Filled.Tune, "Feed controls", onOpenLaya)
             HeaderActionIcon(Icons.Filled.Settings, "Video settings") {
                 context.startActivity(Intent(context, MobileSettingsActivity::class.java))
@@ -156,7 +159,7 @@ fun VideosScreen(onOpenLaya: () -> Unit, viewModel: VideosViewModel = hiltViewMo
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
-        LazyVerticalGrid(columns = GridCells.Adaptive(300.dp), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = FloatingNavDefaults.contentBottomPadding()), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyVerticalGrid(columns = GridCells.Adaptive(appearance.videoSize.width.dp), contentPadding = PaddingValues(start = appearance.spacing.padding.dp, end = appearance.spacing.padding.dp, bottom = FloatingNavDefaults.contentBottomPadding()), verticalArrangement = Arrangement.spacedBy(appearance.spacing.padding.dp), horizontalArrangement = Arrangement.spacedBy(appearance.spacing.padding.dp)) {
             items(videos, key = { viewModel.id(it) }) { video ->
                 val decision = decisions[viewModel.id(video)]
                 LiquidGlassCard {

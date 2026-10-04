@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PACKAGE = "com.harsh.layawave"
-OUT = Path("runtime-verification")
+OUT = Path(sys.argv[2] if len(sys.argv) > 2 else "runtime-verification")
 OUT.mkdir(exist_ok=True)
 checks = []
 
@@ -97,6 +97,24 @@ def switch_by_label(tree, label):
     assert switches, "No switch beside the requested setting"
     return min(switches, key=lambda pair: pair[0])[1]
 
+def reopen_appearance():
+    adb("shell", "am", "force-stop", PACKAGE)
+    adb("shell", "am", "start", "-W", "-n", PACKAGE + "/com.lastwave.app.MainActivity")
+    time.sleep(4)
+    tree = snapshot("appearance-cold-main")
+    # Floating navigation exposes labels through icon accessibility descriptions.
+    videos = next((n for n in tree.iter("node") if
+                   (n.get("text", "") or n.get("content-desc", "")).lower() == "videos"), None)
+    if videos is not None:
+        tap(videos)
+    _, studio = wait_for("Appearance studio", "appearance-entry")
+    tap(studio)
+    wait_for("Make it yours", "appearance-studio")
+
+def check_switch(label, expected, name):
+    tree, target = scroll_for(label, name)
+    assert switch_by_label(tree, target).get("checked") == str(expected).lower(), label + " lost its saved value"
+
 try:
     adb("install", "-r", "-t", sys.argv[1])
     adb("logcat", "-c")
@@ -115,14 +133,14 @@ try:
     if dismiss is not None:
         tap(dismiss)
         tree = snapshot("main-videos")
-    feed = next((n for n in tree.iter("node") if n.get("text", "").lower() == "feed"), None)
+    feed = next((n for n in tree.iter("node") if (n.get("text", "") or n.get("content-desc", "")).lower() == "feed"), None)
     assert feed is not None, "LastWave Feed tab missing"
     tap(feed)
     wait_for("Infinite Radio", "main-music")
     screenshot("main")
     checks.append("LastWave music shell and video tab render")
     tree = snapshot("main-music-navigation")
-    videos = next((n for n in tree.iter("node") if n.get("text", "").lower() == "videos"), None)
+    videos = next((n for n in tree.iter("node") if (n.get("text", "") or n.get("content-desc", "")).lower() == "videos"), None)
     assert videos is not None, "Videos tab missing"
     tap(videos)
     _, controls = wait_for("Feed controls", "video-controls-entry")
@@ -203,6 +221,51 @@ try:
     wait_for_exact("Video settings", "video-settings-captions")
     screenshot("video-settings-captions")
     checks.append("LastWave video settings tree and global search navigate through NewTube settings")
+
+    reopen_appearance()
+    screenshot("appearance-vaso")
+    _, style = wait_for("LastWave", "appearance-lastwave-entry")
+    tap(style)
+    _, preset = scroll_for("Frosted", "appearance-lastwave-preset")
+    tap(preset)
+    scroll_for("LastWave material", "appearance-lastwave-material")
+    scroll_for("20 dp", "appearance-lastwave-frost")
+    screenshot("appearance-lastwave-tuned")
+    reopen_appearance()
+    scroll_for("LastWave material", "appearance-lastwave-reopened")
+    scroll_for("20 dp", "appearance-lastwave-persisted")
+    checks.append("LastWave glass selection and frost tuning survive process restart")
+
+    reopen_appearance()
+    _, style = wait_for("Vaso", "appearance-vaso-entry")
+    tap(style)
+    scroll_for("Vaso material", "appearance-vaso-material")
+    scroll_for("2 dp", "appearance-vaso-independent")
+    _, crystal = wait_for("Crystal", "appearance-vaso-crystal")
+    tap(crystal)
+    scroll_for("1 dp", "appearance-vaso-tuned")
+    screenshot("appearance-vaso-crystal")
+    reopen_appearance()
+    scroll_for("Vaso material", "appearance-vaso-reopened")
+    scroll_for("1 dp", "appearance-vaso-persisted")
+    checks.append("Vaso and LastWave keep independent profiles and persisted preset choices")
+
+    _, comfort = scroll_for("Comfort", "appearance-comfort-entry")
+    tap(comfort)
+    for label in ("Reduced motion", "Reduce transparency", "High contrast"):
+        tree, target = scroll_for(label, "appearance-comfort-" + label.replace(" ", "-").lower())
+        switch = switch_by_label(tree, target)
+        assert switch.get("checked") == "false", label + " should initially be off"
+        tap(switch)
+        check_switch(label, True, "appearance-comfort-saved")
+    screenshot("appearance-high-contrast")
+    reopen_appearance()
+    _, comfort = scroll_for("Comfort", "appearance-comfort-reopened-entry")
+    tap(comfort)
+    for label in ("Reduced motion", "Reduce transparency", "High contrast"):
+        check_switch(label, True, "appearance-comfort-reopened")
+    checks.append("Reduced motion, transparency and high contrast survive process restart")
+
     assert adb("shell", "pidof", PACKAGE).strip(), "Application exited during navigation"
 finally:
     screenshot("final-state")

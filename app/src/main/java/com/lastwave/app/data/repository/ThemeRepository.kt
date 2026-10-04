@@ -28,6 +28,11 @@ import android.os.Handler
 import android.os.Looper
 import javax.inject.Inject
 import com.lastwave.app.data.local.ThemeMode
+import com.lastwave.app.data.local.AppearancePrefs
+import com.lastwave.app.data.local.AppearanceOption
+import com.lastwave.app.data.local.GlassStyle
+import com.lastwave.app.data.local.GlassControl
+import com.lastwave.app.data.local.GlassPreset
 import javax.inject.Singleton
 
 data class ThemeUiState(
@@ -54,6 +59,7 @@ data class ThemeUiState(
      *  (wallpaper) only takes over when no now-playing color is active:
      *  now-playing wins, wallpaper-dynamic is next, manual/mono last. */
     val isNowPlayingThemed: Boolean = false,
+    val appearance: AppearancePrefs = AppearancePrefs(),
 )
 
 @Singleton
@@ -192,7 +198,7 @@ class ThemeRepository @Inject constructor(
         settingsPreferences.settings,
     ) { prefs: ThemePrefs, dynamic: String?, nowPlaying: String?, misc: MiscSettings ->
         val isAmoled = prefs.amoled
-        val isGlass = prefs.liquidGlass
+        val isGlass = prefs.liquidGlass && prefs.appearance.permitsBackdrop && Build.VERSION.SDK_INT >= 31
         val nowPlayingActive = misc.dynamicNowPlayingEnabled && nowPlaying != null
         val (darkScheme, lightScheme) = when {
             nowPlayingActive -> {
@@ -231,7 +237,8 @@ class ThemeRepository @Inject constructor(
             mode = prefs.accentMode,
             accentColorHex = prefs.accentColor,
             useCustomFont = misc.useCustomFont,
-            liquidGlass = isGlass,
+            liquidGlass = prefs.liquidGlass,
+            appearance = prefs.appearance,
             isNowPlayingThemed = nowPlayingActive,
         )
     }.stateIn(
@@ -246,7 +253,7 @@ class ThemeRepository @Inject constructor(
             mode = AccentMode.MANUAL,
             accentColorHex = "#E03030",
             useCustomFont = true,
-            liquidGlass = false,
+            liquidGlass = true,
         ),
     )
 
@@ -269,6 +276,13 @@ class ThemeRepository @Inject constructor(
     suspend fun setAmoled(enabled: Boolean) = themePreferences.setAmoled(enabled)
 
     suspend fun setLiquidGlass(enabled: Boolean) = themePreferences.setLiquidGlass(enabled)
+
+    suspend fun setGlassStyle(style: GlassStyle) = themePreferences.setGlassStyle(style)
+    suspend fun setGlassControl(style: GlassStyle, control: GlassControl, value: Float) = themePreferences.setGlassControl(style, control, value)
+    suspend fun setGlassPreset(style: GlassStyle, preset: GlassPreset) = themePreferences.setGlassPreset(style, preset)
+    suspend fun resetGlassProfile(style: GlassStyle) = themePreferences.resetGlassProfile(style)
+    suspend fun setAppearanceOption(option: AppearanceOption, value: String) = themePreferences.setAppearanceOption(option, value)
+    suspend fun setUseCustomFont(enabled: Boolean) = settingsPreferences.setUseCustomFont(enabled)
 
     /** Turning this on used to just flip the DataStore flag and wait for
      *  Home's own poll loop to eventually call updateNowPlayingArtwork() —

@@ -56,6 +56,7 @@
 
         <activity android:name="com.liskovsoft.smartyoutubetv2.tv.ui.main.SplashActivity" tools:node="remove" />
         <activity android:name="com.lastwave.app.ui.laya.LayaSettingsActivity" android:exported="false" android:theme="@style/Theme.LastWave" />
+        <activity android:name="com.lastwave.app.ui.appearance.AppearanceActivity" android:exported="false" android:theme="@style/Theme.LastWave" />
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.lastwave.app.playback.cast.LastWaveCastOptionsProvider" />

@@ -36,6 +36,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.lastwave.app.ui.theme.LocalLiquidGlassBackdrop
+import com.lastwave.app.ui.theme.LocalLiquidGlass
+import com.lastwave.app.ui.theme.liquidGlassChrome
+import com.lastwave.app.ui.theme.liquidGlassContainerColor
+import com.lastwave.app.ui.theme.LiquidGlassPreset
 
 
 /** Only the bottom corners are rounded, and a modest 24dp at that (not
@@ -80,9 +85,9 @@ fun ExpressiveHeader(
     Box(modifier.fillMaxWidth().zIndex(1f)) {
         Surface(
             shape = HeaderShape,
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = liquidGlassContainerColor(MaterialTheme.colorScheme.surfaceContainer),
             tonalElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().liquidGlassChrome(HeaderShape, LocalLiquidGlass.current, LiquidGlassPreset.Overlay),
         ) {
             Column(
                 Modifier

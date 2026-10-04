@@ -1,14 +1,18 @@
-LayaWave Android integration preview: LastWave's complete music app plus NewTube v1.15.0 video playback and shared Laya filtering controls.
+# Two glass styles, one appearance studio
 
-Install the APK on Android 10 or later (arm64 or x86_64). This preview uses Android's debug signing key. A production signing identity must be configured before a stable release.
+This preview adds a native appearance studio to the LastWave music frontend and NewTube v1.15.0 integration.
 
-Configure your deployed Laya service's HTTPS address and allow metadata processing under Settings → Laya Feed Control. Without that service, explicit local metadata rules remain available; semantic filtering and free-form prompt interpretation require the backend. Explicit control prompts (for example, “disable filters” and “enable filters”) also work offline and retain saved topic preferences. Saving an address checks that both Laya models are ready without sending content metadata.
+- **Vaso:** clear optical glass with a curved bezel, native refraction, signed lens depth and adjustable spectral dispersion, adapted from the supplied Vaso source.
+- **LastWave:** the native frosted glass recipe, with customizable blur, depth and light treatment.
+- Each style saves its own nine material controls and Balanced, Crystal and Frosted presets. Switching styles preserves both profiles.
+- A live preview includes interactive press feedback; controls update the app's shared surfaces.
+- Choose theme, accent color (including custom hex, wallpaper and monochrome), four glass backdrops, navigation layout, card spacing, video card size and application/system font.
+- Comfort settings include reduced glass/navigation motion, reduced transparency, high contrast and text scaling that respects the device font setting.
+- Reset only the active glass style; other profiles, colors and layout choices stay saved.
+- Open **Appearance studio** from the video header, video settings or **Settings → Appearance & Visuals**. It is also searchable in music settings.
 
-The backend implementation, deployment files and exact Android integration source are in this release's commit. Filtering considers text metadata, offers reasons and reveal actions, and does not guarantee visual content detection or factual verification. The video settings tree, choice dialogs and global settings search now use LastWave's headers, cards, typography and theme alongside its original music frontend. NewTube's native video player and remaining account/comment/casting panels retain upstream layouts in this preview. CI checks startup, navigation, saved toggles, offline prompt commands and video settings/search before publishing an APK. Online YouTube playback still needs device testing; the CI network received a YouTube sign-in/bot challenge in prior runs.
+Glass dressing applies to the LastWave Compose frontend: shared headers, cards, video settings, navigation and existing player controls. NewTube's native player and secondary Android View panels retain their native layouts. Android 13+ supports optical refraction; Android 12 supports blur/rims; Android 10/11, low-RAM devices and comfort modes use opaque fallbacks. Foreground labels are drawn above the glass effects.
 
-Video settings are also available from LastWave's main Settings screen. This update preserves NewTube's local TV HTTP discovery configuration, keeps Laya metadata HTTPS-only, and fixes feed results being discarded when preferences change during loading. Playback choice and gesture persistence are included in the runtime gate.
-# Delayed request handling
+Publication is gated on appearance DataStore tests and Android UI checks, including style/profile persistence after process restart, comfort settings and the Android 10 fallback. See the workflow artifacts for the precise verification scope. Physical-device playback/casting and every upstream feature are not established by these appearance checks.
 
-Preference changes and metadata-consent revocation cancel obsolete HTTP work. Queued checks retain their captured policy and destination, and only decisions for the current settings can update a row. Delayed prompt results cannot overwrite newer edits. Responses also validate the content ID before applying a decision.
-
-Shared-client tests use a local HTTPS fixture and real Android preferences to verify consent, readiness, redirects, caching and preference changes. They check integration behavior, not Laya classification accuracy. The backend invalidates cached evidence decisions when their curated record changes or expires, and Android checks evidence expiry before reusing a cached result.
+This is a debug-signed preview. CI signing keys can differ between previews; preserve needed settings before uninstalling an incompatible older preview. Android 10+; arm64-v8a and x86_64.

@@ -128,6 +128,8 @@ import com.kyant.backdrop.shadow.Shadow
 import kotlin.math.sign
 import com.lastwave.app.ui.theme.LocalIsDarkTheme
 import com.lastwave.app.ui.theme.LocalLiquidGlass
+import com.lastwave.app.ui.theme.LocalAppearance
+import com.lastwave.app.data.local.DockStyle
 import com.lastwave.app.ui.theme.LiquidGlassPreset
 import com.lastwave.app.ui.theme.liquidGlassChrome
 import com.lastwave.app.ui.theme.liquidGlassContainerColor
@@ -187,7 +189,9 @@ object FloatingNavDefaults {
 private val DockShape: CornerBasedShape = RoundedCornerShape(32.dp)
 private val PillShape: Shape = CircleShape
 
-private fun <T> navSpring() = ExpressiveMotion.spatialSpring<T>()
+@Composable
+private fun <T> navSpring(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
+    if (LocalAppearance.current.reducedMotion) tween(durationMillis = 0) else ExpressiveMotion.spatialSpring<T>()
 
 @Composable
 fun MainShell(
@@ -231,6 +235,7 @@ fun MainShell(
         drawContent()
     }
     val navGlass = isLiquidGlassBackdropSupported()
+    val reducedMotion = LocalAppearance.current.reducedMotion
 
     Box(Modifier.fillMaxSize()) {
         val feedIndex = tabs.indexOf(MainTab.FEED)
@@ -294,7 +299,7 @@ fun MainShell(
         val currentSelectedIndex by androidx.compose.runtime.rememberUpdatedState(selectedTabIndex)
         val currentOnSelect by androidx.compose.runtime.rememberUpdatedState { index: Int ->
             if (index != selectedTabIndex) selectedTabIndex = index
-            scope.launch { pagerState.animateScrollToPage(index) }
+            scope.launch { if (reducedMotion) pagerState.scrollToPage(index) else pagerState.animateScrollToPage(index) }
             Unit
         }
         val currentOnOpenGenerator by androidx.compose.runtime.rememberUpdatedState(onOpenGenerator)
@@ -399,7 +404,7 @@ private fun FloatingNavBar(
     val dockInteraction = remember { MutableInteractionSource() }
     val fabInteraction = remember { MutableInteractionSource() }
     
-    if (!liquidGlass) {
+    if (!liquidGlass || LocalAppearance.current.dock == DockStyle.CLASSIC) {
         androidx.compose.material3.NavigationBar(
             modifier = modifier.fillMaxWidth(),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -612,6 +617,8 @@ private fun FloatingNavItem(
                         color = contentColor,
                         maxLines = 1,
                         softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 100.dp),
                     )
                 }
             }

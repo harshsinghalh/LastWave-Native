@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -127,6 +128,7 @@ private fun VideoSettingsPage(fragment: SettingsPageFragment, model: SettingsPag
             onBack = { fragment.requireActivity().onBackPressedDispatcher.onBackPressed() },
             actions = {
                 if (fragment.pageId == SettingsPages.ROOT) {
+                    HeaderActionIcon(Icons.Filled.Palette, "Appearance studio") { com.lastwave.app.ui.appearance.AppearanceActivity.open(fragment.requireContext()) }
                     HeaderActionIcon(Icons.Filled.Search, "Search video settings", fragment::openSearch)
                 }
             },

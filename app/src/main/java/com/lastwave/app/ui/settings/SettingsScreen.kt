@@ -1076,14 +1076,13 @@ fun SettingsScreen(
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "appearance.dynamic_color"),
                             )
-                            3 -> SettingsToggleCard(
+                            3 -> SettingsActionCard(
                                 icon = Icons.Filled.BubbleChart,
                                 iconContainer = MaterialTheme.colorScheme.primaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                title = stringResource(R.string.settings_liquid_glass),
-                                subtitle = stringResource(R.string.settings_liquid_glass_sub),
-                                checked = theme?.liquidGlass ?: false,
-                                onCheckedChange = viewModel::setLiquidGlass,
+                                title = "Appearance studio",
+                                subtitle = "Vaso & LastWave glass · Presets, layout and comfort",
+                                onClick = { com.lastwave.app.ui.appearance.AppearanceActivity.open(context) },
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "appearance.liquid_glass"),
                             )

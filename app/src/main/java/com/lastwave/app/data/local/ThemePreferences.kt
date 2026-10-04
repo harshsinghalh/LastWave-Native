@@ -38,9 +38,9 @@ data class ThemePrefs(
     val accentLight: String = "#FF6060",
     val accentMode: AccentMode = AccentMode.MANUAL,
     val amoled: Boolean = false,
-    /** Experimental iOS-style liquid-glass materials. Off by default — the
-     *  classic opaque look stays untouched until the user opts in. */
-    val liquidGlass: Boolean = false,
+    /** New installs use glass; an existing explicit opt-out is preserved. */
+    val liquidGlass: Boolean = true,
+    val appearance: AppearancePrefs = AppearancePrefs(),
 )
 
 @Singleton
@@ -65,7 +65,8 @@ class ThemePreferences @Inject constructor(
                 accentLight = p.readSafely(Keys.ACCENT_LIGHT) ?: "#FF6060",
                 accentMode = AccentMode.fromStorage(p.readSafely(Keys.ACCENT_MODE)),
                 amoled = p.readSafely(Keys.AMOLED) ?: false,
-                liquidGlass = p.readSafely(Keys.LIQUID_GLASS) ?: false,
+                liquidGlass = p.readSafely(Keys.LIQUID_GLASS) ?: true,
+                appearance = AppearanceCodec.read(p),
             )
         }
 
@@ -91,5 +92,25 @@ class ThemePreferences @Inject constructor(
 
     suspend fun setLiquidGlass(enabled: Boolean) {
         dataStore.edit { it[Keys.LIQUID_GLASS] = enabled }
+    }
+
+    suspend fun setGlassStyle(style: GlassStyle) {
+        dataStore.edit { it[AppearanceCodec.styleKey] = style.key }
+    }
+
+    suspend fun setGlassControl(style: GlassStyle, control: GlassControl, value: Float) {
+        dataStore.edit { AppearanceCodec.setControl(it, style, control, value) }
+    }
+
+    suspend fun setGlassPreset(style: GlassStyle, preset: GlassPreset) {
+        dataStore.edit { AppearanceCodec.setPreset(it, style, preset) }
+    }
+
+    suspend fun resetGlassProfile(style: GlassStyle) {
+        dataStore.edit { AppearanceCodec.resetProfile(it, style) }
+    }
+
+    suspend fun setAppearanceOption(option: AppearanceOption, value: String) {
+        dataStore.edit { AppearanceCodec.setOption(it, option, value) }
     }
 }

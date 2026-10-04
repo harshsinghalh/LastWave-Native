@@ -3,6 +3,7 @@ package com.lastwave.app.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -14,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 import com.lastwave.app.data.local.AccentMode
 import com.lastwave.app.data.repository.ThemeUiState
@@ -62,12 +65,17 @@ fun LastWaveTheme(
         } else base
     } else null
     val systemLight = if (useSystemDynamic) dynamicLightColorScheme(context) else null
-    val activeColorScheme = when {
+    val baseColorScheme = when {
         systemDark != null && isDark -> systemDark
         systemLight != null && !isDark -> systemLight
         isDark -> themeState.darkColorScheme
         else -> themeState.lightColorScheme
     }
+    val activeColorScheme = if (themeState.appearance.highContrast) baseColorScheme.copy(
+        onSurface = if (isDark) Color.White else Color.Black,
+        onSurfaceVariant = if (isDark) Color.White else Color.Black,
+    ) else baseColorScheme
+    val density = LocalDensity.current
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -98,8 +106,14 @@ fun LastWaveTheme(
             CompositionLocalProvider(
                 LocalLiquidGlass provides themeState.liquidGlass,
                 LocalIsDarkTheme provides isDark,
+                LocalAppearance provides themeState.appearance,
+                LocalDensity provides Density(density.density, density.fontScale * themeState.appearance.textScale),
             ) {
-                content()
+                val backdrop = rememberLayerBackdrop()
+                Box(Modifier.fillMaxSize()) {
+                    AppearanceBackdrop(Modifier.then(if (backdrop != null && isLiquidGlassBackdropSupported()) Modifier.layerBackdropCompat(backdrop) else Modifier))
+                    CompositionLocalProvider(LocalLiquidGlassBackdrop provides backdrop) { content() }
+                }
             }
         }
     }

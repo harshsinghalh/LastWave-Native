@@ -17,6 +17,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.lastwave.app.ui.theme.LocalAppearance
+import com.lastwave.app.ui.theme.LocalLiquidGlass
+import com.lastwave.app.ui.theme.LocalLiquidGlassBackdrop
+import com.lastwave.app.ui.theme.isLiquidGlassBackdropSupported
+import com.lastwave.app.ui.theme.liquidGlass
 
 
 /**
@@ -25,8 +30,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun LiquidGlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(24.dp),
-    enabled: Boolean = false,
+    shape: Shape = RoundedCornerShape(LocalAppearance.current.profile.roundness.dp),
+    enabled: Boolean = LocalLiquidGlass.current,
     tintColor: Color = Color.Unspecified,
     contentColor: Color = Color.Unspecified,
     onClick: (() -> Unit)? = null,
@@ -39,6 +44,9 @@ fun LiquidGlassCard(
     }
 
     val baseColor = if (tintColor.isSpecified) tintColor else MaterialTheme.colorScheme.surfaceContainer
+    val appearance = LocalAppearance.current
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val useGlass = enabled && appearance.glassCards && backdrop != null && isLiquidGlassBackdropSupported()
     val clickModifier = if (onClick != null) {
         Modifier.clickable(
             role = Role.Button,
@@ -47,13 +55,13 @@ fun LiquidGlassCard(
     } else Modifier
 
     Card(
-        modifier = modifier.then(clickModifier),
+        modifier = modifier.then(if (useGlass) Modifier.liquidGlass(backdrop!!, shape, interactive = false) else Modifier).then(clickModifier),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = baseColor,
+            containerColor = if (useGlass) Color.Transparent else baseColor.copy(alpha = 1f),
             contentColor = resolvedContentColor,
         ),
     ) {
-        Column(Modifier.padding(16.dp), content = content)
+        Column(Modifier.padding(appearance.spacing.padding.dp), content = content)
     }
 }
