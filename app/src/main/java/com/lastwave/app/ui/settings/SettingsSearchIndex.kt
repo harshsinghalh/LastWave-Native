@@ -282,6 +282,20 @@ object SettingsSearchIndex {
             )
             add(
                 SettingsEntry(
+                    id = "audio.dj_cue",
+                    title = "DJ Cue",
+                    subtitle = "Timed volume rise, energy, vocal presence and beats",
+                    keywords = listOf("dj", "cue", "volume", "boost", "beats", "vocals", "energy", "drop"),
+                    icon = Icons.Filled.GraphicEq,
+                    iconContainer = { MaterialTheme.colorScheme.secondaryContainer },
+                    iconTint = { MaterialTheme.colorScheme.onSecondaryContainer },
+                    parentTab = SettingsTab.AUDIO,
+                    section = "Output & Loudness",
+                    type = EntryType.ACTION,
+                )
+            )
+            add(
+                SettingsEntry(
                     id = "audio.studio_clarity",
                     title = "Studio Master Clarity",
                     subtitle = "Crystal-clear open sound, airy detail, and deep clean stereo separation",

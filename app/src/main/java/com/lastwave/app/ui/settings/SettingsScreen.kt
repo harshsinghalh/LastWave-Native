@@ -465,6 +465,7 @@ fun SettingsScreen(
     }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
+    var showDjCue by remember { mutableStateOf(false) }
     var showEqSheet by remember { mutableStateOf(false) }
     var showLyricsAnimationSheet by remember { mutableStateOf(false) }
     var showLyricsProviderDialog by remember { mutableStateOf(false) }
@@ -935,7 +936,7 @@ fun SettingsScreen(
                         LoudnessMode.ALBUM -> "Album \u2022 Keep intentional album dynamics"
                         else -> "Off \u2022 Play tagged tracks at original level"
                     }
-                    SettingsGroup(rowCount = 7) { index, position ->
+                    SettingsGroup(rowCount = 8) { index, position ->
                         when (index) {
                             0 -> SettingsToggleCard(
                                 icon = Icons.Filled.Usb,
@@ -1019,6 +1020,16 @@ fun SettingsScreen(
                                 onClick = { showClarityPresetDialog = true },
                                 position = position,
                                 isHighlighted = (highlightedSettingId == "audio.clarity_preset"),
+                            )
+                            7 -> SettingsActionCard(
+                                icon = Icons.Filled.GraphicEq,
+                                iconContainer = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                title = "DJ Cue",
+                                subtitle = "Timed volume rise, energy, vocal presence and beats",
+                                onClick = { showDjCue = true },
+                                position = position,
+                                isHighlighted = (highlightedSettingId == "audio.dj_cue"),
                             )
                             6 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -2020,6 +2031,11 @@ fun SettingsScreen(
     }
 
     // -- Experimental 15-band equalizer --
+    if (showDjCue) DjCueDialog(
+        onDismiss = { showDjCue = false },
+        onEnable = { viewModel.setDjEnergyEnabled(false) },
+    )
+
     if (showEqSheet) {
         EqualizerSheet(
             eq = eq,

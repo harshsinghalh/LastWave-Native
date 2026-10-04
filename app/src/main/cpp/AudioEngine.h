@@ -55,6 +55,10 @@ public:
     void setPlaying(bool playing) noexcept;
     void setOutputVolume(float volume) noexcept;
 
+    void setDjCue(float volume, float energy, float vocals, float beats) noexcept {
+        oboeDsp_.setDjCue(volume, energy, vocals, beats);
+        mediaDsp_.setDjCue(volume, energy, vocals, beats);
+    }
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     // Read-back for UI truthfulness: true only when both DSP instances

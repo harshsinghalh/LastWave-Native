@@ -19,6 +19,8 @@ public:
 
     void configure(double sampleRate) noexcept;
     void reset() noexcept;
+    // Independent automation layer; never modifies saved EQ or clarity settings.
+    void setDjCue(float volume, float energyDb, float vocalsDb, float beatsDb) noexcept;
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     void setPeakProtectionEnabled(bool enabled) noexcept;
@@ -82,6 +84,10 @@ public:
     }
 
 private:
+    std::atomic<float> djVolumeTarget_{1.0F}, djEnergyTarget_{0.0F}, djVocalsTarget_{0.0F}, djBeatsTarget_{0.0F};
+    float djVolume_{1.0F}, djEnergy_{0.0F}, djVocals_{0.0F}, djBeats_{0.0F};
+    float djEnergyGain_{1.0F};
+    int djCountdown_{0};
     struct Biquad final {
         double b0{1.0};
         double b1{0.0};
@@ -174,6 +180,7 @@ private:
     float currentWet_{0.0F};
     float rampPerFrame_{1.0F / 2400.0F};
     std::atomic<bool> targetEnabled_{false};
+    Biquad djVocalBand_, djBeatBand_;
     std::atomic<bool> bitPerfectEnabled_{false};
     std::atomic<bool> peakProtectionEnabled_{false};
     std::atomic<bool> targetEqualizerEnabled_{false};

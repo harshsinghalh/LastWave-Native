@@ -520,3 +520,9 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeRateAdaptationCount(
     const auto* engine = fromHandle(handle);
     return engine == nullptr ? 0 : static_cast<jlong>(engine->rateAdaptationCount());
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjCue(
+    JNIEnv*, jobject, jlong handle, jfloat volume, jfloat energy, jfloat vocals, jfloat beats) {
+    if (auto* engine = fromHandle(handle)) engine->setDjCue(volume, energy, vocals, beats);
+}

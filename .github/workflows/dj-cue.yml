@@ -1,0 +1,78 @@
+name: DJ Cue Android verification
+on:
+  push:
+    branches: [feature/android-dj-cue-4.5.1]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dj-cue-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ADDON_CLIENT_SECRET: ${{ secrets.ADDON_CLIENT_SECRET }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      RELEASE_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD || secrets.RELEASE_STORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.ALIAS || secrets.RELEASE_KEY_ALIAS || 'release_key' }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.RELEASE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: gradle
+      - name: Native DSP regression checks
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_dsp_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_test
+          /tmp/dj_test
+      - name: Prepare build and fallback signing
+        run: |
+          chmod +x gradlew
+          for DIR in "$HOME/.android" "$HOME/.config/.android"; do
+            mkdir -p "$DIR"
+            keytool -genkeypair -keystore "$DIR/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          done
+      - name: Unit tests and Android packages
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
+      - name: Validate release APK signature
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER=$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n1)
+          test -n "$APKSIGNER"
+          mkdir -p final_apk
+          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-v4.5.1-DJ-Cue.apk
+          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-v4.5.1-DJ-Cue.apk > final_apk/signature-verification.txt
+          (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
+      - name: Upload compiled APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-v4.5.1-DJ-Cue-APK
+          path: final_apk/
+          if-no-files-found: error
+      - name: Enable emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android emulator UI and packaged JNI tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DJ-Cue-test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/

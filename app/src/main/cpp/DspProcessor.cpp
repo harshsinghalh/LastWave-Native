@@ -244,6 +244,11 @@ void DspProcessor::configure(double sampleRate) noexcept {
 }
 
 void DspProcessor::reset() noexcept {
+    djVolume_ = djVolumeTarget_.load();
+    djEnergy_ = djVocals_ = djBeats_ = 0.0F;
+    djEnergyGain_ = 1.0F;
+    djCountdown_ = 0;
+    djVocalBand_.clear(); djBeatBand_.clear();
     subBassHighPass_.clear();
     bassFoundation_.clear();
     lowMidSeparation_.clear();
@@ -505,6 +510,16 @@ std::size_t DspProcessor::flushLookAhead(
     return framesToWrite;
 }
 
+void DspProcessor::setDjCue(float volume, float energyDb, float vocalsDb, float beatsDb) noexcept {
+    auto safe = [](float x, float fallback, float lo, float hi) {
+        return std::isfinite(x) ? std::clamp(x, lo, hi) : fallback;
+    };
+    djVolumeTarget_.store(safe(volume, 1.0F, 0.0F, 1.0F));
+    djEnergyTarget_.store(safe(energyDb, 0.0F, 0.0F, 6.0F));
+    djVocalsTarget_.store(safe(vocalsDb, 0.0F, 0.0F, 6.0F));
+    djBeatsTarget_.store(safe(beatsDb, 0.0F, 0.0F, 6.0F));
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
@@ -542,7 +557,10 @@ void DspProcessor::process(
             }
         }
     }
-    const bool enhancementTargeted = target > 0.0F ||
+    const bool djActive = djVolumeTarget_.load() != 1.0F || djEnergyTarget_.load() != 0.0F ||
+        djVocalsTarget_.load() != 0.0F || djBeatsTarget_.load() != 0.0F ||
+        djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
+    const bool enhancementTargeted = djActive || target > 0.0F ||
         targetEqualizerHasGain || djEnabled;
     const bool enhancementStateActive = currentWet_ > 0.0F ||
         activeEqualizerBands_ != 0U ||
@@ -842,6 +860,30 @@ void DspProcessor::process(
             // device-dependent coloration that listeners report as distortion.
             outputLeft += (wetLeft - dryLeft) * clarityMix;
             outputRight += (wetRight - dryRight) * clarityMix;
+        }
+
+        if (djActive) {
+            if (djCountdown_-- <= 0) {
+                // 30 ms exponential smoothing, independent of buffer size/rate.
+                const float blend = static_cast<float>(1.0 - std::exp(-128.0 / (sampleRate_ * 0.03)));
+                auto ease = [blend](float& value, float goal) {
+                    value += (goal - value) * blend;
+                    if (std::abs(goal - value) < 0.00001F) value = goal;
+                };
+                ease(djEnergy_, djEnergyTarget_.load());
+                ease(djVocals_, djVocalsTarget_.load());
+                ease(djBeats_, djBeatsTarget_.load());
+                djEnergyGain_ = std::pow(10.0F, djEnergy_ / 20.0F);
+                djVocalBand_.setPeaking(sampleRate_, std::min(2200.0, sampleRate_ * 0.3), 0.7, djVocals_);
+                djBeatBand_.setPeaking(sampleRate_, 90.0, 0.7, djBeats_);
+                djCountdown_ = 127;
+            }
+            const float step = static_cast<float>(1.0 / (sampleRate_ * 0.03));
+            djVolume_ += std::clamp(djVolumeTarget_.load() - djVolume_, -step, step);
+            outputLeft = djBeatBand_.tick(djVocalBand_.tick(outputLeft, 0), 0) * djVolume_ * djEnergyGain_;
+            if (channelCount == 2) {
+                outputRight = djBeatBand_.tick(djVocalBand_.tick(outputRight, 1), 1) * djVolume_ * djEnergyGain_;
+            } else outputRight = outputLeft;
         }
 
         // Analog soft-knee saturation: provides clean headroom without squashing the track

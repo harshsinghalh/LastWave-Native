@@ -411,6 +411,7 @@ class MusicPlayer @Inject constructor(
     @Volatile private var usbExclusiveSinkActive = false
     @Volatile private var usbExclusivePrefEnabled = false
     /** System audio-effects mode pref (Settings -> Experimental, default OFF). */
+    @Volatile private var djEnergyModePref = false
     @Volatile private var systemEffectsModePref = false
     /** Effective mode: pref ON and on a mixer route (bypass routes suspend). */
     @Volatile private var systemEffectsEffective = false
@@ -1466,6 +1467,11 @@ class MusicPlayer @Inject constructor(
                         updateSignalPath()
                     }
 
+                    // Follows media position (not wall clock), so pause, speed and seek keep the cue aligned.
+                    val dj = DjCuePreferences.read(appContext)
+                    val mix = dj.mixAt(pos, dj.enabled && !djEnergyModePref && !isCasting && !bitPerfectEnabled &&
+                        !systemEffectsModePref && !usbExclusiveSinkActive && !isSpatialAudioCodec(_state.value.audioCodec))
+                    nativeAudioEngine.get().setDjCue(mix[0], mix[1], mix[2], mix[3])
                     val previous = _state.value
                     val unchanged = !_state.value.isPlaying &&
                         previous.positionMs == pos &&
@@ -1514,6 +1520,7 @@ class MusicPlayer @Inject constructor(
                 crossfadeDurationMs = settings.crossfadeSeconds.coerceIn(1, 12) * 1000L
                 val wasBitPerfect = bitPerfectEnabled
                 bitPerfectEnabled = settings.isBitPerfectEnabled
+                djEnergyModePref = settings.djEnergyEnabled
                 systemEffectsModePref = settings.systemEffectsMode
                 updateBitPerfectState()
                 if (bitPerfectEnabled && settings.isStudioMasterClarityEnabled) {

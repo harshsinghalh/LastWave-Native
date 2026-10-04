@@ -60,8 +60,9 @@ android {
         applicationId = "com.lastwave.app"
         minSdk = (project.findProperty("minSdk") as? String)?.toIntOrNull() ?: 29
         targetSdk = 35
-        versionCode = 26
-        versionName = "4.5.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 27
+        versionName = "4.5.1"
 
         // Native secrets (addon client lock) live strictly in native .so via
         // SecretsBridge_generated.h (tools/generate_native_secrets.py).
@@ -275,6 +276,12 @@ dependencies {
     // app. Runtime-only keeps the app compiler on its existing Kotlin line.
     runtimeOnly(libs.innertubex)
     runtimeOnly("io.ktor:ktor-client-cio:3.5.2")
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Unit Testing dependencies
     testImplementation("junit:junit:4.13.2")
