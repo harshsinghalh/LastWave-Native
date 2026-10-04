@@ -12,8 +12,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('model', type=Path)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
+expected = '1e8906f3ce8551f0c9e153c740505b6c99946d47db6fb69b9c87f16da7ec55d1'
 with args.model.open('rb') as file:
-    assert hashlib.file_digest(file, 'sha256').hexdigest() == 'd337ce1b1cbca907a4063223517af6db7e89f5c9e8d6a2f6a289babc256f4469'
+    assert hashlib.file_digest(file, 'sha256').hexdigest() == expected
 root = Path(__file__).resolve().parents[1]
 bank = json.loads((root / 'app/src/main/assets/laya/dj_tokens.json').read_text())
 options = ort.SessionOptions()
@@ -36,5 +37,5 @@ print(json.dumps(results, indent=2))
 assert results[0]['probability'] < results[1]['probability']
 assert results[2]['probability'] < results[1]['probability']
 args.output.parent.mkdir(parents=True, exist_ok=True)
-args.output.write_text(json.dumps({'model_sha256': 'd337ce1b1cbca907a4063223517af6db7e89f5c9e8d6a2f6a289babc256f4469',
+args.output.write_text(json.dumps({'model_sha256': expected,
     'cases': results}, indent=2) + '\n')

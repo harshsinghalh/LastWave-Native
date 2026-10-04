@@ -51,7 +51,7 @@ jobs:
             keytool -genkeypair -keystore "$DIR/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
           done
       - name: Download pinned Laya test model
-        run: python3 tools/download_laya_model.py /tmp/laya-model.onnx
+        run: python3 tools/download_laya_model.py /tmp/laya-model.onnx --keep-source /tmp/laya-source.onnx
       - name: Unit tests and Android packages
         run: |
           git fetch origin 93bbb49f76af5f2ed0037060e1391b12a3dbfa68 --depth=1
