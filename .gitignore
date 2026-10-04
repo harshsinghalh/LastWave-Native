@@ -62,6 +62,7 @@ tools/*
 !tools/verify_laya_model.py
 !tools/download_laya_model.py
 !tools/prepare_laya_weights.py
+!tools/check_previous_laya_verification.py
 !tools/test_laya_android.sh
 !docs/fork-certificate.pem
 provider.js
