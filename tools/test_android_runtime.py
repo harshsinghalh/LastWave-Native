@@ -90,7 +90,17 @@ def on_screen(node, height):
     # usable viewport or over Android's navigation bar.
     return len(bounds) == 4 and bounds[3] > bounds[1] and .12 * height < (bounds[1] + bounds[3]) / 2 < .82 * height
 
-def scroll_for(label, name, attempts=10):
+def scroll_step(node, width, height):
+    bounds = list(map(int, re.findall(r"\d+", node.get("bounds", "")))) if node is not None else []
+    # A label clipped above the header needs a downward gesture, not another
+    # upward one. Longer drags also work on the software-rendered emulator.
+    reverse = len(bounds) == 4 and (bounds[1] + bounds[3]) / 2 <= .12 * height
+    start, end = (.35, .8) if reverse else (.8, .35)
+    adb("shell", "input", "swipe", str(width//2), str(int(height*start)),
+        str(width//2), str(int(height*end)), "1200")
+    time.sleep(1)
+
+def scroll_for(label, name, attempts=30):
     size = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
     width, height = size
     for _ in range(attempts):
@@ -98,12 +108,10 @@ def scroll_for(label, name, attempts=10):
         node = find(tree, label)
         if node is not None and on_screen(node, height):
             return tree, node
-        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
-            str(width//2), str(int(height*.35)), "400")
-        time.sleep(1)
+        scroll_step(node, width, height)
     raise AssertionError("Could not scroll to: " + label)
 
-def scroll_for_exact(label, name, attempts=10):
+def scroll_for_exact(label, name, attempts=30):
     size = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
     width, height = size
     for _ in range(attempts):
@@ -111,12 +119,10 @@ def scroll_for_exact(label, name, attempts=10):
         node = next((n for n in tree.iter("node") if n.get("text", "").lower() == label.lower()), None)
         if node is not None and on_screen(node, height):
             return tree, node
-        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
-            str(width//2), str(int(height*.35)), "400")
-        time.sleep(1)
+        scroll_step(node, width, height)
     raise AssertionError("Could not scroll to exact label: " + label)
 
-def scroll_for_input(label, name, attempts=10):
+def scroll_for_input(label, name, attempts=30):
     width, height = list(map(int, re.findall(r"\d+", adb("shell", "wm", "size"))))[-2:]
     for _ in range(attempts):
         tree = snapshot(name)
@@ -125,9 +131,7 @@ def scroll_for_input(label, name, attempts=10):
                       and find(n, label) is not None), None)
         if field is not None and on_screen(field, height):
             return tree, field
-        adb("shell", "input", "swipe", str(width//2), str(int(height*.8)),
-            str(width//2), str(int(height*.35)), "400")
-        time.sleep(1)
+        scroll_step(field, width, height)
     raise AssertionError("Could not scroll to input: " + label)
 
 def enter_text(node, value):

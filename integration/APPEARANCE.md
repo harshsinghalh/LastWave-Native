@@ -17,3 +17,5 @@ The change concentrates on appearance. Existing content policies, inference and 
 UI verification waits for navigation action accessibility descriptions, rather than similarly named settings headings, and removes each prior hierarchy file before export. This prevents a stale or transitioning window from directing a tap into the following screen.
 
 Scrollable settings reserve space for Android navigation and the keyboard. UI input checks select the actual editable control inside the usable viewport, confirm focus and the entered value, and dismiss only an open keyboard.
+
+The software-rendered CI emulator uses longer scroll gestures and a bounded scroll budget for dense settings pages. The gesture check reads the actual NewTube preference and reopens the page; it does not skip a setting when scrolling is slow.
