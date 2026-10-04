@@ -48,7 +48,8 @@ fun AppearanceStudioScreen(theme: ThemeUiState, viewModel: AppearanceViewModel, 
             HeaderActionIcon(Icons.Filled.RestartAlt, "Reset glass style") { showReset = true }
         })
         LazyColumn(
-            modifier = Modifier.weight(1f).widthIn(max = 760.dp).fillMaxWidth().align(Alignment.CenterHorizontally),
+            modifier = Modifier.weight(1f).widthIn(max = 760.dp).fillMaxWidth()
+                .align(Alignment.CenterHorizontally).navigationBarsPadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
