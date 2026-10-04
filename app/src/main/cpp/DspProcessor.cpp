@@ -441,6 +441,70 @@ void DspProcessor::applyClarityTrim(std::size_t stage, float trimDb) noexcept {
     }
 }
 
+float DspProcessor::nextDjPreDropGain() noexcept {
+    float targetGain = 1.0F;
+    if (djPreDropFramesRemaining_ > 0 && sampleRate_ > 0.0) {
+        const auto stepFrames = std::max<std::int64_t>(
+            1,
+            static_cast<std::int64_t>(std::llround(sampleRate_ * kDjDropStepSeconds)));
+        if (djPreDropFramesRemaining_ > stepFrames * 2) {
+            targetGain = kDjDropGainStage1;
+        } else if (djPreDropFramesRemaining_ > stepFrames) {
+            targetGain = kDjDropGainStage2;
+        } else {
+            targetGain = kDjDropGainStage3;
+        }
+        --djPreDropFramesRemaining_;
+    }
+
+    // A 6 ms de-click ramp is perceptually instantaneous at the hit but avoids
+    // a waveform discontinuity when moving between 70/40/10/100 percent.
+    djAppliedDropGain_ +=
+        (targetGain - djAppliedDropGain_) * djDropGainSmoothing_;
+    if (std::abs(targetGain - djAppliedDropGain_) < 0.0001F) {
+        djAppliedDropGain_ = targetGain;
+    }
+    return djAppliedDropGain_;
+}
+
+std::size_t DspProcessor::flushLookAhead(
+    float* interleaved,
+    std::size_t frameCapacity,
+    std::int32_t channelCount) noexcept {
+    if (interleaved == nullptr || frameCapacity == 0 ||
+        (channelCount != 1 && channelCount != 2) ||
+        djLookAheadBuffer_ == nullptr ||
+        djLookAheadCapacityFrames_ == 0 ||
+        djLookAheadFramesStored_ == 0) {
+        return 0;
+    }
+
+    const std::size_t framesToWrite =
+        std::min(frameCapacity, djLookAheadFramesStored_);
+    for (std::size_t frame = 0; frame < framesToWrite; ++frame) {
+        const std::size_t readOffset = djLookAheadReadFrame_ * 2U;
+        const float gain = nextDjPreDropGain();
+        const std::size_t outputOffset =
+            frame * static_cast<std::size_t>(channelCount);
+        interleaved[outputOffset] = djLookAheadBuffer_[readOffset] * gain;
+        if (channelCount == 2) {
+            interleaved[outputOffset + 1U] =
+                djLookAheadBuffer_[readOffset + 1U] * gain;
+        }
+        djLookAheadReadFrame_ =
+            (djLookAheadReadFrame_ + 1U) % djLookAheadCapacityFrames_;
+        --djLookAheadFramesStored_;
+    }
+
+    if (djLookAheadFramesStored_ == 0U) {
+        djLookAheadReadFrame_ = 0;
+        djLookAheadWriteFrame_ = 0;
+        djPreDropFramesRemaining_ = 0;
+        djAppliedDropGain_ = 1.0F;
+    }
+    return framesToWrite;
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
