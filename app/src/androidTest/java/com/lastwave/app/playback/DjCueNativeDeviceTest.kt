@@ -23,11 +23,13 @@ class DjCueNativeDeviceTest {
         // Keep unrelated asynchronous preference collectors out of this deterministic DSP check.
         val inactiveScope = CoroutineScope(Job().apply { cancel() })
         val engine = NativeAudioEngine(SettingsPreferences(store, context), EqualizerPreferences(store), inactiveScope)
+        val otherEngine = NativeAudioEngine(SettingsPreferences(store, context), EqualizerPreferences(store), inactiveScope)
         try {
             assertTrue("Native library must load", engine.isAvailable)
             assertTrue(engine.configureMediaProcessor(48_000, 48_000, 2))
             engine.setStudioMasterClarity(false)
             engine.setDjEnergyEnabled(true)
+            otherEngine.setDjEnergyEnabled(false)
             engine.setEqualizer(false, FloatArray(15))
             val frames = 48_000
             val input = ByteBuffer.allocateDirect(frames * 2 * 4).order(ByteOrder.nativeOrder())
@@ -45,7 +47,8 @@ class DjCueNativeDeviceTest {
             fun rms(x: FloatArray) = sqrt(x.drop(x.size / 2).sumOf { it.toDouble() * it } / (x.size / 2))
             engine.setDjCue(.7f, 0f, 0f, 0f)
             val quiet = process()
-            assertEquals(.7 / sqrt(2.0) * .1, rms(quiet), .0003)
+            assertEquals("Another engine's switch must not turn this DJ Energy program off",
+                .7 / sqrt(2.0) * .1, rms(quiet), .0003)
             engine.setDjCue(.8f, 2f, 2f, 3f)
             val lifted = process()
             assertTrue(rms(lifted) > rms(quiet))
@@ -125,9 +128,10 @@ class DjCueNativeDeviceTest {
             assertArrayEquals("Late approval cannot bypass the DJ Energy master", dry, process(), 0f)
             engine.setDjHighlights(false, 0, 0, 2f, 2f, 3f)
             engine.setDjCue(.7f, 2f, 2f, 3f)
+            otherEngine.setDjEnergyEnabled(true)
             assertArrayEquals("The same master must gate timed mode", dry, process(), 0f)
         } finally {
-            engine.close(); storeScope.cancel()
+            otherEngine.close(); engine.close(); storeScope.cancel()
         }
     }
 }

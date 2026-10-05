@@ -62,6 +62,10 @@ public:
         oboeDsp_.setDjCue(volume, energy, vocals, beats);
         mediaDsp_.setDjCue(volume, energy, vocals, beats);
     }
+    void setDjEnergyEnabled(bool enabled) noexcept {
+        oboeDsp_.setDjEnergyEnabled(enabled);
+        mediaDsp_.setDjEnergyEnabled(enabled);
+    }
     void setDjHighlights(bool enabled, int focus, int spacing, float energy, float vocals, float beats,
         float before, float after, float rampSeconds) noexcept {
         mediaDsp_.setDjHighlights(enabled, focus, spacing, energy, vocals, beats, before, after, rampSeconds);
