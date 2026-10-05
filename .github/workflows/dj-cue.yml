@@ -37,6 +37,8 @@ jobs:
           /tmp/dj_laya_test
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_energy_test.cpp -o /tmp/dj_energy_test
           /tmp/dj_energy_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_playback_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_playback_test
+          /tmp/dj_playback_test
       - name: Prepare build and fallback signing
         run: |
           chmod +x gradlew
@@ -54,12 +56,12 @@ jobs:
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n1)
           test -n "$APKSIGNER"
           mkdir -p final_apk
-          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk
-          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk > final_apk/signature-verification.txt
+          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk
+          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk > final_apk/signature-verification.txt
           cp "$(dirname "$APKSIGNER")/lib/apksigner.jar" final_apk/apksigner.jar
           (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
           mkdir -p apk_parts
-          split -b 25M -d final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk apk_parts/apk.part.
+          split -b 25M -d final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk apk_parts/apk.part.
       - name: Upload APK part 1
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +83,7 @@ jobs:
       - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-DJ-v4.6.1-Laya-Energy-APK
+          name: LastWave-DJ-v4.6.2-Laya-Energy-APK
           path: final_apk/
           if-no-files-found: error
       - name: Enable emulator KVM

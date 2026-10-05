@@ -15,10 +15,13 @@ import com.lastwave.app.playback.DjCueMode
 import com.lastwave.app.playback.DjHighlightFocus
 import com.lastwave.app.playback.DjHighlightSpacing
 import com.lastwave.app.playback.LayaModel
+import com.lastwave.app.playback.DjCueProfile
+import com.lastwave.app.playback.DjEnergyStatus
 import kotlin.math.roundToInt
 
 @Composable
-internal fun DjEnergyDialog(enabled: Boolean, onDismiss: () -> Unit, onEnabledChange: (Boolean) -> Unit) {
+internal fun DjEnergyDialog(enabled: Boolean, onDismiss: () -> Unit, onEnabledChange: (Boolean) -> Unit,
+    playbackStatus: DjEnergyStatus = DjEnergyStatus(), onPreview: (DjCueProfile) -> Unit = {}) {
     val context = LocalContext.current
     var profile by remember { mutableStateOf(DjCuePreferences.read(context).copy(enabled = enabled)) }
     val laya = remember { LayaModel.get(context) }
@@ -36,6 +39,12 @@ internal fun DjEnergyDialog(enabled: Boolean, onDismiss: () -> Unit, onEnabledCh
                 Text("Enable DJ Energy")
                 Switch(profile.enabled, { profile = profile.copy(enabled = it) })
             }
+            Text(playbackStatus.message, modifier = Modifier.testTag("DJ playback status"))
+            Text("Applied volume: ${playbackStatus.volumePercent}% • Automatic boosts: ${playbackStatus.boosts}")
+            OutlinedButton(enabled = profile.enabled && playbackStatus.canPreview, onClick = { onPreview(profile) }) {
+                Text("Test boost now")
+            }
+            Text("Play a song with DJ Energy enabled to test these settings immediately. The test uses the current output and does not wait for Laya or the saved cue.")
             Text("How should the DJ boost start?")
             DjChoice("Timed cue", profile.mode == DjCueMode.TIMED) { profile = profile.copy(mode = DjCueMode.TIMED) }
             DjChoice("Automatic highlights", profile.mode == DjCueMode.HIGHLIGHTS) { profile = profile.copy(mode = DjCueMode.HIGHLIGHTS) }
@@ -48,10 +57,10 @@ internal fun DjEnergyDialog(enabled: Boolean, onDismiss: () -> Unit, onEnabledCh
                 Text("How often should boosts happen?")
                 DjChoice("Occasional (35 seconds apart)", profile.spacing == DjHighlightSpacing.OCCASIONAL) { profile = profile.copy(spacing = DjHighlightSpacing.OCCASIONAL) }
                 DjChoice("Rare (60 seconds apart)", profile.spacing == DjHighlightSpacing.RARE) { profile = profile.copy(spacing = DjHighlightSpacing.RARE) }
-                Text("After 10 seconds of listening, a sustained rise can trigger the volume transition below. The high level holds for 3 seconds, then returns to normal over 0.5 seconds. Ordinary passages keep their original level. Quiet, steady and short tracks may have no boost.")
+                Text("After 10 seconds of listening, a strong rise or sustained high-energy section can trigger the transition below. One steady energetic section is assessed once, rather than repeatedly ducking it. The high level holds for 3 seconds, then returns to normal over 0.5 seconds. Quiet and short tracks may have no boost.")
                 if (profile.mode == DjCueMode.LAYA) {
                     Text("Laya scores the measured energy, bass and vocal-range activity using your choices above. No training dataset or account is required. This zero-shot score estimates a section's highlight appeal; it has not been calibrated against listener popularity.")
-                    Text("One-time download: 424 MB. After download, inference runs on your phone and audio stays on your phone. Missing, failed or late decisions leave that section unchanged.")
+                    Text("One-time download: 424 MB. After download, inference runs on your phone and audio stays on your phone. A section stays eligible for up to 15 seconds while it remains energetic; missing, failed or late decisions leave it unchanged.")
                     Text(layaState.message)
                     if (layaState.downloading) {
                         LinearProgressIndicator(progress = { (layaState.downloadedBytes.toFloat() / LayaModel.MODEL_BYTES).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())

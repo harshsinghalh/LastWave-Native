@@ -32,7 +32,9 @@ int main() {
         assert(accepted.volume == 1 && accepted.boost == 0 && detector.eventCount() == 1); ++checks;
         const int generation = detector.generation(); detector.reset(); frame = 0;
         assert(detector.generation() != generation && detector.features()[6] == 0); ++checks;
-        feed(12, .03F); feed(.5, .18F); feed(6, .18F);
+        feed(12, .03F); feed(.5, .18F); feed(10, .18F);
+        assert(detector.features()[6] == 1 && detector.eventCount() == 0); ++checks;
+        feed(6, .18F);
         assert(detector.features()[6] == 0 && detector.eventCount() == 0); ++checks;
         feed(1, .18F, true); assert(detector.eventCount() == 0); ++checks;
         detector.reset(); frame = 0;

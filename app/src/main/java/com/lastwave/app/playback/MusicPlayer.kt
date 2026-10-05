@@ -205,7 +205,9 @@ class MusicPlayer @Inject constructor(
     private val songPlayStatsRepository: dagger.Lazy<com.lastwave.app.data.repository.SongPlayStatsRepository>,
 ) {
     private val appContext = context.applicationContext
-    private val layaDjController by lazy { LayaDjController(appContext, applicationScope) }
+    private val djPlaybackController by lazy { DjPlaybackController(appContext, applicationScope) }
+    val djEnergyStatus get() = djPlaybackController.state
+    fun previewDjEnergy(profile: DjCueProfile) = onMain { djPlaybackController.preview(profile) }
     private val streamResolutionWakeLock by lazy {
         (appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -1302,6 +1304,19 @@ class MusicPlayer @Inject constructor(
                     if (playhead != _state.value.positionMs) {
                         _state.update { it.copy(positionMs = playhead) }
                     }
+                    if (_state.value.current != null && playerDelegate.isInitialized()) {
+                        val blocked = when {
+                            isCasting -> "casting uses the receiver's audio output."
+                            bitPerfectEnabled -> "Bit-Perfect is enabled."
+                            systemEffectsModePref -> "System Audio Effects is enabled."
+                            usbExclusiveSinkActive -> "USB Exclusive is enabled."
+                            isSpatialAudioCodec(_state.value.audioCodec) -> "spatial playback is enabled."
+                            else -> null
+                        }
+                        djPlaybackController.update(nativeAudioEngine.get(), secondaryNativeEngine,
+                            player === secondaryPlayer, DjCuePreferences.read(appContext), djEnergyModePref,
+                            playingNow, playhead, blocked)
+                    }
                     if (!isCasting && exclusiveUsbOutput.isActive()) {
                         // Never touch ExoPlayer here. Its playback thread holds
                         // the player lock inside the blocking USB write, so a
@@ -1468,19 +1483,6 @@ class MusicPlayer @Inject constructor(
                         updateSignalPath()
                     }
 
-                    // Follows media position (not wall clock), so pause, speed and seek keep the cue aligned.
-                    val dj = DjCuePreferences.read(appContext)
-                    val djAllowed = djEnergyModePref && !isCasting && !bitPerfectEnabled &&
-                        !systemEffectsModePref && !usbExclusiveSinkActive && !isSpatialAudioCodec(_state.value.audioCodec)
-                    val mix = dj.mixAt(pos, djAllowed)
-                    val djEngine = nativeAudioEngine.get()
-                    djEngine.setDjCue(mix[0], mix[1], mix[2], mix[3])
-                    val layaActive = djAllowed && dj.mode == DjCueMode.LAYA
-                    djEngine.setDjLayaMode(layaActive)
-                    djEngine.setDjHighlights(djAllowed && dj.mode != DjCueMode.TIMED,
-                        dj.focus.ordinal, dj.spacing.ordinal, dj.energyDb, dj.vocalsDb, dj.beatsDb,
-                        dj.before, dj.after, dj.rampMs)
-                    layaDjController.update(layaActive && healthPlaying, dj, djEngine)
                     val previous = _state.value
                     val unchanged = !_state.value.isPlaying &&
                         previous.positionMs == pos &&
@@ -1543,6 +1545,7 @@ class MusicPlayer @Inject constructor(
                 }
                 onMain {
                     applyDacRoutingFor(currentSourceRateHz())
+                    if (wasBitPerfect && !bitPerfectEnabled) restoreDjMixerIfNeeded()
                     updateSignalPath()
                 }
                 if (playerDelegate.isInitialized()) {
@@ -1578,10 +1581,12 @@ class MusicPlayer @Inject constructor(
 
         applicationScope.launch {
             UsbExclusivePrefs.enabledFlow(appContext).collect { enabled ->
+                val wasExclusive = usbExclusivePrefEnabled
                 usbExclusivePrefEnabled = enabled
                 if (enabled) maybeRequestUsbPermission()
                 onMain {
                     applyDacRoutingFor(currentSourceRateHz())
+                    if (wasExclusive && !enabled) restoreDjMixerIfNeeded()
                     updateSignalPath()
                 }
             }
@@ -2356,6 +2361,13 @@ class MusicPlayer @Inject constructor(
         listener.onMediaItemTransition(standby.currentMediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
         refresh(standby)
         return true
+    }
+
+    private fun restoreDjMixerIfNeeded() {
+        if (djEnergyModePref && !bitPerfectEnabled && !usbExclusivePrefEnabled && !isCasting &&
+            playerDelegate.isInitialized() && audioSinks.any { it.isBitPerfectConfigStale() }) {
+            player.seekTo(_state.value.positionMs)
+        }
     }
 
     private fun updateBitPerfectState() {

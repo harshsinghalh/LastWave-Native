@@ -48,6 +48,7 @@ class NativeProcessingAudioSink(
     private var floatOutputDisabled = false
     private var nativePathDisabled = false
     private var playing = false
+    private var outputStreamOffsetUs = 0L
     @Volatile private var bitPerfectRequested = false
     // Generation tracking so the verdict can separate bitPerfectRequested
     // from bitPerfectActuallyActive: the flag only takes effect when the sink
@@ -597,6 +598,9 @@ class NativeProcessingAudioSink(
     ): Boolean {
         if (pendingOutput == null) {
             if (!buffer.hasRemaining()) return true
+            // DJ timing follows the samples being decoded, including seeks
+            // and Media3's stream offset, rather than the delayed UI clock.
+            processor.setInputPresentationTimeUs((presentationTimeUs - outputStreamOffsetUs).coerceAtLeast(0L))
             processor.queueInput(buffer.duplicate())
             pendingInputLimit = buffer.limit()
             val output = processor.getOutput()
@@ -1103,6 +1107,7 @@ class NativeProcessingAudioSink(
     }
 
     override fun setOutputStreamOffsetUs(outputStreamOffsetUs: Long) {
+        this.outputStreamOffsetUs = outputStreamOffsetUs
         enhancedDelegate.setOutputStreamOffsetUs(outputStreamOffsetUs)
         fallbackDelegate.setOutputStreamOffsetUs(outputStreamOffsetUs)
     }
@@ -1201,6 +1206,11 @@ class NativeProcessingAudioSink(
             }
         }
         activeDelegate.flush()
+        // Disabling Bit-Perfect while a track is already playing must reopen
+        // the decoded DSP path on the seek flush, not wait for the next song.
+        if (!bitPerfectRequested && bitPerfectAtConfigure && hasConfigured) {
+            configuredFormat?.let { configure(it, configuredBufferSize, configuredOutputChannels) }
+        }
     }
 
     override fun reset() {

@@ -85,6 +85,7 @@ class SettingsViewModel @Inject constructor(
     private val themeRepository: ThemeRepository,
     private val settingsPreferences: SettingsPreferences,
     private val audioEngine: dagger.Lazy<NativeAudioEngine>,
+    private val musicPlayer: dagger.Lazy<com.lastwave.app.playback.MusicPlayer>,
     private val generateRepository: GenerateRepository,
     private val discoverRepository: com.lastwave.app.data.discover.DiscoverRepository,
     private val backupRepository: BackupRepository,
@@ -107,6 +108,8 @@ class SettingsViewModel @Inject constructor(
 
     val authState: StateFlow<com.lastwave.app.data.model.AuthState> = authRepository.authState
     val updateInfo = appUpdateManager.updateInfo
+    val djEnergyStatus get() = musicPlayer.get().djEnergyStatus
+    fun previewDjEnergy(profile: com.lastwave.app.playback.DjCueProfile) = musicPlayer.get().previewDjEnergy(profile)
 
     fun checkForUpdates() = appUpdateManager.checkForUpdate(isSilent = false)
     fun openUpdate(context: android.content.Context) = appUpdateManager.openUpdate(context)
@@ -458,6 +461,7 @@ class SettingsViewModel @Inject constructor(
             applyNativeAudio { it.setDjEnergyEnabled(enabled) }
             settingsPreferences.setDjEnergyEnabled(enabled)
             if (enabled) {
+                settingsPreferences.setSystemEffectsMode(false)
                 settingsPreferences.setBitPerfectEnabled(false)
                 applyNativeAudio { it.setBitPerfect(false) }
                 com.lastwave.app.playback.usb.UsbExclusivePrefs.setEnabled(context, false)

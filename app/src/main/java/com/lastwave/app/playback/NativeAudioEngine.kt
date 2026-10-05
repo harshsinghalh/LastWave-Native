@@ -132,6 +132,21 @@ class NativeAudioEngine @Inject constructor(
     private external fun nativeSetDjLayaMode(handle: Long, enabled: Boolean)
     private external fun nativeSetDjLayaDecision(handle: Long, generation: Int, candidate: Int, accepted: Boolean)
     private external fun nativeDjFeatures(handle: Long): FloatArray
+    fun setDjTimedMode(enabled: Boolean, cueMs: Long) {
+        withHandle(Unit) { nativeSetDjTimedMode(it, enabled, cueMs) }
+    }
+    internal fun setDjMediaTimeUs(positionUs: Long) {
+        withHandle(Unit) { nativeSetDjMediaTimeUs(it, positionUs) }
+    }
+    fun previewDjEnergy(profile: DjCueProfile) {
+        withHandle(Unit) { nativePreviewDjEnergy(it, profile.before, profile.after, profile.rampMs / 1000f,
+            profile.energyDb, profile.vocalsDb, profile.beatsDb) }
+    }
+    fun djRuntime(): FloatArray = withHandle(FloatArray(9)) { nativeDjRuntime(it) }
+    private external fun nativeSetDjTimedMode(handle: Long, enabled: Boolean, cueMs: Long)
+    private external fun nativeSetDjMediaTimeUs(handle: Long, positionUs: Long)
+    private external fun nativePreviewDjEnergy(handle: Long, before: Float, after: Float, ramp: Float, energy: Float, vocals: Float, beats: Float)
+    private external fun nativeDjRuntime(handle: Long): FloatArray
 
     internal fun setOutputVolume(volume: Float) {
         withHandle(Unit) { nativeSetOutputVolume(it, volume.coerceIn(0f, 1f)) }

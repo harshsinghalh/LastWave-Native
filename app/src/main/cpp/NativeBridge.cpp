@@ -554,3 +554,30 @@ Java_com_lastwave_app_playback_NativeAudioEngine_nativeDjFeatures(JNIEnv* env, j
     if (result != nullptr) env->SetFloatArrayRegion(result, 0, static_cast<jsize>(data.size()), data.data());
     return result;
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjTimedMode(
+    JNIEnv*, jobject, jlong handle, jboolean enabled, jlong cueMs) {
+    if (auto* engine = fromHandle(handle)) engine->setDjTimedMode(enabled == JNI_TRUE, cueMs / 1000.0);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeSetDjMediaTimeUs(
+    JNIEnv*, jobject, jlong handle, jlong positionUs) {
+    if (auto* engine = fromHandle(handle)) engine->setDjMediaTimeUs(positionUs);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativePreviewDjEnergy(
+    JNIEnv*, jobject, jlong handle, jfloat before, jfloat after, jfloat ramp, jfloat energy, jfloat vocals, jfloat beats) {
+    if (auto* engine = fromHandle(handle)) engine->previewDjEnergy(before, after, ramp, energy, vocals, beats);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_lastwave_app_playback_NativeAudioEngine_nativeDjRuntime(JNIEnv* env, jobject, jlong handle) {
+    const auto* engine = fromHandle(handle);
+    const auto data = engine == nullptr ? std::array<float, 9>{} : engine->djRuntime();
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(data.size()));
+    if (result != nullptr) env->SetFloatArrayRegion(result, 0, static_cast<jsize>(data.size()), data.data());
+    return result;
+}

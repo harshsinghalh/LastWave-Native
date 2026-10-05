@@ -23,6 +23,8 @@ class NativePcmAudioProcessor(
     val isAvailable: Boolean
         get() = engine.isAvailable
 
+    fun setInputPresentationTimeUs(positionUs: Long) { engine.setDjMediaTimeUs(positionUs) }
+
     private var nativeEncoding = NativePcmEncoding.PCM_FLOAT
     private var copyBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var trimCombineBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER

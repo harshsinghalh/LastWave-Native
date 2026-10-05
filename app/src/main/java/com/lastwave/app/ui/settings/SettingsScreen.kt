@@ -443,6 +443,7 @@ fun SettingsScreen(
     val eq by viewModel.equalizer.collectAsStateWithLifecycle()
     val usbExclusiveEnabled by viewModel.usbExclusiveEnabled.collectAsStateWithLifecycle()
     val loudness by viewModel.loudness.collectAsStateWithLifecycle()
+    val djEnergyStatus by viewModel.djEnergyStatus.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
     val isLastFmConnected by viewModel.isLastFmConnected.collectAsStateWithLifecycle()
     val hasApiKey by viewModel.hasApiKey.collectAsStateWithLifecycle()
@@ -988,7 +989,7 @@ fun SettingsScreen(
                                 title = "DJ Energy",
                                 subtitle = when {
                                     misc.isBitPerfectEnabled -> "Paused by Bit-Perfect mode"
-                                    misc.djEnergyEnabled -> "On • Laya, cue time and volume in DJ Energy options"
+                                    misc.djEnergyEnabled -> djEnergyStatus.message
                                     else -> "Select important energy, vocal and beat moments"
                                 },
                                 checked = misc.djEnergyEnabled,
@@ -2035,6 +2036,8 @@ fun SettingsScreen(
         enabled = misc.djEnergyEnabled,
         onDismiss = { showDjEnergyOptions = false },
         onEnabledChange = viewModel::setDjEnergyEnabled,
+        playbackStatus = djEnergyStatus,
+        onPreview = viewModel::previewDjEnergy,
     )
 
     if (showEqSheet) {

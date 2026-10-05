@@ -28,6 +28,8 @@ public:
         lastEvent_ = -static_cast<std::int64_t>(rate_ * 60.0);
         eventFrame_ = -1;
         fast_ = slow_ = bass_ = vocal_ = bassPower_ = vocalPower_ = 0.0F;
+        plateauUsed_ = false;
+        quietFrames_ = 0;
     }
     [[nodiscard]] std::int64_t eventCount() const noexcept { return events_; }
     [[nodiscard]] int generation() const noexcept { return generation_; }
@@ -55,13 +57,15 @@ public:
         slow_ += slowAlpha_ * (power - slow_);
         bassPower_ += fastAlpha_ * (bass_ * bass_ - bassPower_);
         vocalPower_ += fastAlpha_ * (voice * voice - vocalPower_);
+        quietFrames_ = fast_ < 0.002512F ? quietFrames_ + 1 : 0;
+        if (quietFrames_ > static_cast<std::int64_t>(rate_)) plateauUsed_ = false;
 
         if (eventFrame_ < 0) {
             if (pendingFrame_ >= 0) {
                 // Wait for background inference without stalling PCM. Only a
                 // still-energetic section and the matching decision may start.
                 ++pendingFrame_;
-                if (pendingFrame_ > static_cast<std::int64_t>(rate_ * 5.0) || fast_ < pendingFeatures_[0] * 0.65F) {
+                if (pendingFrame_ > static_cast<std::int64_t>(rate_ * 15.0) || fast_ < pendingFeatures_[0] * 0.65F) {
                     pendingFrame_ = -1;
                     candidate_ = 0;
                 } else if (!requireModel || approved) {
@@ -69,19 +73,26 @@ public:
                     lastEvent_ = frames_;
                     pendingFrame_ = -1;
                     ++events_;
+                    plateauUsed_ = true;
                 }
             }
             const double gap = spacing == 1 ? 60.0 : 35.0;
             const float contrast = spacing == 1 ? 3.981072F : 2.818383F; // 6 / 4.5 dB
             const bool focusMatches = focus == 1 ? bassPower_ > fast_ * 0.35F
                 : focus == 2 ? vocalPower_ > fast_ * 0.35F && bassPower_ < fast_ * 0.25F : true;
+            const bool rise = fast_ > std::max(slow_, 1.0e-9F) * contrast;
+            // Mastered choruses can stay energetic without a 4.5 dB jump.
+            // Permit one sustained loud section per plateau, with the same
+            // focus, spacing and real model gate. Never pulse a steady section.
+            const bool plateau = !plateauUsed_ && fast_ > 0.02F && fast_ >= slow_ * 0.85F;
             const bool candidate = eventFrame_ < 0 && pendingFrame_ < 0 && frames_ >= static_cast<std::int64_t>(rate_ * 10.0) &&
                 frames_ - lastEvent_ >= static_cast<std::int64_t>(rate_ * gap) &&
-                fast_ > 0.002512F && fast_ > std::max(slow_, 1.0e-9F) * contrast && focusMatches;
+                fast_ > 0.002512F && (rise || plateau) && focusMatches;
             candidate_ = candidate ? candidate_ + 1 : 0;
             // Reject isolated clicks/transients; require a sustained rise.
-            if (candidate_ >= static_cast<std::int64_t>(rate_ * 0.18)) {
+            if (candidate_ >= static_cast<std::int64_t>(rate_ * (rise ? 0.18 : 1.2))) {
                 ++candidateId_;
+                plateauUsed_ = true;
                 pendingFrame_ = 0;
                 pendingFeatures_ = {fast_, slow_, bassPower_ / std::max(fast_, 1.0e-9F),
                     vocalPower_ / std::max(fast_, 1.0e-9F)};
@@ -91,6 +102,7 @@ public:
                     lastEvent_ = frames_;
                     pendingFrame_ = -1;
                     ++events_;
+                    plateauUsed_ = true;
                 }
             }
         }
@@ -123,5 +135,7 @@ private:
     int generation_{0}, candidateId_{0};
     std::int64_t pendingFrame_{-1};
     std::array<float, 4> pendingFeatures_{};
+    bool plateauUsed_{false};
+    std::int64_t quietFrames_{0};
 };
 }

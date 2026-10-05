@@ -27,6 +27,11 @@ public:
     void setDjLayaMode(bool enabled) noexcept { layaEnabled_.store(enabled); }
     void setDjLayaDecision(int generation, int candidate, bool accepted) noexcept;
     [[nodiscard]] std::array<float, 8> djFeatures() const noexcept;
+    void setDjTimedMode(bool enabled, double cueSeconds) noexcept;
+    void setDjMediaTimeUs(std::int64_t positionUs) noexcept;
+    void previewDjEnergy(float before, float after, float rampSeconds,
+        float energy, float vocals, float beats) noexcept;
+    [[nodiscard]] std::array<float, 9> djRuntime() const noexcept;
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     void setPeakProtectionEnabled(bool enabled) noexcept;
@@ -109,6 +114,13 @@ private:
     float djVolume_{1.0F}, djEnergy_{0.0F}, djVocals_{0.0F}, djBeats_{0.0F};
     float djEnergyGain_{1.0F};
     int djCountdown_{0};
+    std::atomic<bool> timedEnabled_{false};
+    std::atomic<double> timedCueSeconds_{165.0}, mediaSeconds_{0.0};
+    std::array<std::atomic<float>, 6> previewSettings_{};
+    std::atomic<unsigned> previewRequest_{0};
+    unsigned previewApplied_{0};
+    std::int64_t previewFrame_{-1}, processedFrames_{0};
+    std::array<std::atomic<float>, 7> runtimeSnapshot_{};
     struct Biquad final {
         double b0{1.0};
         double b1{0.0};

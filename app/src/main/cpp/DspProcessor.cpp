@@ -244,6 +244,11 @@ void DspProcessor::configure(double sampleRate) noexcept {
 }
 
 void DspProcessor::reset() noexcept {
+    previewFrame_ = -1;
+    previewApplied_ = previewRequest_.load();
+    processedFrames_ = 0;
+    for (auto& value : runtimeSnapshot_) value.store(0.0F);
+    runtimeSnapshot_[1].store(1.0F);
     highlights_.configure(sampleRate_);
     highlightWasEnabled_ = false;
     layaWasEnabled_ = false;
@@ -552,12 +557,44 @@ std::array<float, 8> DspProcessor::djFeatures() const noexcept {
     return result;
 }
 
+void DspProcessor::setDjTimedMode(bool enabled, double cueSeconds) noexcept {
+    timedCueSeconds_.store(std::isfinite(cueSeconds) ? std::clamp(cueSeconds, 0.0, 86400.0) : 165.0);
+    timedEnabled_.store(enabled);
+}
+
+void DspProcessor::setDjMediaTimeUs(std::int64_t positionUs) noexcept {
+    if (positionUs >= 0) mediaSeconds_.store(static_cast<double>(positionUs) / 1'000'000.0);
+}
+
+void DspProcessor::previewDjEnergy(float before, float after, float rampSeconds,
+    float energy, float vocals, float beats) noexcept {
+    const std::array<float, 6> values{before, after, rampSeconds, energy, vocals, beats};
+    const std::array<float, 6> limits{1.0F, 1.0F, 30.0F, 6.0F, 6.0F, 6.0F};
+    for (std::size_t i = 0; i < values.size(); ++i)
+        previewSettings_[i].store(std::isfinite(values[i]) ? std::clamp(values[i], i == 2 ? 0.1F : 0.0F, limits[i]) : 0.0F);
+    previewRequest_.fetch_add(1, std::memory_order_release);
+}
+
+std::array<float, 9> DspProcessor::djRuntime() const noexcept {
+    std::array<float, 9> result{};
+    for (std::size_t i = 0; i < runtimeSnapshot_.size(); ++i) result[i] = runtimeSnapshot_[i].load();
+    result[7] = targetDjEnergyEnabled_.load() ? 1.0F : 0.0F;
+    result[8] = bitPerfectEnabled_.load() ? 1.0F : 0.0F;
+    return result;
+}
+
 void DspProcessor::process(
     float* samples,
     std::int32_t frameCount,
     std::int32_t channelCount) noexcept {
     if (samples == nullptr || frameCount <= 0 || (channelCount != 1 && channelCount != 2)) return;
+    processedFrames_ += frameCount;
+    runtimeSnapshot_[0].store(static_cast<float>(processedFrames_ / sampleRate_));
     if (bitPerfectEnabled_.load(std::memory_order_acquire)) {
+        previewFrame_ = -1;
+        previewApplied_ = previewRequest_.load();
+        runtimeSnapshot_[1].store(1.0F);
+        for (std::size_t i = 2; i < 7; ++i) runtimeSnapshot_[i].store(0.0F);
         highlights_.reset();
         for (auto& feature : featureSnapshot_) feature.store(0.0F);
         return;
@@ -573,6 +610,18 @@ void DspProcessor::process(
     const bool programManaged = energyProgramManaged_.load();
     const bool programAllowed = !programManaged ||
         (targetDjEnergyEnabled_.load(std::memory_order_acquire) && !atmosBypassed);
+    const bool timedActive = timedEnabled_.load() && programAllowed;
+    const double timedCueSeconds = timedCueSeconds_.load();
+    const auto request = previewRequest_.load(std::memory_order_acquire);
+    if (request != previewApplied_) {
+        previewApplied_ = request;
+        previewFrame_ = programAllowed ? 0 : -1;
+    }
+    if (!programAllowed) previewFrame_ = -1;
+    std::array<float, 6> preview{};
+    for (std::size_t i = 0; i < preview.size(); ++i) preview[i] = previewSettings_[i].load();
+    const double mediaStartSeconds = mediaSeconds_.load();
+    mediaSeconds_.store(mediaStartSeconds + frameCount / sampleRate_);
     const bool djEnabled =
         targetDjEnergyEnabled_.load(std::memory_order_acquire) &&
         !programManaged &&
@@ -624,7 +673,7 @@ void DspProcessor::process(
             }
         }
     }
-    const bool djActive = cueVolume != 1.0F || cueEnergy != 0.0F ||
+    const bool djActive = timedActive || previewFrame_ >= 0 || cueVolume != 1.0F || cueEnergy != 0.0F ||
         cueVocals != 0.0F || cueBeats != 0.0F ||
         djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
     const bool enhancementTargeted = djActive || target > 0.0F ||
@@ -657,12 +706,46 @@ void DspProcessor::process(
             channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing,
             layaEnabled, layaApproved, highlightBefore, highlightAfter, highlightRampSeconds)
             : DjHighlightDetector::Mix{};
+        auto automated = highlightEnabled ? highlight : DjHighlightDetector::Mix{cueVolume, 0.0F};
+        float energyGoal = highlightEnabled ? highlightEnergy * highlight.boost : cueEnergy;
+        float vocalsGoal = highlightEnabled ? highlightVocals * highlight.boost : cueVocals;
+        float beatsGoal = highlightEnabled ? highlightBeats * highlight.boost : cueBeats;
+        if (timedActive) {
+            const double elapsed = mediaStartSeconds + frame / sampleRate_ - timedCueSeconds;
+            const float f = static_cast<float>(std::clamp(elapsed / highlightRampSeconds, 0.0, 1.0));
+            const float eased = f * f * (3.0F - 2.0F * f);
+            automated = {highlightBefore + (highlightAfter - highlightBefore) * eased, eased};
+            energyGoal = highlightEnergy * eased;
+            vocalsGoal = highlightVocals * eased;
+            beatsGoal = highlightBeats * eased;
+        }
+        if (previewFrame_ >= 0) {
+            const double seconds = previewFrame_++ / sampleRate_;
+            const double transitionStart = 0.53;
+            const double endRise = transitionStart + preview[2];
+            auto smooth = [](double f) { const float x = static_cast<float>(std::clamp(f, 0.0, 1.0)); return x * x * (3.0F - 2.0F * x); };
+            if (seconds < 0.03) automated = {1.0F + (preview[0] - 1.0F) * smooth(seconds / 0.03), 0.0F};
+            else if (seconds < transitionStart) automated = {preview[0], 0.0F};
+            else if (seconds < endRise) {
+                const float f = smooth((seconds - transitionStart) / preview[2]);
+                automated = {preview[0] + (preview[1] - preview[0]) * f, f};
+            } else if (seconds < endRise + 3.0) automated = {preview[1], 1.0F};
+            else if (seconds < endRise + 3.5) {
+                const float f = smooth((seconds - endRise - 3.0) / 0.5);
+                automated = {preview[1] + (1.0F - preview[1]) * f, 1.0F - f};
+            } else previewFrame_ = -1;
+            if (previewFrame_ >= 0) {
+                energyGoal = preview[3] * automated.boost;
+                vocalsGoal = preview[4] * automated.boost;
+                beatsGoal = preview[5] * automated.boost;
+            }
+        }
         if (highlightEnabled && featureCountdown_-- <= 0) {
             const auto features = highlights_.features();
             for (std::size_t i = 0; i < features.size(); ++i) featureSnapshot_[i].store(features[i]);
             featureCountdown_ = 127;
         }
-        const bool highlightActive = highlight.volume != 1.0F || highlight.boost != 0.0F;
+        const bool highlightActive = automated.volume != 1.0F || automated.boost != 0.0F;
         const bool cueReleasing = djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
         // Analyze untouched audio without sending ordinary passages through
         // the DC blocker, saturation or limiter. This is sample-transparent.
@@ -956,16 +1039,16 @@ void DspProcessor::process(
                     value += (goal - value) * blend;
                     if (std::abs(goal - value) < 0.00001F) value = goal;
                 };
-                ease(djEnergy_, highlightEnabled ? highlightEnergy * highlight.boost : cueEnergy);
-                ease(djVocals_, highlightEnabled ? highlightVocals * highlight.boost : cueVocals);
-                ease(djBeats_, highlightEnabled ? highlightBeats * highlight.boost : cueBeats);
+                ease(djEnergy_, energyGoal);
+                ease(djVocals_, vocalsGoal);
+                ease(djBeats_, beatsGoal);
                 djEnergyGain_ = std::pow(10.0F, djEnergy_ / 20.0F);
                 djVocalBand_.setPeaking(sampleRate_, std::min(2200.0, sampleRate_ * 0.3), 0.7, djVocals_);
                 djBeatBand_.setPeaking(sampleRate_, 90.0, 0.7, djBeats_);
                 djCountdown_ = 127;
             }
             const float step = static_cast<float>(1.0 / (sampleRate_ * 0.03));
-            const float volumeGoal = highlightEnabled ? highlight.volume : cueVolume;
+            const float volumeGoal = automated.volume;
             djVolume_ += std::clamp(volumeGoal - djVolume_, -step, step);
             outputLeft = djBeatBand_.tick(djVocalBand_.tick(outputLeft, 0), 0) * djVolume_ * djEnergyGain_;
             if (channelCount == 2) {
@@ -1067,6 +1150,12 @@ void DspProcessor::process(
         }
     }
 
+    runtimeSnapshot_[1].store(djVolume_);
+    runtimeSnapshot_[2].store(djEnergy_);
+    runtimeSnapshot_[3].store(djVocals_);
+    runtimeSnapshot_[4].store(djBeats_);
+    runtimeSnapshot_[5].store(static_cast<float>(highlights_.eventCount()));
+    runtimeSnapshot_[6].store(previewFrame_ >= 0 ? 1.0F : 0.0F);
     if (target == 0.0F && currentWet_ == 0.0F && clarityChainActive_) {
         // Once bypass has fully crossfaded, stop burning CPU on a result that
         // is multiplied by zero. The next enable starts from clean state.

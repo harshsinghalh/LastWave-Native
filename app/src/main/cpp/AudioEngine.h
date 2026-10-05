@@ -75,6 +75,12 @@ public:
         mediaDsp_.setDjLayaDecision(generation, candidate, accepted);
     }
     [[nodiscard]] std::array<float, 8> djFeatures() const noexcept { return mediaDsp_.djFeatures(); }
+    void setDjTimedMode(bool enabled, double cueSeconds) noexcept { mediaDsp_.setDjTimedMode(enabled, cueSeconds); }
+    void setDjMediaTimeUs(std::int64_t positionUs) noexcept { mediaDsp_.setDjMediaTimeUs(positionUs); }
+    void previewDjEnergy(float before, float after, float rampSeconds, float energy, float vocals, float beats) noexcept {
+        mediaDsp_.previewDjEnergy(before, after, rampSeconds, energy, vocals, beats);
+    }
+    [[nodiscard]] std::array<float, 9> djRuntime() const noexcept { return mediaDsp_.djRuntime(); }
     void setStudioMasterClarity(bool enabled) noexcept;
     void setBitPerfect(bool enabled) noexcept;
     // Read-back for UI truthfulness: true only when both DSP instances

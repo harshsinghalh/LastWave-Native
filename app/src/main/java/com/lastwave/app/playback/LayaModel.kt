@@ -110,7 +110,7 @@ class LayaModel private constructor(private val context: Context) {
 
     internal suspend fun score(key: String): Float? = scoreInternal(key, publish = true, force = false)
 
-    /** Warm the real session before a musical candidate's five-second deadline. */
+    /** Warm the real session before a musical candidate's inference deadline. */
     internal suspend fun warmup() { scoreInternal("0.0.1.0.0", publish = false, force = true) }
 
     private suspend fun scoreInternal(key: String, publish: Boolean, force: Boolean): Float? = withContext(Dispatchers.IO) {

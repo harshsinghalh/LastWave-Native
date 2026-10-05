@@ -25,6 +25,21 @@ class DjEnergyDialogDeviceTest {
         compose.setContent { MaterialTheme { DjEnergyDialog(enabled = enabled, onDismiss = onDismiss, onEnabledChange = onEnabledChange) } }
     }
 
+    @Test fun previewUsesDraftLevelsAndShowsActualPlaybackStatus() {
+        var preview: DjCueProfile? = null
+        compose.setContent { MaterialTheme { DjEnergyDialog(enabled = true, onDismiss = {}, onEnabledChange = {},
+            playbackStatus = com.lastwave.app.playback.DjEnergyStatus("DJ boost active.", 80, 2, true),
+            onPreview = { preview = it }) } }
+        compose.onNodeWithTag("DJ playback status").assertTextEquals("DJ boost active.")
+        compose.onNodeWithText("Test boost now").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(.7f, preview!!.before, 0f); assertEquals(.8f, preview!!.after, 0f); assertEquals(1_500L, preview!!.rampMs) }
+    }
+
+    @Test fun previewIsUnavailableWithoutActivePlayback() {
+        show(enabled = true)
+        compose.onNodeWithText("Test boost now").performScrollTo().assertIsNotEnabled()
+    }
+
     @Test fun invalidTimeCannotBeSaved() {
         show()
         compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("2:99")
