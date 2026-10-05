@@ -41,6 +41,7 @@ int main() {
     }
     for (int channels : {1, 2}) {
         DspProcessor dsp; dsp.configure(48000); dsp.setLongLookAheadMode(true);
+        dsp.setDjEnergyProgramManaged(true); dsp.setDjEnergyEnabled(true);
         dsp.setDjHighlights(true, 0, 0, 2, 2, 3); dsp.setDjLayaMode(true);
         std::int64_t frame = 0;
         auto feed = [&](double seconds, float amplitude) {
@@ -66,6 +67,16 @@ int main() {
         dsp.setBitPerfect(true); assert(!feed(1, .9F)); assert(dsp.djFeatures()[6] == 0); ++checks;
         dsp.setBitPerfect(false); dsp.setDjHighlights(false, 0, 0, 2, 2, 3);
         assert(!feed(1, .9F)); ++checks;
+        dsp.setDjEnergyEnabled(false);
+        dsp.setDjHighlights(true, 0, 0, 2, 2, 3);
+        dsp.setDjLayaDecision(generation, id, true);
+        assert(!feed(1, .9F)); assert(dsp.djFeatures()[6] == 0); ++checks;
+        dsp.setDjHighlights(false, 0, 0, 2, 2, 3);
+        dsp.setDjCue(.7F, 2, 2, 3);
+        assert(!feed(1, .3F)); ++checks;
+        dsp.setDjEnergyEnabled(true); assert(feed(1, .3F)); ++checks;
+        dsp.setDjEnergyEnabled(false); feed(1, .3F);
+        assert(!feed(1, .3F)); ++checks;
     }
     std::cout << checks << " Laya approval / playback checks passed\n";
 }

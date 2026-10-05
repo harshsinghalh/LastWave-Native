@@ -74,6 +74,7 @@ class NativeAudioEngine @Inject constructor(
                     .collect { if (!systemFlattened) setClarityAtmosBypass(it) }
             }
             applicationScope.launch(Dispatchers.Default) {
+                settingsPreferences.migrateDjEnergyProgram()
                 settingsPreferences.settings
                     .map { it.djEnergyEnabled }
                     .distinctUntilChanged()
@@ -116,11 +117,13 @@ class NativeAudioEngine @Inject constructor(
         withHandle(Unit) { nativeSetDjCue(it, volume, energy, vocals, beats) }
     }
     private external fun nativeSetDjCue(handle: Long, volume: Float, energy: Float, vocals: Float, beats: Float)
-    fun setDjHighlights(enabled: Boolean, focus: Int, spacing: Int, energy: Float, vocals: Float, beats: Float) {
-        withHandle(Unit) { nativeSetDjHighlights(it, enabled, focus, spacing, energy, vocals, beats) }
+    fun setDjHighlights(enabled: Boolean, focus: Int, spacing: Int, energy: Float, vocals: Float, beats: Float,
+        before: Float = .7f, after: Float = .8f, rampMs: Long = 1_500) {
+        withHandle(Unit) { nativeSetDjHighlights(it, enabled, focus, spacing, energy, vocals, beats,
+            before, after, rampMs / 1000f) }
     }
     private external fun nativeSetDjHighlights(handle: Long, enabled: Boolean, focus: Int, spacing: Int,
-        energy: Float, vocals: Float, beats: Float)
+        energy: Float, vocals: Float, beats: Float, before: Float, after: Float, rampSeconds: Float)
     fun setDjLayaMode(enabled: Boolean) { withHandle(Unit) { nativeSetDjLayaMode(it, enabled) } }
     fun setDjLayaDecision(generation: Int, candidate: Int, accepted: Boolean) {
         withHandle(Unit) { nativeSetDjLayaDecision(it, generation, candidate, accepted) }

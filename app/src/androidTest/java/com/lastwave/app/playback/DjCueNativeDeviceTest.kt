@@ -27,7 +27,7 @@ class DjCueNativeDeviceTest {
             assertTrue("Native library must load", engine.isAvailable)
             assertTrue(engine.configureMediaProcessor(48_000, 48_000, 2))
             engine.setStudioMasterClarity(false)
-            engine.setDjEnergyEnabled(false)
+            engine.setDjEnergyEnabled(true)
             engine.setEqualizer(false, FloatArray(15))
             val frames = 48_000
             val input = ByteBuffer.allocateDirect(frames * 2 * 4).order(ByteOrder.nativeOrder())
@@ -117,6 +117,15 @@ class DjCueNativeDeviceTest {
             val dry = FloatArray(frames * 2) { input.getFloat(it * 4) }
             assertFalse("Real model approval must reach the packaged DSP", second.contentEquals(dry))
             assertTrue(second.all { it.isFinite() && abs(it) <= 1f })
+            engine.setDjEnergyEnabled(false)
+            process() // short de-click release of an in-progress event
+            assertArrayEquals("Turning DJ Energy off must stop Laya automation", dry, process(), 0f)
+            assertEquals(0f, engine.djFeatures()[6], 0f)
+            engine.setDjLayaDecision(candidate[4].toInt(), candidate[5].toInt(), true)
+            assertArrayEquals("Late approval cannot bypass the DJ Energy master", dry, process(), 0f)
+            engine.setDjHighlights(false, 0, 0, 2f, 2f, 3f)
+            engine.setDjCue(.7f, 2f, 2f, 3f)
+            assertArrayEquals("The same master must gate timed mode", dry, process(), 0f)
         } finally {
             engine.close(); storeScope.cancel()
         }

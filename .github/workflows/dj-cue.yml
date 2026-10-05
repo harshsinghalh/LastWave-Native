@@ -27,22 +27,6 @@ jobs:
           java-version: '17'
           distribution: temurin
           cache: gradle
-      - name: Retrieve previously compiled release
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: LastWave-DJ-v4.6.0-Laya-APK
-          run-id: 37232182953
-          github-token: ${{ github.token }}
-          path: previously_compiled
-      - name: Retrieve passed verification reports
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: Laya-DJ-test-reports
-          run-id: 37232182953
-          github-token: ${{ github.token }}
-          path: previously_verified
       - name: Native DSP regression checks
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_dsp_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_test
@@ -51,6 +35,8 @@ jobs:
           /tmp/dj_highlight_test
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_laya_test.cpp app/src/main/cpp/DspProcessor.cpp -o /tmp/dj_laya_test
           /tmp/dj_laya_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I app/src/main/cpp tests/dj/dj_energy_test.cpp -o /tmp/dj_energy_test
+          /tmp/dj_energy_test
       - name: Prepare build and fallback signing
         run: |
           chmod +x gradlew
@@ -61,32 +47,19 @@ jobs:
       - name: Download pinned Laya test model
         run: python3 tools/download_laya_model.py /tmp/laya-model.onnx --keep-source /tmp/laya-source.onnx
       - name: Unit tests and Android packages
-        run: |
-          git fetch origin c02c0af1a26c55d238eab54b7a4f87209315195c --depth=1
-          if test -f previously_compiled/LastWave-DJ-v4.6.0-Laya.apk && test -z "$SIGNING_KEY$ADDON_CLIENT_SECRET" && test "$RELEASE_CERT_SHA256" = 5a698e3c68c88fbeba18c3390c07771632f59ec8436308d502d6d635c0be549e && git diff --quiet c02c0af1a26c55d238eab54b7a4f87209315195c HEAD -- app audio build.gradle.kts settings.gradle.kts gradle.properties gradle tools/generate_native_secrets.py && python3 tools/check_previous_laya_verification.py previously_verified; then
-            mkdir -p app/build/outputs/apk/release
-            cp previously_compiled/LastWave-DJ-v4.6.0-Laya.apk app/build/outputs/apk/release/app-release.apk
-            cp -r previously_verified/reports app/build/reports
-            cp -r previously_verified/outputs/androidTest-results app/build/outputs/androidTest-results
-            echo 'Application and test sources are unchanged. Actual passed unit/Android reports and the compiled release are verified and reused; rerunning release installation/startup.'
-            echo 'Prior passed tests: run 37232182953, application commit c02c0af1a26c55d238eab54b7a4f87209315195c. This run validates the identical release startup after fixing test-app cleanup.' > app/build/outputs/reused-verification.txt
-            echo 'DJ_VERIFIED_REUSE=true' >> "$GITHUB_ENV"
-          else
-            ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
-            echo 'DJ_VERIFIED_REUSE=false' >> "$GITHUB_ENV"
-          fi
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
       - name: Validate release APK signature
         run: |
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n1)
           test -n "$APKSIGNER"
           mkdir -p final_apk
-          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.6.0-Laya.apk
-          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.0-Laya.apk > final_apk/signature-verification.txt
+          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk
+          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk > final_apk/signature-verification.txt
           cp "$(dirname "$APKSIGNER")/lib/apksigner.jar" final_apk/apksigner.jar
           (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
           mkdir -p apk_parts
-          split -b 25M -d final_apk/LastWave-DJ-v4.6.0-Laya.apk apk_parts/apk.part.
+          split -b 25M -d final_apk/LastWave-DJ-v4.6.1-Laya-Energy.apk apk_parts/apk.part.
       - name: Upload APK part 1
         uses: actions/upload-artifact@v4
         with:
@@ -108,7 +81,7 @@ jobs:
       - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-DJ-v4.6.0-Laya-APK
+          name: LastWave-DJ-v4.6.1-Laya-Energy-APK
           path: final_apk/
           if-no-files-found: error
       - name: Enable emulator KVM
@@ -135,4 +108,3 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/outputs/release-startup.txt
-            app/build/outputs/reused-verification.txt

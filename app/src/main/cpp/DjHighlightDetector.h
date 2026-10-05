@@ -41,7 +41,8 @@ public:
     }
     // focus: 0 any strong energy rise, 1 bass-led, 2 vocal-range-led.
     // spacing: 0 at least 35 seconds, 1 at least 60 seconds between starts.
-    Mix tick(float left, float right, int focus, int spacing, bool requireModel = false, bool approved = false) noexcept {
+    Mix tick(float left, float right, int focus, int spacing, bool requireModel = false, bool approved = false,
+        float before = 0.70F, float after = 0.80F, float rampSeconds = 1.5F) noexcept {
         if (!std::isfinite(left)) left = 0.0F;
         if (!std::isfinite(right)) right = 0.0F;
         ++frames_;
@@ -95,19 +96,19 @@ public:
         }
         if (eventFrame_ < 0) return {};
         const double seconds = static_cast<double>(eventFrame_++) / rate_;
-        // 30 ms entry avoids a click. The low-to-high rise completes at 1.5 s.
+        // A de-click entry followed by the saved low-to-high transition.
         if (seconds < 0.03) {
             const float f = smooth(static_cast<float>(seconds / 0.03));
-            return {1.0F - 0.30F * f, 0.0F};
+            return {1.0F + (before - 1.0F) * f, 0.0F};
         }
-        if (seconds < 1.5) {
-            const float f = smooth(static_cast<float>((seconds - 0.03) / 1.47));
-            return {0.70F + 0.10F * f, f};
+        if (seconds < rampSeconds) {
+            const float f = smooth(static_cast<float>((seconds - 0.03) / (rampSeconds - 0.03)));
+            return {before + (after - before) * f, f};
         }
-        if (seconds < 4.5) return {0.80F, 1.0F};
-        if (seconds < 5.0) {
-            const float f = smooth(static_cast<float>((seconds - 4.5) / 0.5));
-            return {0.80F + 0.20F * f, 1.0F - f};
+        if (seconds < rampSeconds + 3.0) return {after, 1.0F};
+        if (seconds < rampSeconds + 3.5) {
+            const float f = smooth(static_cast<float>((seconds - rampSeconds - 3.0) / 0.5));
+            return {after + (1.0F - after) * f, 1.0F - f};
         }
         eventFrame_ = -1;
         return {};

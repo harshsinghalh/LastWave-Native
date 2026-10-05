@@ -251,6 +251,7 @@ class SettingsPreferences @Inject constructor(
         val CLARITY_PRESET = intPreferencesKey("lw_clarity_preset")
         val CLARITY_ATMOS_BYPASS = booleanPreferencesKey("lw_clarity_atmos_bypass")
         val DJ_ENERGY_ENABLED = booleanPreferencesKey("lw_dj_energy_enabled")
+        val DJ_ENERGY_PROGRAM_MIGRATED = booleanPreferencesKey("lw_dj_energy_program_migrated")
         val BIT_PERFECT_ENABLED = booleanPreferencesKey("lw_bit_perfect_enabled")
         val LYRICS_UI_VERSION = stringPreferencesKey("lw_lyrics_ui_version")
         val WORD_BY_WORD_LYRICS = booleanPreferencesKey("lw_word_by_word_lyrics")
@@ -410,7 +411,22 @@ class SettingsPreferences @Inject constructor(
     }
 
     suspend fun setDjEnergyEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DJ_ENERGY_ENABLED] = enabled }
+        dataStore.edit {
+            it[Keys.DJ_ENERGY_ENABLED] = enabled
+            it[Keys.DJ_ENERGY_PROGRAM_MIGRATED] = true
+        }
+    }
+
+    /** Preserve an enabled cue from 4.6.0 when moving it into DJ Energy. */
+    suspend fun migrateDjEnergyProgram() {
+        val previousCueEnabled = appContext.getSharedPreferences("lastwave_dj_cue", Context.MODE_PRIVATE)
+            .getBoolean("enabled", false)
+        dataStore.edit {
+            if (it[Keys.DJ_ENERGY_PROGRAM_MIGRATED] != true) {
+                if (previousCueEnabled && it[Keys.BIT_PERFECT_ENABLED] != true) it[Keys.DJ_ENERGY_ENABLED] = true
+                it[Keys.DJ_ENERGY_PROGRAM_MIGRATED] = true
+            }
+        }
     }
 
     suspend fun setLyricsUiVersion(version: LyricsUiVersion) {

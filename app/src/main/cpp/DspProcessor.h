@@ -22,7 +22,8 @@ public:
     void reset() noexcept;
     // Independent automation layer; never modifies saved EQ or clarity settings.
     void setDjCue(float volume, float energyDb, float vocalsDb, float beatsDb) noexcept;
-    void setDjHighlights(bool enabled, int focus, int spacing, float energyDb, float vocalsDb, float beatsDb) noexcept;
+    void setDjHighlights(bool enabled, int focus, int spacing, float energyDb, float vocalsDb, float beatsDb,
+        float before = 0.70F, float after = 0.80F, float rampSeconds = 1.5F) noexcept;
     void setDjLayaMode(bool enabled) noexcept { layaEnabled_.store(enabled); }
     void setDjLayaDecision(int generation, int candidate, bool accepted) noexcept;
     [[nodiscard]] std::array<float, 8> djFeatures() const noexcept;
@@ -56,6 +57,8 @@ public:
     // so clearing the flag restores the previous mix without clicks.
     void setClarityAtmosBypass(bool bypass) noexcept;
     void setDjEnergyEnabled(bool enabled) noexcept;
+    // App playback uses DJ Energy as the master for timed/signal/Laya modes.
+    void setDjEnergyProgramManaged(bool enabled) noexcept { energyProgramManaged_.store(enabled); }
     // The media-decoder path enables a true three-second delay so the DSP can
     // react to an incoming high-energy hit while outputting audio from three
     // seconds earlier. The direct Oboe path leaves this false to avoid
@@ -101,6 +104,8 @@ private:
     bool layaWasEnabled_{false};
     int featureCountdown_{0};
     std::atomic<float> djVolumeTarget_{1.0F}, djEnergyTarget_{0.0F}, djVocalsTarget_{0.0F}, djBeatsTarget_{0.0F};
+    std::atomic<bool> energyProgramManaged_{false};
+    std::atomic<float> highlightBefore_{0.70F}, highlightAfter_{0.80F}, highlightRampSeconds_{1.5F};
     float djVolume_{1.0F}, djEnergy_{0.0F}, djVocals_{0.0F}, djBeats_{0.0F};
     float djEnergyGain_{1.0F};
     int djCountdown_{0};

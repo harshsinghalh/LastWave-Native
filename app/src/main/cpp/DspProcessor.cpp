@@ -526,13 +526,16 @@ void DspProcessor::setDjCue(float volume, float energyDb, float vocalsDb, float 
 }
 
 void DspProcessor::setDjHighlights(bool enabled, int focus, int spacing,
-    float energyDb, float vocalsDb, float beatsDb) noexcept {
+    float energyDb, float vocalsDb, float beatsDb, float before, float after, float rampSeconds) noexcept {
     auto safe = [](float x) { return std::isfinite(x) ? std::clamp(x, 0.0F, 6.0F) : 0.0F; };
     highlightFocus_.store(std::clamp(focus, 0, 2));
     highlightSpacing_.store(std::clamp(spacing, 0, 1));
     highlightEnergy_.store(safe(energyDb));
     highlightVocals_.store(safe(vocalsDb));
     highlightBeats_.store(safe(beatsDb));
+    highlightBefore_.store(std::isfinite(before) ? std::clamp(before, 0.0F, 1.0F) : 0.70F);
+    highlightAfter_.store(std::isfinite(after) ? std::clamp(after, 0.0F, 1.0F) : 0.80F);
+    highlightRampSeconds_.store(std::isfinite(rampSeconds) ? std::clamp(rampSeconds, 0.1F, 30.0F) : 1.5F);
     highlightEnabled_.store(enabled, std::memory_order_release);
 }
 
@@ -567,15 +570,19 @@ void DspProcessor::process(
         ? 1.0F
         : 0.0F;
     const bool peakProtectionEnabled = peakProtectionEnabled_.load(std::memory_order_acquire);
+    const bool programManaged = energyProgramManaged_.load();
+    const bool programAllowed = !programManaged ||
+        (targetDjEnergyEnabled_.load(std::memory_order_acquire) && !atmosBypassed);
     const bool djEnabled =
         targetDjEnergyEnabled_.load(std::memory_order_acquire) &&
+        !programManaged &&
         longLookAheadMode_ &&
         djLookAheadBuffer_ != nullptr &&
         djLookAheadCapacityFrames_ > 0;
-    // Selective automation runs once, on decoded PCM; never on the Oboe
-    // output a second time. The older three-second DJ Energy keeps priority.
+    // DJ Energy's modes run once on decoded PCM. The master gates timed,
+    // signal and Laya automation; app playback never enters the legacy delay.
     const bool highlightEnabled = highlightEnabled_.load(std::memory_order_acquire) &&
-        longLookAheadMode_ && !djEnabled && !atmosBypassed;
+        longLookAheadMode_ && !djEnabled && programAllowed && !atmosBypassed;
     const bool layaEnabled = layaEnabled_.load() && highlightEnabled;
     const int highlightFocus = highlightFocus_.load();
     const int highlightSpacing = highlightSpacing_.load();
@@ -592,6 +599,13 @@ void DspProcessor::process(
     const float highlightEnergy = highlightEnergy_.load();
     const float highlightVocals = highlightVocals_.load();
     const float highlightBeats = highlightBeats_.load();
+    const float highlightBefore = highlightBefore_.load();
+    const float highlightAfter = highlightAfter_.load();
+    const float highlightRampSeconds = highlightRampSeconds_.load();
+    const float cueVolume = programAllowed ? djVolumeTarget_.load() : 1.0F;
+    const float cueEnergy = programAllowed ? djEnergyTarget_.load() : 0.0F;
+    const float cueVocals = programAllowed ? djVocalsTarget_.load() : 0.0F;
+    const float cueBeats = programAllowed ? djBeatsTarget_.load() : 0.0F;
     const auto equalizerRevision = targetEqualizerRevision_.load(std::memory_order_acquire);
     if (equalizerRevision != appliedEqualizerRevision_) {
         appliedEqualizerRevision_ = equalizerRevision;
@@ -610,8 +624,8 @@ void DspProcessor::process(
             }
         }
     }
-    const bool djActive = djVolumeTarget_.load() != 1.0F || djEnergyTarget_.load() != 0.0F ||
-        djVocalsTarget_.load() != 0.0F || djBeatsTarget_.load() != 0.0F ||
+    const bool djActive = cueVolume != 1.0F || cueEnergy != 0.0F ||
+        cueVocals != 0.0F || cueBeats != 0.0F ||
         djVolume_ != 1.0F || djEnergy_ != 0.0F || djVocals_ != 0.0F || djBeats_ != 0.0F;
     const bool enhancementTargeted = djActive || target > 0.0F ||
         targetEqualizerHasGain || djEnabled;
@@ -640,7 +654,8 @@ void DspProcessor::process(
         const bool layaApproved = layaAccepted_.load(std::memory_order_acquire) &&
             layaGeneration_.load() == highlights_.generation() && layaCandidate_.load() == highlights_.candidateId();
         const auto highlight = highlightEnabled ? highlights_.tick(samples[rawOffset],
-            channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing, layaEnabled, layaApproved)
+            channelCount == 2 ? samples[rawOffset + 1U] : samples[rawOffset], highlightFocus, highlightSpacing,
+            layaEnabled, layaApproved, highlightBefore, highlightAfter, highlightRampSeconds)
             : DjHighlightDetector::Mix{};
         if (highlightEnabled && featureCountdown_-- <= 0) {
             const auto features = highlights_.features();
@@ -941,16 +956,16 @@ void DspProcessor::process(
                     value += (goal - value) * blend;
                     if (std::abs(goal - value) < 0.00001F) value = goal;
                 };
-                ease(djEnergy_, highlightEnabled ? highlightEnergy * highlight.boost : djEnergyTarget_.load());
-                ease(djVocals_, highlightEnabled ? highlightVocals * highlight.boost : djVocalsTarget_.load());
-                ease(djBeats_, highlightEnabled ? highlightBeats * highlight.boost : djBeatsTarget_.load());
+                ease(djEnergy_, highlightEnabled ? highlightEnergy * highlight.boost : cueEnergy);
+                ease(djVocals_, highlightEnabled ? highlightVocals * highlight.boost : cueVocals);
+                ease(djBeats_, highlightEnabled ? highlightBeats * highlight.boost : cueBeats);
                 djEnergyGain_ = std::pow(10.0F, djEnergy_ / 20.0F);
                 djVocalBand_.setPeaking(sampleRate_, std::min(2200.0, sampleRate_ * 0.3), 0.7, djVocals_);
                 djBeatBand_.setPeaking(sampleRate_, 90.0, 0.7, djBeats_);
                 djCountdown_ = 127;
             }
             const float step = static_cast<float>(1.0 / (sampleRate_ * 0.03));
-            const float volumeGoal = highlightEnabled ? highlight.volume : djVolumeTarget_.load();
+            const float volumeGoal = highlightEnabled ? highlight.volume : cueVolume;
             djVolume_ += std::clamp(volumeGoal - djVolume_, -step, step);
             outputLeft = djBeatBand_.tick(djVocalBand_.tick(outputLeft, 0), 0) * djVolume_ * djEnergyGain_;
             if (channelCount == 2) {

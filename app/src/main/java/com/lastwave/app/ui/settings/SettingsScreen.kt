@@ -465,7 +465,7 @@ fun SettingsScreen(
     }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
-    var showDjCue by remember { mutableStateOf(false) }
+    var showDjEnergyOptions by remember { mutableStateOf(false) }
     var showEqSheet by remember { mutableStateOf(false) }
     var showLyricsAnimationSheet by remember { mutableStateOf(false) }
     var showLyricsProviderDialog by remember { mutableStateOf(false) }
@@ -988,8 +988,8 @@ fun SettingsScreen(
                                 title = "DJ Energy",
                                 subtitle = when {
                                     misc.isBitPerfectEnabled -> "Paused by Bit-Perfect mode"
-                                    misc.djEnergyEnabled -> "3 s look-ahead • 30% → 60% → 90% dip • normal at impact"
-                                    else -> "Concert pre-drop before high-energy vocals and beats"
+                                    misc.djEnergyEnabled -> "On • Laya, cue time and volume in DJ Energy options"
+                                    else -> "Select important energy, vocal and beat moments"
                                 },
                                 checked = misc.djEnergyEnabled,
                                 onCheckedChange = viewModel::setDjEnergyEnabled,
@@ -1025,11 +1025,11 @@ fun SettingsScreen(
                                 icon = Icons.Filled.GraphicEq,
                                 iconContainer = MaterialTheme.colorScheme.secondaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                title = "DJ Cue",
-                                subtitle = "Timed cue or selective highlights with a 1.5 s / 80% preset",
-                                onClick = { showDjCue = true },
+                                title = "DJ Energy options",
+                                subtitle = "Laya selection • 2:45 timed cue • 1.5 s / 80% preset",
+                                onClick = { showDjEnergyOptions = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.dj_cue"),
+                                isHighlighted = (highlightedSettingId == "audio.dj_energy_options"),
                             )
                             6 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -2031,9 +2031,10 @@ fun SettingsScreen(
     }
 
     // -- Experimental 15-band equalizer --
-    if (showDjCue) DjCueDialog(
-        onDismiss = { showDjCue = false },
-        onEnable = { viewModel.setDjEnergyEnabled(false) },
+    if (showDjEnergyOptions) DjEnergyDialog(
+        enabled = misc.djEnergyEnabled,
+        onDismiss = { showDjEnergyOptions = false },
+        onEnabledChange = viewModel::setDjEnergyEnabled,
     )
 
     if (showEqSheet) {

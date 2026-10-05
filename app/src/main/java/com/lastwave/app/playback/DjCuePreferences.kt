@@ -44,7 +44,7 @@ object DjCuePreferences {
             if (oldDefaults) 1_500L else p.getLong("ramp", 1_500).coerceIn(100, 30_000),
             safe("before", .7f, 1f), if (oldDefaults) .8f else safe("after", .8f, 1f),
             safe("energy", 2f, 6f), safe("vocals", 2f, 6f), safe("beats", 3f, 6f),
-            DjCueMode.entries.getOrNull(p.getInt("mode", 0)) ?: DjCueMode.TIMED,
+            DjCueMode.entries.getOrNull(p.getInt("mode", if (p.contains("cue")) 0 else 1)) ?: DjCueMode.HIGHLIGHTS,
             DjHighlightFocus.entries.getOrNull(p.getInt("focus", 0)) ?: DjHighlightFocus.ENERGY,
             DjHighlightSpacing.entries.getOrNull(p.getInt("spacing", 0)) ?: DjHighlightSpacing.OCCASIONAL,
             safe("laya_threshold", .50f, .95f).coerceAtLeast(.4f))

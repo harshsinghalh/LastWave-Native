@@ -1470,7 +1470,7 @@ class MusicPlayer @Inject constructor(
 
                     // Follows media position (not wall clock), so pause, speed and seek keep the cue aligned.
                     val dj = DjCuePreferences.read(appContext)
-                    val djAllowed = dj.enabled && !djEnergyModePref && !isCasting && !bitPerfectEnabled &&
+                    val djAllowed = djEnergyModePref && !isCasting && !bitPerfectEnabled &&
                         !systemEffectsModePref && !usbExclusiveSinkActive && !isSpatialAudioCodec(_state.value.audioCodec)
                     val mix = dj.mixAt(pos, djAllowed)
                     val djEngine = nativeAudioEngine.get()
@@ -1478,7 +1478,8 @@ class MusicPlayer @Inject constructor(
                     val layaActive = djAllowed && dj.mode == DjCueMode.LAYA
                     djEngine.setDjLayaMode(layaActive)
                     djEngine.setDjHighlights(djAllowed && dj.mode != DjCueMode.TIMED,
-                        dj.focus.ordinal, dj.spacing.ordinal, dj.energyDb, dj.vocalsDb, dj.beatsDb)
+                        dj.focus.ordinal, dj.spacing.ordinal, dj.energyDb, dj.vocalsDb, dj.beatsDb,
+                        dj.before, dj.after, dj.rampMs)
                     layaDjController.update(layaActive && healthPlaying, dj, djEngine)
                     val previous = _state.value
                     val unchanged = !_state.value.isPlaying &&

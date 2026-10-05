@@ -19,7 +19,10 @@ namespace lastwave::audio {
 class AudioEngine final : public oboe::AudioStreamDataCallback,
                           public oboe::AudioStreamErrorCallback {
 public:
-    AudioEngine() = default;
+    AudioEngine() {
+        oboeDsp_.setDjEnergyProgramManaged(true);
+        mediaDsp_.setDjEnergyProgramManaged(true);
+    }
     ~AudioEngine() override;
 
     AudioEngine(const AudioEngine&) = delete;
@@ -59,8 +62,9 @@ public:
         oboeDsp_.setDjCue(volume, energy, vocals, beats);
         mediaDsp_.setDjCue(volume, energy, vocals, beats);
     }
-    void setDjHighlights(bool enabled, int focus, int spacing, float energy, float vocals, float beats) noexcept {
-        mediaDsp_.setDjHighlights(enabled, focus, spacing, energy, vocals, beats);
+    void setDjHighlights(bool enabled, int focus, int spacing, float energy, float vocals, float beats,
+        float before, float after, float rampSeconds) noexcept {
+        mediaDsp_.setDjHighlights(enabled, focus, spacing, energy, vocals, beats, before, after, rampSeconds);
     }
     void setDjLayaMode(bool enabled) noexcept { mediaDsp_.setDjLayaMode(enabled); }
     void setDjLayaDecision(int generation, int candidate, bool accepted) noexcept {

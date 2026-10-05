@@ -282,10 +282,10 @@ object SettingsSearchIndex {
             )
             add(
                 SettingsEntry(
-                    id = "audio.dj_cue",
-                    title = "DJ Cue",
-                    subtitle = "Timed cue or selective highlights with a 1.5 s / 80% preset",
-                    keywords = listOf("dj", "cue", "volume", "boost", "beats", "vocals", "energy", "drop", "highlight", "automatic", "1.5", "80"),
+                    id = "audio.dj_energy_options",
+                    title = "DJ Energy options",
+                    subtitle = "Laya selection, cue time and 1.5 s / 80% preset",
+                    keywords = listOf("dj", "cue", "volume", "boost", "beats", "vocals", "energy", "drop", "highlight", "automatic", "laya", "ai", "timing", "2:45", "1.5", "80"),
                     icon = Icons.Filled.GraphicEq,
                     iconContainer = { MaterialTheme.colorScheme.secondaryContainer },
                     iconTint = { MaterialTheme.colorScheme.onSecondaryContainer },
