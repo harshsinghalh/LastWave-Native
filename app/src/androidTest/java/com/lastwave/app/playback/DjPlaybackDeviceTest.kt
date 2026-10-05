@@ -98,6 +98,9 @@ class DjPlaybackDeviceTest {
         Rig().use { r ->
             val model = LayaModel.get(r.context)
             withTimeout(90_000) { while (!model.state.value.ready) delay(100) }
+            // Earlier JNI tests may have scored the same rise. This streaming
+            // check must wait for fresh inference while PCM keeps advancing.
+            model.clearScoreCache()
             val profile = DjCueProfile(enabled = true, mode = DjCueMode.LAYA)
             var heardChange = false
             var accepted = false
