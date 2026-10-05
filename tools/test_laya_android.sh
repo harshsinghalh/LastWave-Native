@@ -7,6 +7,7 @@ adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
 adb shell svc wifi disable
 adb shell svc data disable
 ./gradlew :app:connectedDebugAndroidTest --stacktrace
+adb pull /sdcard/Download/dj-energy-ui app/build/outputs/dj-energy-ui
 # AGP's test runner may already have uninstalled the application under test.
 if adb shell pm path com.lastwave.dj | grep -q '^package:'; then
   adb uninstall com.lastwave.dj

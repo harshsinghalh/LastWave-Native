@@ -273,3 +273,4 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/outputs/release-startup.txt
+            app/build/outputs/dj-energy-ui/
