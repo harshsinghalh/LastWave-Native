@@ -48,7 +48,18 @@ int main() {
         state = process(.1);
         assert(std::abs(state[1] - .7F) < .0001F); ++checks;
         dsp.setDjTimedMode(false, 165);
+        dsp.setDjEnergyEnabled(false);
         process(.1);
+        // The release buffer uses the existing DC filter. The next buffer
+        // must return to sample-transparent playback after owner handoff.
+        std::vector<float> dry(rate);
+        for (std::size_t n = 0; n < dry.size() / 2; ++n) {
+            dry[n * 2] = dry[n * 2 + 1] = .1F * std::sin(n * 440.0 * 2 * pi / rate);
+        }
+        const auto untouched = dry;
+        dsp.process(dry.data(), static_cast<int>(dry.size() / 2), 2);
+        assert(dry == untouched); ++checks;
+        dsp.setDjEnergyEnabled(true);
         dsp.previewDjEnergy(.4F, .8F, 1.5F, 0, 0, 0);
         state = process(.5);
         assert(std::abs(state[1] - .4F) < .0001F && state[6] == 1); ++checks;

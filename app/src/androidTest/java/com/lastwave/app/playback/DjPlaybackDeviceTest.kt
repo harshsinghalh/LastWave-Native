@@ -60,20 +60,21 @@ class DjPlaybackDeviceTest {
         return sqrt(power(pair.second) / power(pair.first))
     }
 
+    private fun assertUnchanged(pair: Pair<FloatArray, FloatArray>) {
+        assertArrayEquals("An inactive DJ owner must leave PCM unchanged after its de-click release", pair.first, pair.second, 0f)
+    }
+
     @Test fun controllerFollowsCrossfadeOwnersAndPreviewChangesCurrentPcm() = runBlocking {
         Rig().use { r ->
-            // Normal playback retains the existing DC blocker even with DJ off.
-            // Compare against that same PCM path rather than untreated input,
-            // so ownership changes must preserve the exact pre-DJ gain.
-            val dryGain = ratio(r.pcm(r.primary, .5, .1f))
             val timed = DjCueProfile(enabled = true, mode = DjCueMode.TIMED, energyDb = 0f, vocalsDb = 0f, beatsDb = 0f)
             withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, true, timed, true, true, 0) }
             assertEquals(.7, ratio(r.pcm(r.secondary, .5, .1f)), .001)
-            assertEquals(dryGain, ratio(r.pcm(r.primary, .5, .1f)), .00001)
+            assertUnchanged(r.pcm(r.primary, .5, .1f))
             assertEquals(0f, r.primary.djRuntime()[7], 0f)
             withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, timed, true, true, 0) }
             assertEquals(.7, ratio(r.pcm(r.primary, .5, .1f)), .001)
-            assertEquals(dryGain, ratio(r.pcm(r.secondary, .5, .1f)), .00001)
+            r.pcm(r.secondary, .1, .1f) // Consume the short de-click release, still processed by the existing DC filter.
+            assertUnchanged(r.pcm(r.secondary, .5, .1f))
             assertEquals(0f, r.secondary.djRuntime()[7], 0f)
             val automatic = timed.copy(mode = DjCueMode.HIGHLIGHTS, before = .4f)
             withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, automatic, true, true, 0) }
@@ -84,10 +85,11 @@ class DjPlaybackDeviceTest {
                 r.controller.preview(automatic)
             }
             assertEquals(.4, ratio(r.pcm(r.primary, .5, .1f)), .001)
-            assertEquals(dryGain, ratio(r.pcm(r.secondary, .5, .1f)), .00001)
+            assertUnchanged(r.pcm(r.secondary, .5, .1f))
             assertEquals(1f, r.primary.djRuntime()[6], 0f)
             withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, automatic, false, true, 0) }
-            assertEquals(dryGain, ratio(r.pcm(r.primary, .5, .1f)), .00001)
+            r.pcm(r.primary, .1, .1f)
+            assertUnchanged(r.pcm(r.primary, .5, .1f))
             assertEquals(1f, r.primary.djRuntime()[1], 0f)
             assertEquals(0f, r.primary.djRuntime()[7], 0f)
             assertFalse(r.controller.state.value.canPreview)
