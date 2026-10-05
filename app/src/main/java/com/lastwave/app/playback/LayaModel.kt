@@ -139,10 +139,23 @@ class LayaModel private constructor(private val context: Context) {
                 } finally { inputs.values.forEach { it.close() } }
             } catch (e: Exception) {
                 session?.close(); session = null
-                mutableState.value = state.value.copy(message = "Laya could not score this section. Playback continues unchanged.")
+                mutableState.value = state.value.copy(message = "DJ Energy ready • Audio analysis")
+                null
+            } catch (e: OutOfMemoryError) {
+                disableInference()
+                null
+            } catch (e: LinkageError) {
+                disableInference()
                 null
             }
         }
+    }
+
+    private fun disableInference() {
+        runCatching { session?.close() }
+        session = null
+        mutableState.value = state.value.copy(ready = false, checking = false,
+            message = "DJ Energy ready • Audio analysis")
     }
 
     internal fun releaseWhenIdle() {
