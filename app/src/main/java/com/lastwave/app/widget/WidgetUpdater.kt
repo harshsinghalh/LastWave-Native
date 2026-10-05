@@ -28,7 +28,7 @@ private const val TICK_INTERVAL_MS = 600L
  * Single-widget publisher: plain SharedPreferences + AppWidgetManager.
  *
  * Same public API as before (publish / clear / setPlaying / sync /
- * refreshTheme) so MusicPlaybackService,
+ * refreshTheme) so MediaScrobbleListenerService, MusicPlaybackService,
  * MusicPlayer and LastWaveApplication keep compiling unchanged — but the
  * inside is dependency-free: no Glance, no Hilt, no theme repo.
  *
@@ -164,12 +164,7 @@ object WidgetUpdater {
                 val views = WidgetViews.build(context, appWidgetId, eqFrame, progressOverride)
                 runCatching { manager.updateAppWidget(appWidgetId, views) }
             }
-            val obsidianIds = manager.getAppWidgetIds(ComponentName(context, ObsidianGlassWidgetReceiver::class.java))
-            for (appWidgetId in obsidianIds) {
-                val views = ObsidianWidgetViews.build(context, appWidgetId, eqFrame, progressOverride)
-                runCatching { manager.updateAppWidget(appWidgetId, views) }
-            }
-            ids.isNotEmpty() || obsidianIds.isNotEmpty()
+            ids.isNotEmpty()
         }.onFailure { Log.w(TAG, "widget push failed", it) }.getOrDefault(false)
 
     /** Live position 0..1 off the MediaController, extrapolated while playing. */

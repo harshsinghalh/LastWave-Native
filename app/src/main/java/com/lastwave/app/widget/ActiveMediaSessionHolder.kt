@@ -4,7 +4,9 @@ import android.media.session.MediaController
 
 /**
  * The single most-recently-active [MediaController], shared in-process
- * between the playback service and the Now Playing widget's tap actions (play/pause, skip).
+ * between [com.lastwave.app.service.MediaScrobbleListenerService] (which
+ * already holds real MediaController access for local scrobbling) and the
+ * Now Playing widget's tap actions (play/pause, skip).
  *
  * Deliberately NOT persisted anywhere — a MediaController is only valid
  * for the lifetime of the session it points to, so on process death this

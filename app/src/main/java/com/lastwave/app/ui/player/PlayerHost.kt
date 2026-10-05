@@ -2,7 +2,6 @@
 
 package com.lastwave.app.ui.player
 
-import androidx.compose.foundation.border
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.BitmapDrawable
@@ -90,7 +89,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -321,18 +319,6 @@ class PlayerViewModel @Inject constructor(
         navigator.openAlbum(title, artist, browseId)
     }
 
-    fun setLyricsOffsetMs(offsetMs: Long) {
-        viewModelScope.launch {
-            settingsPreferences.setLyricsOffsetMs(offsetMs.coerceIn(-3000L, 3000L))
-        }
-    }
-
-    fun setLyricsFontScale(scale: Float) {
-        viewModelScope.launch {
-            settingsPreferences.setLyricsFontScale(scale)
-        }
-    }
-
     private val _lyricsState = MutableStateFlow<LyricsUiState>(LyricsUiState.Idle)
     val lyricsState = _lyricsState.asStateFlow()
 
@@ -486,17 +472,14 @@ class PlayerViewModel @Inject constructor(
             is LyricsResult.Success -> {
                 // Single funnel for everything the views draw: de-overlap the
                 // timeline once so word fill, line focus and auto-scroll all
-                // read the same edge-to-edge clock, then group continuation
-                // rows into phrases (no constant-gapped fragments) and merge
-                // provider fragments into whitespace-true words so spacing
-                // and punctuation render as authored. Word-sync rows render
+                // read the same edge-to-edge clock, then merge provider
+                // fragments into whitespace-true words so spacing and
+                // punctuation render as authored. Word-sync rows render
                 // word-by-word; rows without syllables fall back to
                 // line-by-line focus on the same clock.
                 val lines = if (result.isSynced && result.lines.isNotEmpty() && !result.isInstrumental) {
                     com.lastwave.app.ui.player.normalizeWordSpacing(
-                        com.lastwave.app.data.lyrics.LyricsRepository.mergeContinuationLines(
-                            com.lastwave.app.data.lyrics.LyricsRepository.normalizeLyricTiming(result.lines),
-                        ),
+                        com.lastwave.app.data.lyrics.LyricsRepository.normalizeLyricTiming(result.lines),
                     )
                 } else result.lines
                 _lyricsState.value = LyricsUiState.Success(
@@ -706,19 +689,11 @@ fun PlayerHost(
                 visible = expanded && state.current != null,
                 enter = slideInVertically(
                     animationSpec = ExpressiveMotion.smoothSpring(),
-                    initialOffsetY = { (it * 0.85f).toInt() },
-                ) + scaleIn(
-                    animationSpec = ExpressiveMotion.smoothSpring(),
-                    initialScale = 0.85f,
-                    transformOrigin = TransformOrigin(0.5f, 1f)
+                    initialOffsetY = { it },
                 ) + fadeIn(tween(180)),
                 exit = slideOutVertically(
                     animationSpec = ExpressiveMotion.smoothSpring(),
-                    targetOffsetY = { (it * 0.85f).toInt() },
-                ) + scaleOut(
-                    animationSpec = ExpressiveMotion.smoothSpring(),
-                    targetScale = 0.85f,
-                    transformOrigin = TransformOrigin(0.5f, 1f)
+                    targetOffsetY = { it },
                 ) + fadeOut(tween(150)),
             ) {
                 PredictiveBackScreen(
@@ -778,10 +753,8 @@ private fun ExpandedPlayer(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val likedTrackKeys by viewModel.likedTrackKeys.collectAsStateWithLifecycle()
     val currentTrack = state.current
-    // Normalized key: raw "title|artist".lowercase() would miss liked entries
-    // whose spacing differs (e.g. trailing space from another source).
     val isLiked = currentTrack != null &&
-        currentTrack.toGeneratedTrack().key in likedTrackKeys
+        "${currentTrack.title}|${currentTrack.artist}".lowercase() in likedTrackKeys
     FullPlayer(
         state = state,
         progressState = viewModel.progressState,
@@ -791,9 +764,6 @@ private fun ExpandedPlayer(
         lyricsAnimation = settings.lyricsAnimation,
         wavySeekbarEnabled = settings.wavySeekbarEnabled,
         lyricsOffsetMs = settings.lyricsOffsetMs,
-        onSetLyricsOffsetMs = viewModel::setLyricsOffsetMs,
-        lyricsFontScale = settings.lyricsFontScale,
-        onSetLyricsFontScale = viewModel::setLyricsFontScale,
         canvas = canvas,
         canvasEnabled = settings.canvasEnabled,
         canvasFullBleedEnabled = settings.canvasFullBleed,
@@ -1386,47 +1356,6 @@ private fun AddToPlaylistDialog(
             ) {}
         },
     ) {
-        var showCreateDialog by remember { mutableStateOf(false) }
-        
-        if (showCreateDialog) {
-            AlertDialog(
-                onDismissRequest = { showCreateDialog = false },
-                title = { Text("Create playlist") },
-                text = {
-                    OutlinedTextField(
-                        value = newPlaylistName,
-                        onValueChange = { newPlaylistName = it },
-                        label = { Text("Playlist name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        enabled = newPlaylistName.isNotBlank(),
-                        onClick = {
-                            val cleanName = newPlaylistName.trim()
-                            val existingPlaylist = sanitizedPlaylists.firstOrNull {
-                                it.mode == "custom" && it.title.equals(cleanName, ignoreCase = true)
-                            }
-                            if (existingPlaylist == null) {
-                                onCreate(cleanName)
-                            } else {
-                                selectedPlaylistIds = setOf(existingPlaylist.id)
-                                requestAdd(setOf(existingPlaylist.id))
-                            }
-                            showCreateDialog = false
-                        },
-                    ) {
-                        Text("Create & Add")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCreateDialog = false }) { Text("Cancel") }
-                },
-            )
-        }
-
         com.lastwave.app.ui.common.EdgeToEdgeDialogWindow()
         Column(
             modifier = Modifier
@@ -1458,12 +1387,6 @@ private fun AddToPlaylistDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                }
-                androidx.compose.material3.IconButton(
-                    onClick = { showCreateDialog = true },
-                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "Create Playlist")
                 }
             }
 
@@ -1579,6 +1502,33 @@ private fun AddToPlaylistDialog(
                 }
             }
 
+            OutlinedTextField(
+                value = newPlaylistName,
+                onValueChange = { newPlaylistName = it },
+                label = { Text("New playlist name") },
+                singleLine = true,
+                trailingIcon = {
+                    IconButton(
+                        enabled = newPlaylistName.isNotBlank(),
+                        onClick = {
+                            val cleanName = newPlaylistName.trim()
+                            val existingPlaylist = sanitizedPlaylists.firstOrNull {
+                                it.mode == "custom" && it.title.equals(cleanName, ignoreCase = true)
+                            }
+                            if (existingPlaylist == null) {
+                                onCreate(cleanName)
+                            } else {
+                                selectedPlaylistIds = setOf(existingPlaylist.id)
+                                requestAdd(setOf(existingPlaylist.id))
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = "Create playlist and add track")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -1625,9 +1575,6 @@ private fun FullPlayer(
     lyricsAnimation: LyricsAnimation = LyricsAnimation.APPLE_FLUID,
     wavySeekbarEnabled: Boolean = true,
     lyricsOffsetMs: Long = 0L,
-    onSetLyricsOffsetMs: ((Long) -> Unit)? = null,
-    lyricsFontScale: Float = 1.0f,
-    onSetLyricsFontScale: ((Float) -> Unit)? = null,
     canvas: com.lastwave.app.data.canvas.CanvasArtwork? = null,
     canvasEnabled: Boolean = true,
     canvasFullBleedEnabled: Boolean = true,
@@ -1641,9 +1588,8 @@ private fun FullPlayer(
     onDoubleTapLike: () -> Unit = {},
 ) {
     val track = state.current ?: return
-    var showLyricsOffsetDialog by remember { mutableStateOf(false) }
     val isCanvasActive = canvasEnabled && canvas != null
-    val showFullBleed = canvasFullBleedEnabled
+    val showFullBleed = isCanvasActive && canvasFullBleedEnabled
     val showSleeveCanvas = isCanvasActive && !showFullBleed
     val activeCanvas = remember(canvas, showFullBleed) {
         val tall = canvas?.tallUrl
@@ -1862,18 +1808,16 @@ private fun FullPlayer(
                         )
                     }
                 )
-                // Contrast scrim gradient (ensures text & controls are clear while preserving vibrant colors).
-                // Bottom is intentionally softer now — the seamless melt below carries
-                // the dominant hue, so heavy black here would recreate the hard cut.
+                // Contrast scrim gradient (ensures text & controls are clear while preserving vibrant colors)
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
                                 0.00f to Color.Black.copy(alpha = 0.35f),
-                                0.28f to Color.Black.copy(alpha = 0.12f),
-                                0.65f to Color.Black.copy(alpha = 0.28f),
-                                1.00f to Color.Black.copy(alpha = 0.52f),
+                                0.28f to Color.Black.copy(alpha = 0.15f),
+                                0.65f to Color.Black.copy(alpha = 0.40f),
+                                1.00f to Color.Black.copy(alpha = 0.72f),
                             )
                         )
                 )
@@ -1894,86 +1838,30 @@ private fun FullPlayer(
                             ),
                         ),
                 )
-                if (showFullBleed) {
-                    val density = LocalDensity.current
-                    // Dominant-derived solid the hero melts into. Darkened just enough
-                    // for white title/controls to stay legible while keeping hue,
-                    // so the eye can't find where art ends and background begins.
-                    val seamlessBase = androidx.compose.ui.graphics.lerp(
-                        ambientDeep,
-                        Color.Black,
-                        0.42f,
-                    )
-                    // Square-capped hero: a tall container forces Crop to zoom and eat
-                    // the sides (the "stretch"). Clamp measured height near square so
-                    // side-crop stays minimal. Tall portrait canvas keeps full-page.
-                    val isTallCanvas = activeCanvas != null && canvasRendered &&
-                        canvasAspect in 0.30f..0.82f
-                    val measuredPx = if (heroBottomPx > 0f) {
-                        heroBottomPx + with(density) { 8.dp.toPx() }
+                if (showFullBleed && activeCanvas != null) {
+                    val heroHeight = if (heroBottomPx > 0f) {
+                        with(LocalDensity.current) { heroBottomPx.toDp() }
                     } else {
-                        bgHeight * 0.58f
+                        with(LocalDensity.current) { (bgHeight * 0.54f).toDp() }
                     }
-                    val maxPx = if (isTallCanvas) {
-                        bgHeight * 0.70f
-                    } else {
-                        minOf(bgWidth * 1.08f, bgHeight * 0.62f)
-                    }
-                    val minPx = minOf(bgWidth * 0.92f, bgHeight * 0.50f)
-                    val heroPx = measuredPx.coerceIn(minPx, maxPx).coerceAtLeast(1f)
-                    val heroHeight = with(density) { heroPx.toDp() }
-                    // Melt foundation UNDER the hero: transparent where hero is opaque,
-                    // fully solid where hero has faded out. Revealed through the DstIn
-                    // mask, so there is never a hero-edge line — just hue into hue.
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.00f to Color.Transparent,
-                                    0.30f to Color.Transparent,
-                                    0.50f to seamlessBase.copy(alpha = 0.55f),
-                                    0.62f to seamlessBase,
-                                    1.00f to seamlessBase,
-                                )
-                            )
-                    )
                     val lyricsCanvasBlurDp by animateDpAsState(
                         targetValue = if (currentTab == FullPlayerTab.LYRICS) 32.dp else 0.dp,
                         animationSpec = tween(350),
                         label = "lyricsCanvasBlur",
                     )
-                    val canvasCrossfadeAlpha by animateFloatAsState(
-                        targetValue = if (activeCanvas != null && canvasRendered) 1f else 0f,
-                        animationSpec = tween(400),
-                        label = "canvasCrossfadeAlpha",
-                    )
-                    Box(
+                    CanvasArtworkPlayer(
+                        canvas = activeCanvas,
+                        isPlaying = state.isPlaying,
+                        contentMode = CanvasContentMode.CROP,
+                        alignPortraitTop = true,
+                        bottomFade = 0.38f,
+                        onAspectRatioChanged = { canvasAspect = it },
+                        onRenderedChanged = { canvasRendered = it },
+                        pausedForTransition = shownDismissY > 0f || currentTab != FullPlayerTab.NOW_PLAYING,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxWidth()
                             .height(heroHeight)
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                // Long buttery fade: fully sharp through the face/focus
-                                // zone, then eased melt. Extra stops kill banding so the
-                                // join is hard to notice even on flat skin tones.
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        0.00f to Color.Black,
-                                        0.52f to Color.Black,
-                                        0.66f to Color.Black.copy(alpha = 0.92f),
-                                        0.78f to Color.Black.copy(alpha = 0.66f),
-                                        0.88f to Color.Black.copy(alpha = 0.30f),
-                                        0.95f to Color.Black.copy(alpha = 0.08f),
-                                        1.00f to Color.Transparent,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            }
                             .then(
                                 if (lyricsCanvasBlurDp > 0.dp) {
                                     Modifier.blur(lyricsCanvasBlurDp)
@@ -1981,65 +1869,7 @@ private fun FullPlayer(
                                     Modifier
                                 }
                             ),
-                    ) {
-                        ArtworkImage(
-                            name = track.title,
-                            artist = track.artist,
-                            embeddedUrl = track.artworkUrl,
-                            fallbackIcon = Icons.Filled.MusicNote,
-                            alignment = Alignment.TopCenter,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        // Top status bar vignette only (ensures system indicators remain legible over bright artwork)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(110.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        0.00f to Color.Black.copy(alpha = 0.35f),
-                                        0.60f to Color.Black.copy(alpha = 0.12f),
-                                        1.00f to Color.Transparent,
-                                    )
-                                )
-                        )
-                        if (activeCanvas != null) {
-                            CanvasArtworkPlayer(
-                                canvas = activeCanvas,
-                                isPlaying = state.isPlaying,
-                                contentMode = CanvasContentMode.CROP,
-                                alignPortraitTop = true,
-                                // Lower than before: outer hero mask + bottom tint now own
-                                // the melt. Higher values double-darken animated art.
-                                bottomFade = 0.30f,
-                                onAspectRatioChanged = { canvasAspect = it },
-                                onRenderedChanged = { canvasRendered = it },
-                                pausedForTransition = shownDismissY > 0f || currentTab != FullPlayerTab.NOW_PLAYING,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        alpha = canvasCrossfadeAlpha
-                                    },
-                            )
-                        }
-                        // Bottom hue-tint INSIDE the mask: dyes the hero's own tail
-                        // pixels toward seamlessBase before they fade, so sharp art
-                        // and solid meet with zero visible edge. Also fades with DstIn.
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .height(heroHeight * 0.58f)
-                                .background(
-                                    Brush.verticalGradient(
-                                        0.00f to Color.Transparent,
-                                        0.45f to seamlessBase.copy(alpha = 0.18f),
-                                        0.75f to seamlessBase.copy(alpha = 0.42f),
-                                        1.00f to seamlessBase.copy(alpha = 0.62f),
-                                    )
-                                )
-                        )
-                    }
+                    )
                 }
 
                 // Lyrics-only readability veil: heavy blur still can't tame a
@@ -2195,15 +2025,9 @@ private fun FullPlayer(
                                         progressState = progressState,
                                         wavySeekbarEnabled = wavySeekbarEnabled,
                                         lyricsOffsetMs = lyricsOffsetMs,
-                                        lyricsFontScale = lyricsFontScale,
-                                        onLyricsFontScaleChange = onSetLyricsFontScale ?: {},
                                         onRetry = onRetryLyrics,
                                         onToggleFullscreen = { lyricsFullscreen = !lyricsFullscreen },
                                         isFullscreen = lyricsFullscreen,
-                                        onOpenLyricsOffset = { showLyricsOffsetDialog = true },
-                                        primaryColor = ambientColor,
-                                        secondaryColor = ambientCompanion,
-                                        tertiaryColor = ambientDeep,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .adaptiveContentWidth(maxWidth = 720.dp),
@@ -2217,15 +2041,9 @@ private fun FullPlayer(
                                         lyricsAnimation = lyricsAnimation,
                                         wavySeekbarEnabled = wavySeekbarEnabled,
                                         lyricsOffsetMs = lyricsOffsetMs,
-                                        lyricsFontScale = lyricsFontScale,
-                                        onLyricsFontScaleChange = onSetLyricsFontScale ?: {},
                                         onRetry = onRetryLyrics,
                                         onToggleFullscreen = { lyricsFullscreen = !lyricsFullscreen },
                                         isFullscreen = lyricsFullscreen,
-                                        onOpenLyricsOffset = { showLyricsOffsetDialog = true },
-                                        primaryColor = ambientColor,
-                                        secondaryColor = ambientCompanion,
-                                        tertiaryColor = ambientDeep,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .adaptiveContentWidth(maxWidth = 720.dp),
@@ -2258,7 +2076,7 @@ private fun FullPlayer(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     val sleeveAlpha by animateFloatAsState(
-                                        targetValue = if (showFullBleed) 0f else 1f,
+                                        targetValue = if (showFullBleed && canvasRendered) 0f else 1f,
                                         animationSpec = tween(350),
                                         label = "sleeveAlpha",
                                     )
@@ -2678,11 +2496,8 @@ private fun FullPlayer(
                                         trackKey = track.videoId ?: "${track.artist}|${track.title}",
                                         wavyEnabled = wavySeekbarEnabled,
                                         onSeek = player::seekTo,
-                                        isTranslucent = LocalLiquidGlass.current,
+                                        isTranslucent = true,
                                         fallbackDurationMs = track.durationMs ?: state.durationMs,
-                                        primaryColor = ambientColor,
-                                        secondaryColor = ambientCompanion,
-                                        tertiaryColor = ambientDeep,
                                     )
                                     Spacer(Modifier.height(14.dp))
                                     MainControls(state, player, isTranslucent = true)
@@ -2744,13 +2559,6 @@ private fun FullPlayer(
             onPlayInLastWave = { player.play(track, sourceLabel = state.sourceLabel) },
         )
     }
-    if (showLyricsOffsetDialog && onSetLyricsOffsetMs != null) {
-        LyricsOffsetDialog(
-            currentMs = lyricsOffsetMs,
-            onSelect = onSetLyricsOffsetMs,
-            onDismiss = { showLyricsOffsetDialog = false },
-        )
-    }
 }
 }
 
@@ -2763,11 +2571,9 @@ internal fun PlayerProgressSlider(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource,
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
 ) {
-    val primary = primaryColor
-    val tertiary = tertiaryColor
+    val primary = MaterialTheme.colorScheme.primary
+    val tertiary = MaterialTheme.colorScheme.tertiary
     val inactive = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.20f else 0.12f)
     val range = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.0001f)
     val fraction = ((value - valueRange.start) / range).coerceIn(0f, 1f)
@@ -2838,9 +2644,6 @@ private fun SeekBar(
     onSeek: (Long) -> Unit,
     isTranslucent: Boolean = false,
     fallbackDurationMs: Long = 0L,
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
 ) {
     val progress by progressState.collectAsStateWithLifecycle()
     val effectiveDurationMs = if (progress.durationMs > 0L) progress.durationMs else fallbackDurationMs.coerceAtLeast(0L)
@@ -2853,9 +2656,6 @@ private fun SeekBar(
             onSeek = onSeek,
             isTranslucent = isTranslucent,
             trackKey = trackKey,
-            primaryColor = primaryColor,
-            secondaryColor = secondaryColor,
-            tertiaryColor = tertiaryColor,
         )
         return
     }
@@ -2883,11 +2683,11 @@ private fun SeekBar(
         (it * boundedDurationMs).toLong().coerceIn(0L, boundedDurationMs)
     } ?: progress.positionMs.coerceIn(0L, boundedDurationMs)
 
-    val effectivePrimary = primaryColor
+    val primaryColor = if (isTranslucent) Color.White else MaterialTheme.colorScheme.primary
     val inactiveColor = if (isTranslucent) {
         Color.White.copy(alpha = 0.20f)
     } else {
-        effectivePrimary.copy(alpha = 0.28f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     }
     val textColor = if (isTranslucent) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f)
 
@@ -2921,7 +2721,7 @@ private fun SeekBar(
                 // Thick active capsule ending before the vertical thumb.
                 if (activeEndX > 0f) {
                     drawRoundRect(
-                        color = effectivePrimary,
+                        color = primaryColor,
                         topLeft = Offset(0f, centerY - trackHeightPx / 2f),
                         size = Size(activeEndX, trackHeightPx),
                         cornerRadius = cornerRadius,
@@ -2942,7 +2742,7 @@ private fun SeekBar(
                 val endpointX = width - trackHeightPx / 2f
                 if (inactiveStartX < endpointX) {
                     drawCircle(
-                        color = effectivePrimary.copy(alpha = 0.86f),
+                        color = primaryColor.copy(alpha = 0.86f),
                         radius = 2.dp.toPx(),
                         center = Offset(endpointX, centerY),
                     )
@@ -2953,7 +2753,7 @@ private fun SeekBar(
                 val thumbCornerRadius = CornerRadius(thumbWidthPx / 2f, thumbWidthPx / 2f)
 
                 drawRoundRect(
-                    color = effectivePrimary,
+                    color = primaryColor,
                     topLeft = Offset(thumbX, centerY - thumbHeightPx / 2f),
                     size = Size(thumbWidthPx, thumbHeightPx),
                     cornerRadius = thumbCornerRadius,
@@ -3569,13 +3369,10 @@ private fun QueuePanel(state: MusicPlayerState, player: MusicPlayer, modifier: M
                     glassModifier = Modifier.liquidGlassChrome(RoundedCornerShape(20.dp), LocalLiquidGlass.current),
                     onClick = { player.seekToQueueItem(index) },
                     shape = RoundedCornerShape(20.dp),
-                    color = if (isCurrent) {
-                        if (LocalLiquidGlass.current) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-                        else MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        if (LocalLiquidGlass.current) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.70f)
-                        else MaterialTheme.colorScheme.surfaceContainerHighest
-                    },
+                    color = liquidGlassContainerColor(
+                        if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ),
                     contentColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier

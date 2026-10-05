@@ -207,7 +207,7 @@ class MusicPlayer @Inject constructor(
     private val appContext = context.applicationContext
     private val djPlaybackController by lazy { DjPlaybackController(appContext, applicationScope) }
     val djEnergyStatus get() = djPlaybackController.state
-    fun previewDjEnergy(profile: DjCueProfile) = onMain { djPlaybackController.preview(profile) }
+    fun previewDjEnergy(profile: DjEnergyProfile) = onMain { djPlaybackController.preview(profile) }
     private val streamResolutionWakeLock by lazy {
         (appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -1314,7 +1314,7 @@ class MusicPlayer @Inject constructor(
                             else -> null
                         }
                         djPlaybackController.update(nativeAudioEngine.get(), secondaryNativeEngine,
-                            player === secondaryPlayer, DjCuePreferences.read(appContext), djEnergyModePref,
+                            player === secondaryPlayer, DjEnergyPreferences.read(appContext), djEnergyModePref,
                             playingNow, playhead, blocked)
                     }
                     if (!isCasting && exclusiveUsbOutput.isActive()) {

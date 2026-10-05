@@ -7,33 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.withStyle
-import com.lastwave.app.ui.common.HeaderActionIcon
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,16 +41,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.ui.composed
-import androidx.compose.ui.graphics.Shape
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Bolt
+import com.lastwave.app.playback.DjEnergyStatus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -107,10 +75,6 @@ import androidx.compose.material.icons.filled.Waves
 import com.lastwave.app.data.local.LyricsAnimation
 import com.lastwave.app.data.local.LyricsProvider
 import com.lastwave.app.data.local.LyricsUiVersion
-import com.lastwave.app.ui.player.LyricsOffsetDialog
-import com.lastwave.app.ui.player.LyricsSizeDialog
-import androidx.compose.material.icons.filled.FormatSize
-import kotlin.math.roundToInt
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Palette
@@ -241,7 +205,7 @@ private val IconBadgeShape = RoundedCornerShape(14.dp)
  *  drives per-row corner radii so a multi-row group reads as one premium
  *  surface split into rows, not a stack of separate cards (see groupShape
  *  below and the GROUP_GAP spacing used between rows in a group's Column). */
-private enum class GroupPosition { SINGLE, TOP, MIDDLE, BOTTOM }
+internal enum class GroupPosition { SINGLE, TOP, MIDDLE, BOTTOM }
 
 private val GROUP_OUTER_RADIUS = 28.dp
 private val GROUP_INNER_RADIUS = 6.dp
@@ -282,79 +246,6 @@ private fun SettingsGroup(rowCount: Int, content: @Composable (index: Int, posit
 }
 
 /**
- * Determines the target LazyColumn item index (section) for a searchable setting.
- */
-private fun getTargetSectionIndex(settingId: String?): Int {
-    if (settingId == null) return 0
-    val entry = SettingsSearchIndex.allEntries.firstOrNull { it.id == settingId } ?: return 0
-    return when (entry.parentTab) {
-        SettingsTab.AUDIO -> if (entry.section == "Output & Loudness") 1 else 0
-        SettingsTab.APPEARANCE -> when (entry.section) {
-            "Accent Color" -> 1
-            "Experimental & Player" -> 2
-            else -> 0
-        }
-        SettingsTab.LIBRARY -> when (entry.section) {
-            "Imports" -> 1
-            "Modules & Addons" -> 2
-            else -> 0
-        }
-        SettingsTab.DATA_BACKUP -> if (entry.section == "Data Management") 1 else 0
-        SettingsTab.ABOUT -> if (entry.section == "About & Community") 1 else 0
-        else -> 0
-    }
-}
-
-/**
- * Attaches a BringIntoViewRequester and renders an expressive pulsing highlight glow
- * with outer colored shadow halo, accent border, and auto-scroll when isHighlighted is true.
- */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-private fun Modifier.settingHighlightGlow(
-    isHighlighted: Boolean,
-    shape: Shape = CardOuterShape,
-): Modifier = composed {
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val primaryColor = MaterialTheme.colorScheme.primary
-
-    LaunchedEffect(isHighlighted) {
-        if (isHighlighted) {
-            delay(160L)
-            bringIntoViewRequester.bringIntoView()
-        }
-    }
-
-    if (!isHighlighted) {
-        return@composed this.bringIntoViewRequester(bringIntoViewRequester)
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "settingHighlightGlow")
-    val glowProgress by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "glowProgress",
-    )
-
-    this
-        .bringIntoViewRequester(bringIntoViewRequester)
-        .shadow(
-            elevation = (7 * glowProgress).dp,
-            shape = shape,
-            ambientColor = primaryColor.copy(alpha = 0.40f * glowProgress),
-            spotColor = primaryColor.copy(alpha = 0.55f * glowProgress),
-        )
-        .border(
-            width = 2.5.dp,
-            color = primaryColor.copy(alpha = glowProgress),
-            shape = shape,
-        )
-}
-
-/**
  * Faithful port of settings.js (par 8): Last.fm account management, appearance
  * (AMOLED / Dynamic Color / Monochrome / accent presets / custom color
  * wheel), iTunes/ListenBrainz artwork toggles, data management (clear
@@ -391,6 +282,11 @@ enum class SettingsTab(
         subtitle = "Account connection, Scrobbling sync & API credentials",
         icon = Icons.Filled.Album,
     ),
+    SCROBBLER(
+        title = "Notification Scrobbler",
+        subtitle = "Background scrobbler, Delay slider, App tracking",
+        icon = Icons.Filled.Group,
+    ),
     LIBRARY(
         title = "Library & Content",
         subtitle = "Home layout, Playlist imports, Downloads, Exclusions",
@@ -413,6 +309,7 @@ enum class SettingsTab(
 fun SettingsScreen(
     onBack: () -> Unit = {},
     onLoggedOut: () -> Unit = {},
+    onOpenChooseApps: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
     onOpenModules: () -> Unit = {},
     onOpenHomeSections: () -> Unit = {},
@@ -426,6 +323,7 @@ fun SettingsScreen(
     val avatarUrl by viewModel.avatarUrl.collectAsStateWithLifecycle()
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val misc by viewModel.misc.collectAsStateWithLifecycle()
+    val scrobbler by viewModel.scrobbler.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val downloadCount by viewModel.downloadCount.collectAsStateWithLifecycle()
     val downloadTotalBytes by viewModel.downloadTotalBytes.collectAsStateWithLifecycle()
@@ -466,12 +364,10 @@ fun SettingsScreen(
     }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
-    var showDjEnergyOptions by remember { mutableStateOf(false) }
     var showEqSheet by remember { mutableStateOf(false) }
     var showLyricsAnimationSheet by remember { mutableStateOf(false) }
     var showLyricsProviderDialog by remember { mutableStateOf(false) }
     var showLyricsOffsetDialog by remember { mutableStateOf(false) }
-    var showLyricsSizeDialog by remember { mutableStateOf(false) }
     var showLoudnessDialog by remember { mutableStateOf(false) }
     var showClarityPresetDialog by remember { mutableStateOf(false) }
     var showSyncPlaylistsSheet by remember { mutableStateOf(false) }
@@ -483,6 +379,17 @@ fun SettingsScreen(
 
     // Sends the user to Android's own Notification Listener access screen
     // — the one permission this feature needs that the app can never grant
+    // itself, only deep-link to. There's no reliable "is it already
+    // granted for THIS app" API pre-33 short of parsing a settings string,
+    // so this always opens the picker rather than guessing; picking
+    // LastWave again there if it's already on is harmless.
+    fun openNotificationAccessSettings() {
+        val opened = startActivitySafely(
+            context,
+            Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
+        ) || startActivitySafely(context, Intent(android.provider.Settings.ACTION_SETTINGS))
+        if (!opened) viewModel.showToast("Android Settings is unavailable on this ROM")
+    }
 
     // "*/*" rather than "application/json": many document providers (Drive,
     // Downloads, some file managers) report a .json file as
@@ -520,93 +427,23 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .adaptiveContentWidth(maxWidth = 760.dp),
         ) {
-        var activeTab by remember { mutableStateOf<SettingsTab?>(null) }
-        var isSearchBarVisible by rememberSaveable { mutableStateOf(false) }
-        var highlightedSettingId by remember { mutableStateOf<String?>(null) }
-        val focusManager = LocalFocusManager.current
+                var activeTab by remember { mutableStateOf<SettingsTab?>(null) }
 
-        val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
-        val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
-
-        LaunchedEffect(highlightedSettingId) {
-            if (highlightedSettingId != null) {
-                delay(3200L)
-                highlightedSettingId = null
-            }
-        }
-
-        BackHandler(enabled = searchQuery.isNotBlank() || isSearchBarVisible || activeTab != null) {
-            if (searchQuery.isNotBlank() || isSearchBarVisible) {
-                viewModel.clearSearch()
-                isSearchBarVisible = false
-            } else if (activeTab != null) {
-                activeTab = null
-            }
+        BackHandler(enabled = activeTab != null) {
+            activeTab = null
         }
 
         ExpressiveHeader(
-            title = if (searchQuery.isNotBlank()) stringResource(R.string.settings_search_title) else (activeTab?.title ?: stringResource(R.string.settings)),
+            title = activeTab?.title ?: stringResource(R.string.settings),
             onBack = {
-                if (searchQuery.isNotBlank() || isSearchBarVisible) {
-                    viewModel.clearSearch()
-                    isSearchBarVisible = false
-                } else if (activeTab != null) {
+                if (activeTab != null) {
                     activeTab = null
                 } else {
                     onBack()
                 }
             },
-            actions = {
-                HeaderActionIcon(
-                    icon = if (isSearchBarVisible || searchQuery.isNotBlank()) Icons.Filled.Close else Icons.Filled.Search,
-                    contentDescription = if (isSearchBarVisible || searchQuery.isNotBlank()) stringResource(R.string.settings_search_clear) else stringResource(R.string.settings_search_title),
-                    onClick = {
-                        if (isSearchBarVisible || searchQuery.isNotBlank()) {
-                            viewModel.clearSearch()
-                            isSearchBarVisible = false
-                        } else {
-                            isSearchBarVisible = true
-                        }
-                    },
-                )
-            },
         )
 
-        AnimatedVisibility(
-            visible = isSearchBarVisible,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
-            SettingsSearchBar(
-                query = searchQuery,
-                onQueryChange = viewModel::onSearchQueryChange,
-                onClear = {
-                    if (searchQuery.isNotBlank()) {
-                        viewModel.clearSearch()
-                    } else {
-                        isSearchBarVisible = false
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-            )
-        }
-
-        if (searchQuery.isNotBlank()) {
-            SettingsSearchResultsList(
-                query = searchQuery,
-                results = searchResults,
-                onResultClick = { entry ->
-                    focusManager.clearFocus()
-                    viewModel.clearSearch()
-                    isSearchBarVisible = false
-                    activeTab = entry.parentTab
-                    highlightedSettingId = entry.id
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-        } else {
         AnimatedContent(
             targetState = activeTab,
             transitionSpec = {
@@ -625,23 +462,7 @@ fun SettingsScreen(
             label = "SettingsTabTransition",
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) { tab ->
-            val listState = remember(tab) { LazyListState() }
-
-            LaunchedEffect(highlightedSettingId, tab) {
-                if (highlightedSettingId != null && tab != null) {
-                    val targetIndex = getTargetSectionIndex(highlightedSettingId)
-                    if (targetIndex > 0) {
-                        delay(80L)
-                        listState.animateScrollToItem(targetIndex)
-                    } else if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
-                        delay(80L)
-                        listState.animateScrollToItem(0)
-                    }
-                }
-            }
-
             LazyColumn(
-                state = listState,
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
@@ -693,7 +514,7 @@ fun SettingsScreen(
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 SectionLabel("Playback & UI")
-                                SettingsGroup(rowCount = 3) { index, position ->
+                                SettingsGroup(rowCount = 4) { index, position ->
                                     when (index) {
                                         0 -> SettingsActionCard(
                                             icon = Icons.Filled.GraphicEq,
@@ -713,6 +534,15 @@ fun SettingsScreen(
                                             onClick = { activeTab = SettingsTab.APPEARANCE },
                                             position = position,
                                         )
+                                        2 -> SettingsActionCard(
+                                            icon = Icons.Filled.Group,
+                                            iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                                            iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            title = "Notification Scrobbler",
+                                            subtitle = "Background scrobbler, Delay slider, App tracking",
+                                            onClick = { activeTab = SettingsTab.SCROBBLER },
+                                            position = position,
+                                        )
                                         else -> SettingsActionCard(
                                             icon = Icons.Filled.QueueMusic,
                                             iconContainer = MaterialTheme.colorScheme.secondaryContainer,
@@ -720,7 +550,7 @@ fun SettingsScreen(
                                             title = "Library & Content",
                                             subtitle = run {
                                                 val count = downloadCount
-                                                if (count > 0) "$count songs downloaded • Imports, Home layout" else "Home layout, Playlist imports, Downloads, Exclusions"
+                                                if (count > 0) "$count songs downloaded \u2022 Imports, Home layout" else "Home layout, Playlist imports, Downloads, Exclusions"
                                             },
                                             onClick = { activeTab = SettingsTab.LIBRARY },
                                             position = position,
@@ -775,13 +605,13 @@ fun SettingsScreen(
                     }
                     val downloadQualitySubtitle = when (misc.downloadQuality) {
                         28 -> "Dolby Atmos (Spatial Immersive Audio)"
-                        27 -> "Hi-Res (24-bit / 192 kHz FLAC)"
+                        27 -> "Max (24-bit / 192 kHz FLAC)"
                         7 -> "Hi-Res (24-bit / 96 kHz FLAC)"
                         6 -> "CD Lossless (16-bit / 44.1 kHz FLAC)"
                         5 -> "Standard (320 kbps MP3)"
                         4 -> "Data Saver (96 kbps HE-AAC)"
                         -1 -> "YouTube Music (AAC / Opus)"
-                        else -> "Hi-Res (24-bit / 192 kHz FLAC)"
+                        else -> "Max (24-bit / 192 kHz FLAC)"
                     }
 
                     val isIgnored = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
@@ -800,7 +630,6 @@ fun SettingsScreen(
                                 subtitle = if (misc.losslessQuality == -1) "YouTube Music • Native stream" else "$qualitySubtitle • YouTube Music fallback",
                                 onClick = { showQualityDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.streaming_quality"),
                             )
                             1 -> SettingsActionCard(
                                 icon = Icons.Filled.CloudDownload,
@@ -810,7 +639,6 @@ fun SettingsScreen(
                                 subtitle = "$downloadQualitySubtitle \u2022 Lossless & YouTube",
                                 onClick = { showDownloadQualityDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.download_quality"),
                             )
                             2 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -825,7 +653,6 @@ fun SettingsScreen(
                                 checked = misc.dolbyAtmosEnabled,
                                 onCheckedChange = viewModel::setDolbyAtmosEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.dolby_atmos"),
                             )
                             3 -> SettingsToggleCard(
                                 icon = Icons.Filled.Tune,
@@ -840,7 +667,6 @@ fun SettingsScreen(
                                 checked = misc.isBitPerfectEnabled,
                                 onCheckedChange = viewModel::setBitPerfectEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.bit_perfect"),
                             )
                             4 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -857,14 +683,12 @@ fun SettingsScreen(
                                 checked = misc.crossfadeEnabled,
                                 onCheckedChange = viewModel::setCrossfadeEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.crossfade"),
                             )
                             5 -> if (misc.crossfadeEnabled) {
                                 CrossfadeDurationRow(
                                     seconds = misc.crossfadeSeconds,
                                     onSecondsChange = viewModel::setCrossfadeSeconds,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "audio.crossfade_duration"),
                                 )
                             } else {
                                 SettingsToggleCard(
@@ -880,7 +704,6 @@ fun SettingsScreen(
                                     checked = misc.downloadLyrics,
                                     onCheckedChange = viewModel::setDownloadLyrics,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "audio.download_lyrics"),
                                 )
                             }
                             6 -> if (misc.crossfadeEnabled) {
@@ -897,7 +720,6 @@ fun SettingsScreen(
                                     checked = misc.downloadLyrics,
                                     onCheckedChange = viewModel::setDownloadLyrics,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "audio.download_lyrics"),
                                 )
                             } else if (!isIgnored) {
                                 SettingsActionCard(
@@ -908,7 +730,6 @@ fun SettingsScreen(
                                     subtitle = "Restricted \u2022 Tap to exempt from Samsung Device Care / sleeping apps",
                                     onClick = { BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context) },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "audio.battery_optimization"),
                                 )
                             }
                             7 -> if (!isIgnored) {
@@ -920,7 +741,6 @@ fun SettingsScreen(
                                     subtitle = "Restricted \u2022 Tap to exempt from Samsung Device Care / sleeping apps",
                                     onClick = { BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context) },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "audio.battery_optimization"),
                                 )
                             }
                         }
@@ -937,7 +757,7 @@ fun SettingsScreen(
                         LoudnessMode.ALBUM -> "Album \u2022 Keep intentional album dynamics"
                         else -> "Off \u2022 Play tagged tracks at original level"
                     }
-                    SettingsGroup(rowCount = 8) { index, position ->
+                    SettingsGroup(rowCount = 7) { index, position ->
                         when (index) {
                             0 -> SettingsToggleCard(
                                 icon = Icons.Filled.Usb,
@@ -954,7 +774,6 @@ fun SettingsScreen(
                                 checked = usbExclusiveEnabled,
                                 onCheckedChange = viewModel::setUsbExclusiveEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.usb_exclusive"),
                             )
                             1 -> SettingsActionCard(
                                 icon = Icons.Filled.VolumeUp,
@@ -964,7 +783,6 @@ fun SettingsScreen(
                                 subtitle = loudnessSubtitle,
                                 onClick = { showLoudnessDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.loudness_normalization"),
                             )
                             2 -> SettingsActionCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -980,22 +798,12 @@ fun SettingsScreen(
                                 },
                                 onClick = { showEqSheet = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.equalizer"),
                             )
-                            3 -> SettingsToggleCard(
-                                icon = Icons.Filled.Bolt,
-                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
-                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                title = "DJ Energy",
-                                subtitle = when {
-                                    misc.isBitPerfectEnabled -> "Paused by Bit-Perfect mode"
-                                    misc.djEnergyEnabled -> djEnergyStatus.message
-                                    else -> "Select important energy, vocal and beat moments"
-                                },
-                                checked = misc.djEnergyEnabled,
-                                onCheckedChange = viewModel::setDjEnergyEnabled,
+                            3 -> DjEnergySetting(
+                                enabled = misc.djEnergyEnabled,
+                                status = djEnergyStatus,
+                                onEnabledChange = viewModel::setDjEnergyEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.dj_energy"),
                             )
                             4 -> SettingsToggleCard(
                                 icon = Icons.Filled.Waves,
@@ -1010,7 +818,6 @@ fun SettingsScreen(
                                 checked = misc.isStudioMasterClarityEnabled,
                                 onCheckedChange = viewModel::setStudioMasterClarity,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.studio_clarity"),
                             )
                             5 -> SettingsActionCard(
                                 icon = Icons.Filled.Tune,
@@ -1020,17 +827,6 @@ fun SettingsScreen(
                                 subtitle = "${clarityPreset.displayName} \u2022 ${clarityPreset.description}",
                                 onClick = { showClarityPresetDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.clarity_preset"),
-                            )
-                            7 -> SettingsActionCard(
-                                icon = Icons.Filled.GraphicEq,
-                                iconContainer = MaterialTheme.colorScheme.secondaryContainer,
-                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                title = "DJ Energy options",
-                                subtitle = "Laya selection • 2:45 timed cue • 1.5 s / 80% preset",
-                                onClick = { showDjEnergyOptions = true },
-                                position = position,
-                                isHighlighted = (highlightedSettingId == "audio.dj_energy_options"),
                             )
                             6 -> SettingsToggleCard(
                                 icon = Icons.Filled.GraphicEq,
@@ -1045,7 +841,6 @@ fun SettingsScreen(
                                 checked = misc.clarityAtmosBypass,
                                 onCheckedChange = viewModel::setClarityAtmosBypass,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "audio.clarity_spatial_bypass"),
                             )
                         }
                     }
@@ -1063,7 +858,6 @@ fun SettingsScreen(
                                 currentThemeMode = theme?.themeMode ?: ThemeMode.SYSTEM,
                                 onSelectThemeMode = viewModel::setThemeMode,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.theme_mode"),
                             )
                             1 -> SettingsToggleCard(
                                 icon = Icons.Filled.Contrast,
@@ -1075,7 +869,6 @@ fun SettingsScreen(
                                 enabled = theme?.themeMode != ThemeMode.LIGHT,
                                 onCheckedChange = viewModel::setAmoled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.amoled"),
                             )
                             2 -> SettingsToggleCard(
                                 icon = Icons.Filled.Palette,
@@ -1088,7 +881,6 @@ fun SettingsScreen(
                                     viewModel.setAccentMode(if (enabled) AccentMode.DYNAMIC else AccentMode.MANUAL)
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.dynamic_color"),
                             )
                             3 -> SettingsToggleCard(
                                 icon = Icons.Filled.BubbleChart,
@@ -1099,7 +891,6 @@ fun SettingsScreen(
                                 checked = theme?.liquidGlass ?: false,
                                 onCheckedChange = viewModel::setLiquidGlass,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.liquid_glass"),
                             )
                             4 -> SettingsToggleCard(
                                 icon = Icons.Filled.Album,
@@ -1110,7 +901,6 @@ fun SettingsScreen(
                                 checked = misc.dynamicNowPlayingEnabled,
                                 onCheckedChange = viewModel::setDynamicNowPlaying,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.dynamic_now_playing"),
                             )
                             5 -> SettingsToggleCard(
                                 icon = Icons.Filled.TextFields,
@@ -1121,7 +911,6 @@ fun SettingsScreen(
                                 checked = misc.useCustomFont,
                                 onCheckedChange = viewModel::setUseCustomFont,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.app_font"),
                             )
                             6 -> SettingsActionCard(
                                 icon = Icons.Filled.Dashboard,
@@ -1135,7 +924,6 @@ fun SettingsScreen(
                                 },
                                 onClick = onOpenHomeSections,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.home_sections"),
                             )
                         }
                     }
@@ -1148,16 +936,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(10.dp))
                     Card(
                         shape = CardOuterShape,
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (highlightedSettingId == "appearance.accent_preset") MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .settingHighlightGlow(
-                                isHighlighted = (highlightedSettingId == "appearance.accent_preset"),
-                                shape = CardOuterShape,
-                            ),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                     ) {
                         Column(Modifier.padding(20.dp)) {
                             AccentPresetGrid(
@@ -1175,7 +954,7 @@ fun SettingsScreen(
                         item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel(stringResource(R.string.settings_section_experimental))
-                    SettingsGroup(rowCount = 6) { index, position ->
+                    SettingsGroup(rowCount = 5) { index, position ->
                         when (index) {
                             0 -> SettingsActionCard(
                                 icon = Icons.Filled.Lyrics,
@@ -1189,7 +968,6 @@ fun SettingsScreen(
                                 },
                                 onClick = { showLyricsAnimationSheet = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.lyrics_animation"),
                             )
                             1 -> SettingsToggleCard(
                                 icon = Icons.Filled.Waves,
@@ -1204,7 +982,6 @@ fun SettingsScreen(
                                 checked = misc.wavySeekbarEnabled,
                                 onCheckedChange = viewModel::setWavySeekbarEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.wavy_seekbar"),
                             )
                             2 -> SettingsActionCard(
                                 icon = Icons.Filled.Lyrics,
@@ -1214,7 +991,6 @@ fun SettingsScreen(
                                 subtitle = "${misc.lyricsProvider.title} \u2022 ${misc.lyricsProvider.subtitle}",
                                 onClick = { showLyricsProviderDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.lyrics_provider"),
                             )
                             3 -> SettingsActionCard(
                                 icon = Icons.Filled.Timer,
@@ -1228,26 +1004,8 @@ fun SettingsScreen(
                                 },
                                 onClick = { showLyricsOffsetDialog = true },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.lyrics_offset"),
                             )
-                            4 -> SettingsActionCard(
-                                icon = Icons.Filled.FormatSize,
-                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
-                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                title = "Lyrics text size",
-                                subtitle = "${(misc.lyricsFontScale * 100).roundToInt()}% \u2022 ${
-                                    when {
-                                        misc.lyricsFontScale < 0.85f -> "Small"
-                                        misc.lyricsFontScale in 0.85f..1.15f -> "Standard"
-                                        misc.lyricsFontScale in 1.16f..1.35f -> "Large"
-                                        else -> "Extra Large"
-                                    }
-                                }",
-                                onClick = { showLyricsSizeDialog = true },
-                                position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.lyrics_size"),
-                            )
-                            5 -> SettingsToggleCard(
+                            4 -> SettingsToggleCard(
                                 icon = Icons.Filled.VolumeUp,
                                 iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
                                 iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -1260,7 +1018,6 @@ fun SettingsScreen(
                                 checked = misc.systemEffectsMode,
                                 onCheckedChange = viewModel::setSystemEffectsMode,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.system_audio_effects"),
                             )
                         }
                     }
@@ -1281,7 +1038,6 @@ fun SettingsScreen(
                                 checked = misc.canvasEnabled,
                                 onCheckedChange = viewModel::setCanvasEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.canvas_enabled"),
                             )
                             1 -> SettingsToggleCard(
                                 icon = Icons.Filled.Visibility,
@@ -1292,7 +1048,6 @@ fun SettingsScreen(
                                 checked = misc.canvasFullBleed,
                                 onCheckedChange = viewModel::setCanvasFullBleed,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.canvas_full_bleed"),
                             )
                             2 -> SettingsToggleCard(
                                 icon = Icons.Filled.CloudDownload,
@@ -1303,7 +1058,6 @@ fun SettingsScreen(
                                 checked = misc.canvasOverCellular,
                                 onCheckedChange = viewModel::setCanvasOverCellular,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "appearance.canvas_cellular"),
                             )
                         }
                     }
@@ -1344,7 +1098,6 @@ fun SettingsScreen(
                                     channelHandle = ytConnection.channelHandle,
                                     onDisconnect = { showYtDisconnectConfirm = true },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.account"),
                                 )
                             } else {
                                 SettingsActionCard(
@@ -1355,7 +1108,6 @@ fun SettingsScreen(
                                     subtitle = stringResource(R.string.settings_connect_yt_sub),
                                     onClick = onOpenYouTubeLogin,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.account"),
                                 )
                             }
                             1 -> SettingsToggleCard(
@@ -1367,7 +1119,6 @@ fun SettingsScreen(
                                 checked = ytConnected && ytSyncEnabled,
                                 onCheckedChange = viewModel::setYtSyncEnabled,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "youtube.sync"),
                             )
                             2 -> if (ytConnected) {
                                 SettingsActionCard(
@@ -1381,7 +1132,6 @@ fun SettingsScreen(
                                         showYtChannelSheet = true
                                     },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.channel"),
                                 )
                             }
                             3 -> if (ytConnected) {
@@ -1399,7 +1149,6 @@ fun SettingsScreen(
                                     subtitle = syncCountText,
                                     onClick = { showSyncPlaylistsSheet = true },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.select_playlists"),
                                 )
                             } else {
                                 SettingsActionCard(
@@ -1410,7 +1159,6 @@ fun SettingsScreen(
                                     subtitle = "Search, browse, or paste playlist links & IDs",
                                     onClick = onOpenYouTubeImport,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.import"),
                                 )
                             }
                             4 -> if (ytConnected) {
@@ -1428,7 +1176,6 @@ fun SettingsScreen(
                                     subtitle = visibilitySubtitle,
                                     onClick = { showYtLibraryVisibilitySheet = true },
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.shown_playlists"),
                                 )
                             }
                             5 -> SettingsActionCard(
@@ -1439,7 +1186,6 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.settings_make_local_sub),
                                 onClick = onOpenYouTubeImport,
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "youtube.import"),
                             )
                             6 -> if (ytConnected) {
                                 SettingsToggleCard(
@@ -1455,7 +1201,6 @@ fun SettingsScreen(
                                     checked = ytHistorySyncEnabled,
                                     onCheckedChange = viewModel::setYtHistorySyncEnabled,
                                     position = position,
-                                    isHighlighted = (highlightedSettingId == "youtube.history"),
                                 )
                             }
                         }
@@ -1478,7 +1223,6 @@ fun SettingsScreen(
                         connecting = lastFmConnecting,
                         awaitingApproval = lastFmAuthUrl != null,
                         hasApiKey = hasApiKey,
-                        isHighlighted = (highlightedSettingId in listOf("lastfm.connect", "lastfm.api_credentials")),
                         onConnect = { viewModel.beginLastFmConnect() },
                         onCancel = viewModel::cancelLastFmConnect,
                         onDisconnect = viewModel::disconnectLastFm,
@@ -1497,7 +1241,54 @@ fun SettingsScreen(
             }
                     }
 
-
+                    SettingsTab.SCROBBLER -> {
+                        item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionLabel(stringResource(R.string.settings_section_scrobbler))
+                    SettingsGroup(rowCount = 4) { index, position ->
+                        when (index) {
+                            0 -> SettingsToggleCard(
+                                icon = Icons.Filled.GraphicEq,
+                                iconContainer = MaterialTheme.colorScheme.primaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                title = stringResource(R.string.settings_scrobble),
+                                subtitle = if (scrobbler.enabled) "Watching ${scrobbler.selectedPackages.size} app(s)" else "Detect and submit plays from other apps",
+                                checked = scrobbler.enabled,
+                                onCheckedChange = { enabled ->
+                                    if (enabled) openNotificationAccessSettings()
+                                    viewModel.setScrobblerEnabled(enabled)
+                                },
+                                position = position,
+                            )
+                            1 -> SettingsActionCard(
+                                icon = Icons.Filled.Apps,
+                                iconContainer = MaterialTheme.colorScheme.secondaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                title = stringResource(R.string.settings_choose_apps),
+                                subtitle = if (scrobbler.selectedPackages.isEmpty()) "None selected yet" else "${scrobbler.selectedPackages.size} app(s) selected",
+                                onClick = onOpenChooseApps,
+                                position = position,
+                            )
+                            2 -> SettingsToggleCard(
+                                icon = Icons.Filled.NotificationsActive,
+                                iconContainer = MaterialTheme.colorScheme.tertiaryContainer,
+                                iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                title = stringResource(R.string.settings_now_playing),
+                                subtitle = stringResource(R.string.settings_now_playing_sub),
+                                checked = scrobbler.submitNowPlaying,
+                                onCheckedChange = viewModel::setSubmitNowPlaying,
+                                position = position,
+                            )
+                            3 -> ScrobbleThresholdRow(
+                                percent = scrobbler.scrobblePercent,
+                                onPercentChange = viewModel::setScrobblePercent,
+                                position = position,
+                            )
+                        }
+                    }
+                }
+            }
+                    }
 
                     SettingsTab.LIBRARY -> {
                         item {
@@ -1517,7 +1308,6 @@ fun SettingsScreen(
                                             },
                                             onClick = onOpenHomeSections,
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "library.home_sections"),
                                         )
                                         else -> SettingsActionCard(
                                             icon = Icons.Filled.RestartAlt,
@@ -1527,7 +1317,6 @@ fun SettingsScreen(
                                             subtitle = "${state.recommendationExclusionCount} songs excluded",
                                             onClick = onOpenExcludedSongs,
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "library.excluded_songs"),
                                         )
                                     }
                                 }
@@ -1547,7 +1336,6 @@ fun SettingsScreen(
                                             subtitle = "Search, browse, or paste playlist links & IDs",
                                             onClick = onOpenYouTubeImport,
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "library.import_yt"),
                                         )
                                         1 -> SettingsActionCard(
                                             icon = Icons.Filled.QueueMusic,
@@ -1557,7 +1345,6 @@ fun SettingsScreen(
                                             subtitle = "Paste a public playlist link",
                                             onClick = onOpenExternalImport,
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "library.import_external"),
                                         )
                                         else -> SettingsActionCard(
                                             icon = Icons.Filled.FileDownload,
@@ -1571,7 +1358,6 @@ fun SettingsScreen(
                                                 }.onFailure { viewModel.showToast("No file picker is available") }
                                             },
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "library.import_file"),
                                         )
                                     }
                                 }
@@ -1579,17 +1365,116 @@ fun SettingsScreen(
                         }
 
                         item {
+                val mb = (downloadTotalBytes ?: 0L).toDouble() / (1024 * 1024)
+                val formattedStorage = if (mb >= 1000) "%.1f GB".format(mb / 1024) else "%.1f MB".format(mb)
+                // Custom SAF location (SD card) replaces the Music/<folder>
+                // noun; a lost grant shows as unavailable until reselected.
+                val customDownloadLabel = androidx.compose.runtime.remember(context, misc.downloadTreeUri) {
+                    com.lastwave.app.data.download.SafTreeFiles.describeLocation(context, misc.downloadTreeUri)
+                }
+                val downloadLocationNoun = customDownloadLabel
+                    ?: if (misc.downloadTreeUri.isNotBlank()) {
+                        "Unavailable — reselect in Downloads"
+                    } else {
+                        "Music/${misc.downloadFolder}"
+                    }
+                val downloadsSubtitle = if (downloadCount > 0) {
+                    if (misc.downloadStructure == com.lastwave.app.data.local.DownloadFolderStructure.FLAT) {
+                        if (customDownloadLabel != null || misc.downloadTreeUri.isNotBlank()) {
+                            stringResource(
+                                R.string.settings_downloads_sub_custom,
+                                downloadCount,
+                                formattedStorage,
+                                downloadLocationNoun,
+                            )
+                        } else {
+                            stringResource(
+                                R.string.settings_downloads_sub,
+                                downloadCount,
+                                formattedStorage,
+                                misc.downloadFolder,
+                            )
+                        }
+                    } else {
+                        if (customDownloadLabel != null || misc.downloadTreeUri.isNotBlank()) {
+                            stringResource(
+                                R.string.settings_downloads_sub_structured_custom,
+                                downloadCount,
+                                formattedStorage,
+                                downloadLocationNoun,
+                                stringResource(misc.downloadStructure.shortLabelRes),
+                            )
+                        } else {
+                            stringResource(
+                                R.string.settings_downloads_sub_structured,
+                                downloadCount,
+                                formattedStorage,
+                                misc.downloadFolder,
+                                stringResource(misc.downloadStructure.shortLabelRes),
+                            )
+                        }
+                    }
+                } else {
+                    stringResource(R.string.settings_downloads_empty)
+                }
+
+                Card(
+                    onClick = onOpenDownloads,
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Download,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.settings_downloads_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                downloadsSubtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            )
+                        }
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForwardIos,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+
+                        item {
                 Card(
                     onClick = onOpenModules,
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .settingHighlightGlow(
-                            isHighlighted = (highlightedSettingId == "library.modules"),
-                            shape = RoundedCornerShape(22.dp),
-                        ),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp).fillMaxWidth(),
@@ -1652,7 +1537,6 @@ fun SettingsScreen(
                                         .onFailure { viewModel.showToast("No file picker is available") }
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "backup.create"),
                             )
                             1 -> SettingsActionCard(
                                 icon = Icons.Filled.CloudDownload,
@@ -1665,7 +1549,6 @@ fun SettingsScreen(
                                         .onFailure { viewModel.showToast("No file picker is available") }
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "backup.restore"),
                             )
                         }
                     }
@@ -1686,7 +1569,6 @@ fun SettingsScreen(
                                             danger = true,
                                             onClick = viewModel::requestClearAllData,
                                             position = position,
-                                            isHighlighted = (highlightedSettingId == "backup.clear_all"),
                                         )
                                     }
                                 }
@@ -1707,7 +1589,6 @@ fun SettingsScreen(
                             subtitle = currentLanguage.nativeDisplayName(),
                             onClick = { showLanguageDialog = true },
                             position = position,
-                            isHighlighted = (highlightedSettingId == "about.language"),
                         )
                     }
                 }
@@ -1730,7 +1611,6 @@ fun SettingsScreen(
                                     }
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "about.telegram_support"),
                             )
                             1 -> SettingsActionCard(
                                 icon = Icons.Filled.Group,
@@ -1745,7 +1625,6 @@ fun SettingsScreen(
                                     }
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "about.discord_support"),
                             )
                             2 -> SettingsActionCard(
                                 icon = Icons.Filled.AutoAwesome,
@@ -1759,7 +1638,6 @@ fun SettingsScreen(
                                     }
                                 },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "about.more_apps"),
                             )
                             3 -> SettingsActionCard(
                                 icon = Icons.Filled.Code,
@@ -1769,7 +1647,6 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.settings_diagnostics_sub),
                                 onClick = { viewModel.exportDiagnostics() },
                                 position = position,
-                                isHighlighted = (highlightedSettingId == "about.diagnostics"),
                             )
                         }
                     }
@@ -1856,14 +1733,13 @@ fun SettingsScreen(
                                 viewModel.checkForUpdates()
                             }
                         },
-                        isHighlighted = (highlightedSettingId == "about.check_updates"),
                     )
 
                     SettingsActionCard(
                         icon = Icons.Filled.Code,
                         iconContainer = MaterialTheme.colorScheme.secondaryContainer,
                         iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        title = stringResource(R.string.settings_source_code),
+                                title = stringResource(R.string.settings_source_code),
                         subtitle = "github.com/Clash-Projects/LastWave-native",
                         onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Clash-Projects/LastWave-native"))
@@ -1871,14 +1747,12 @@ fun SettingsScreen(
                                 viewModel.showToast("No browser is available")
                             }
                         },
-                        isHighlighted = (highlightedSettingId == "about.source_code"),
                     )
                 }
             }
                     }
                 }
             }
-        }
         }
     }
     }
@@ -2032,14 +1906,6 @@ fun SettingsScreen(
     }
 
     // -- Experimental 15-band equalizer --
-    if (showDjEnergyOptions) DjEnergyDialog(
-        enabled = misc.djEnergyEnabled,
-        onDismiss = { showDjEnergyOptions = false },
-        onEnabledChange = viewModel::setDjEnergyEnabled,
-        playbackStatus = djEnergyStatus,
-        onPreview = viewModel::previewDjEnergy,
-    )
-
     if (showEqSheet) {
         EqualizerSheet(
             eq = eq,
@@ -2086,15 +1952,6 @@ fun SettingsScreen(
             currentMs = misc.lyricsOffsetMs,
             onSelect = { viewModel.setLyricsOffsetMs(it) },
             onDismiss = { showLyricsOffsetDialog = false },
-        )
-    }
-
-    // -- Lyrics text size dialog: scales font size with live preview --
-    if (showLyricsSizeDialog) {
-        LyricsSizeDialog(
-            currentScale = misc.lyricsFontScale,
-            onSelect = { viewModel.setLyricsFontScale(it) },
-            onDismiss = { showLyricsSizeDialog = false },
         )
     }
 
@@ -2160,7 +2017,7 @@ fun SettingsScreen(
     if (showQualityDialog) {
         val tiers = listOf(
             Triple(28, "Dolby Atmos", "Spatial Immersive Audio • Master Audio" to "ATMOS"),
-            Triple(27, "Hi-Res Audio (Max)", "Up to 24-bit / 192 kHz • Lossless Studio FLAC" to "24-BIT / 192k"),
+            Triple(27, "Max Quality", "Up to 24-bit / 192 kHz • Lossless Studio FLAC" to "24-BIT / 192k"),
             Triple(7, "Hi-Res Audio", "24-bit / 96 kHz • Lossless Studio FLAC" to "24-BIT / 96k"),
             Triple(6, "CD Lossless", "16-bit / 44.1 kHz • Lossless CD FLAC" to "16-BIT / 44.1k"),
             Triple(5, "Standard Quality", "320 kbps • MP3 / AAC" to "320 kbps"),
@@ -2310,7 +2167,7 @@ fun SettingsScreen(
     if (showDownloadQualityDialog) {
         val downloadTiers = listOf(
             Triple(28, "Dolby Atmos", "Spatial Immersive Audio • Master Audio" to "ATMOS"),
-            Triple(27, "Hi-Res Audio (Max)", "Up to 24-bit / 192 kHz • Studio Master FLAC" to "24-BIT / 192k"),
+            Triple(27, "Max Quality", "Up to 24-bit / 192 kHz • Studio Master FLAC" to "24-BIT / 192k"),
             Triple(7, "Hi-Res Audio", "24-bit / 96 kHz • Studio FLAC" to "24-BIT / 96k"),
             Triple(6, "CD Lossless", "16-bit / 44.1 kHz • Bit-Exact CD FLAC" to "16-BIT / 44.1k"),
             Triple(5, "Standard Quality", "320 kbps • High-Bitrate MP3 / AAC" to "320 kbps"),
@@ -2541,19 +2398,14 @@ private fun ThemeModeSelectorCard(
     currentThemeMode: ThemeMode,
     onSelectThemeMode: (ThemeMode) -> Unit,
     position: GroupPosition = GroupPosition.SINGLE,
-    isHighlighted: Boolean = false,
 ) {
     val shape = groupShape(position)
 
     Card(
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = shape),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -2606,6 +2458,25 @@ private fun ThemeModeSelectorCard(
 }
 
 @Composable
+internal fun DjEnergySetting(
+    enabled: Boolean,
+    status: DjEnergyStatus,
+    onEnabledChange: (Boolean) -> Unit,
+    position: GroupPosition = GroupPosition.SINGLE,
+) {
+    SettingsToggleCard(
+        icon = Icons.Filled.Bolt,
+        iconContainer = MaterialTheme.colorScheme.primaryContainer,
+        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+        title = "DJ Energy",
+        subtitle = if (enabled) status.message else "Automatic highlights • 70% → 80% • 1.5 s",
+        checked = enabled,
+        onCheckedChange = onEnabledChange,
+        position = position,
+    )
+}
+
+@Composable
 private fun SettingsToggleCard(
     icon: ImageVector,
     iconContainer: Color,
@@ -2616,7 +2487,6 @@ private fun SettingsToggleCard(
     onCheckedChange: (Boolean) -> Unit,
     position: GroupPosition = GroupPosition.SINGLE,
     enabled: Boolean = true,
-    isHighlighted: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interactionSource)
@@ -2627,15 +2497,14 @@ private fun SettingsToggleCard(
         shape = shape,
         enabled = enabled,
         colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(if (enabled) scale else 1f)
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = shape),
+            .scale(if (enabled) scale else 1f),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -2683,14 +2552,52 @@ private fun SettingsToggleCard(
     }
 }
 
-
+/** The percent-of-track threshold before a scrobble is submitted — same
+ *  idea as Pano Scrobbler's "Percent" slider, minus its separate parallel
+ *  "Minutes" slider: Last.fm's own scrobble rule already caps the wait at
+ *  4 minutes regardless of percent, so that second slider would only ever
+ *  matter for tracks over 8 minutes long, a genuine edge case not worth
+ *  the extra UI here. */
+@Composable
+private fun ScrobbleThresholdRow(percent: Int, onPercentChange: (Int) -> Unit, position: GroupPosition = GroupPosition.SINGLE) {
+    var sliderValue by remember(percent) { mutableStateOf(percent.coerceIn(25, 90).toFloat()) }
+    val shape = groupShape(position)
+    Card(
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(Icons.Filled.Timer, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Scrobble after", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(
+                        "${sliderValue.toInt()}% played (capped at 4 min)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Slider(
+                value = sliderValue,
+                onValueChange = { sliderValue = it },
+                onValueChangeFinished = { onPercentChange(sliderValue.toInt()) },
+                valueRange = 25f..90f,
+                steps = 12,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+        }
+    }
+}
 
 @Composable
 private fun CrossfadeDurationRow(
     seconds: Int,
     onSecondsChange: (Int) -> Unit,
     position: GroupPosition = GroupPosition.SINGLE,
-    isHighlighted: Boolean = false,
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var sliderValue by remember { mutableStateOf(seconds.coerceIn(1, 12).toFloat()) }
@@ -2709,13 +2616,9 @@ private fun CrossfadeDurationRow(
 
     Card(
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = shape),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2788,7 +2691,6 @@ private fun SettingsActionCard(
     danger: Boolean = false,
     onClick: () -> Unit,
     position: GroupPosition = GroupPosition.SINGLE,
-    isHighlighted: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val scale = rememberPressScale(interactionSource)
@@ -2798,15 +2700,12 @@ private fun SettingsActionCard(
     Card(
         onClick = onClick,
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = shape),
+            .scale(scale),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -2827,296 +2726,21 @@ private fun SettingsActionCard(
     }
 }
 
-// ==========================================
-// SETTINGS SEARCH COMPOSABLES
-// ==========================================
-
-/**
- * Builds an [AnnotatedString] from [text], highlighting ranges from [ranges]
- * with primary bold styling for search query matches.
- */
-private fun buildHighlightedText(
-    text: String,
-    ranges: List<IntRange>,
-    highlightColor: Color,
-): AnnotatedString {
-    if (ranges.isEmpty() || text.isEmpty()) {
-        return AnnotatedString(text)
-    }
-    return buildAnnotatedString {
-        var lastIndex = 0
-        for (range in ranges) {
-            val start = range.first.coerceIn(0, text.length)
-            val end = (range.last + 1).coerceIn(0, text.length)
-            if (start > lastIndex) {
-                append(text.substring(lastIndex, start))
-            }
-            if (end > start) {
-                withStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Bold)) {
-                    append(text.substring(start, end))
-                }
-                lastIndex = end
-            }
-        }
-        if (lastIndex < text.length) {
-            append(text.substring(lastIndex))
-        }
-    }
-}
-
-@Composable
-private fun SettingsSearchBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClear: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier.focusRequester(focusRequester),
-        shape = RoundedCornerShape(20.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        ),
-        placeholder = {
-            Text(
-                stringResource(R.string.settings_search_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
-        },
-        leadingIcon = {
-            Icon(
-                Icons.Filled.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = onClear) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.settings_search_clear),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-    )
-}
-
-@Composable
-private fun SettingsSearchResultsList(
-    query: String,
-    results: List<MatchResult>,
-    onResultClick: (SettingsEntry) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = 32.dp + LocalMiniPlayerScrollClearance.current + safeDrawingBottomPadding(),
-        ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier.fillMaxSize().safeHorizontalContentPadding(),
-    ) {
-        if (results.isEmpty()) {
-            item {
-                SettingsSearchEmptyState(query = query)
-            }
-        } else {
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "${results.size} setting${if (results.size == 1) "" else "s"} found",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            items(results, key = { it.entry.id }) { result ->
-                SearchResultCard(
-                    result = result,
-                    onClick = { onResultClick(result.entry) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchResultCard(
-    result: MatchResult,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val scale = rememberPressScale(interactionSource)
-    val highlightColor = MaterialTheme.colorScheme.primary
-
-    val annotatedTitle = remember(result.entry.title, result.titleMatchedRanges, highlightColor) {
-        buildHighlightedText(result.entry.title, result.titleMatchedRanges, highlightColor)
-    }
-
-    val annotatedSubtitle = remember(result.entry.subtitle, result.subtitleMatchedRanges, highlightColor) {
-        buildHighlightedText(result.entry.subtitle, result.subtitleMatchedRanges, highlightColor)
-    }
-
-    Card(
-        onClick = onClick,
-        shape = CardOuterShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-            ) {
-                Text(
-                    text = "${result.entry.parentTab.title} › ${result.entry.section}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconBadge(
-                    result.entry.icon,
-                    result.entry.iconContainer(),
-                    result.entry.iconTint(),
-                )
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = annotatedTitle,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = annotatedSubtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsSearchEmptyState(query: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 48.dp, horizontal = 24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier.size(72.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Filled.SearchOff,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(36.dp),
-                    )
-                }
-            }
-            Text(
-                text = stringResource(R.string.settings_search_no_results, query),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(R.string.settings_search_no_results_sub),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 @Composable
 private fun YouTubeAccountRow(
     accountName: String,
     channelHandle: String?,
     onDisconnect: () -> Unit,
     position: GroupPosition,
-    isHighlighted: Boolean = false,
 ) {
     val shape = groupShape(position)
     Card(
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize()
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = shape),
+            .animateContentSize(),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
@@ -3196,7 +2820,6 @@ private fun LastFmIntegrationCard(
     onSaveKeys: (String, String) -> Unit,
     onRemoveKey: () -> Unit,
     onOpenCreateKeyPage: () -> Unit,
-    isHighlighted: Boolean = false,
 ) {
     var showDisconnectConfirm by remember { mutableStateOf(false) }
     // No shared key exists, so the form starts open until a key is saved.
@@ -3206,14 +2829,8 @@ private fun LastFmIntegrationCard(
 
     Card(
         shape = CardOuterShape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-            .settingHighlightGlow(isHighlighted = isHighlighted, shape = CardOuterShape),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (isConnected) 14.dp else 16.dp),
@@ -4885,7 +4502,56 @@ private fun LyricsProviderDialog(
     )
 }
 
-
+@Composable
+private fun LyricsOffsetDialog(
+    currentMs: Long,
+    onSelect: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var draftMs by remember(currentMs) { mutableLongStateOf(currentMs) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Lyrics sync offset") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Nudges the highlight when a provider's timestamps run early or late. + shows lyrics early (fixes late lyrics), \u2212 delays them. Seekbar is unaffected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (draftMs == 0L) "0 ms (off)" else "${if (draftMs > 0) "+" else ""}$draftMs ms",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Slider(
+                    value = draftMs.toFloat(),
+                    onValueChange = { draftMs = it.roundToLong() },
+                    onValueChangeFinished = { onSelect(draftMs) },
+                    valueRange = -1000f..1000f,
+                    steps = 39,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        draftMs = (draftMs - 100).coerceIn(-3000L, 3000L)
+                        onSelect(draftMs)
+                    }) { Text("−100") }
+                    OutlinedButton(onClick = {
+                        draftMs = (draftMs + 100).coerceIn(-3000L, 3000L)
+                        onSelect(draftMs)
+                    }) { Text("+100") }
+                    FilledTonalButton(onClick = {
+                        draftMs = 0L
+                        onSelect(0L)
+                    }) { Text("Reset") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_done)) }
+        },
+    )
+}
 
 private fun loudnessModeTitle(mode: LoudnessMode): String = when (mode) {
     LoudnessMode.TRACK -> "Track"

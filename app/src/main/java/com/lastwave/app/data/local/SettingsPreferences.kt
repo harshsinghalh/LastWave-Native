@@ -411,6 +411,7 @@ class SettingsPreferences @Inject constructor(
     }
 
     suspend fun setDjEnergyEnabled(enabled: Boolean) {
+        com.lastwave.app.playback.DjEnergyPreferences.setEnabled(appContext, enabled)
         dataStore.edit {
             it[Keys.DJ_ENERGY_ENABLED] = enabled
             it[Keys.DJ_ENERGY_PROGRAM_MIGRATED] = true

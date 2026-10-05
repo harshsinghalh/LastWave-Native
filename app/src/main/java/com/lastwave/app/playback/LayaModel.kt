@@ -5,8 +5,6 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,24 +16,20 @@ import kotlin.math.exp
 
 data class LayaModelState(
     val ready: Boolean = false,
-    val checking: Boolean = false,
-    val downloading: Boolean = false,
-    val downloadedBytes: Long = 0,
-    val message: String = "Download Laya to enable AI highlights.",
+    val checking: Boolean = true,
+    val message: String = "Preparing DJ Energy…",
     val lastProbability: Float? = null,
 )
 
-/** One shared CPU session. Download, validation and inference never run on the audio thread. */
+/** Bundled, offline model. Preparation and inference never run on the audio thread. */
 class LayaModel private constructor(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
     private val directory = File(context.filesDir, "laya")
     private val model = File(directory, "model.onnx")
     private val partial = File(directory, "model.onnx.part")
-    private val mutableState = MutableStateFlow(LayaModelState(checking = model.isFile))
+    private val mutableState = MutableStateFlow(LayaModelState())
     val state = mutableState.asStateFlow()
-    private var downloadJob: Job? = null
-    @Volatile private var connection: HttpURLConnection? = null
     private var releaseJob: Job? = null
     private var session: OrtSession? = null
     private val tokens by lazy { JSONObject(context.assets.open("laya/dj_tokens.json").bufferedReader().use { it.readText() }) }
@@ -43,77 +37,58 @@ class LayaModel private constructor(private val context: Context) {
 
     init {
         scope.launch {
-            if (model.isFile) {
-                mutableState.value = LayaModelState(checking = true, message = "Checking downloaded Laya model…")
-                try {
-                    LayaWeights.prepare(context, model) {
-                        mutableState.value = LayaModelState(checking = true, message = "Preparing Laya for this device…")
-                    }
-                    mutableState.value = LayaModelState(ready = true, message = "Laya ready. Scoring runs offline.")
+            try {
+                check(directory.isDirectory || directory.mkdirs()) { "Cannot prepare DJ Energy storage." }
+                // Reuse valid weights from older DJ versions, repairing damaged
+                // files directly from the APK without any network request.
+                val existingValid = if (model.isFile) try {
+                    LayaWeights.prepare(context, model)
+                    true
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
-                    model.delete()
-                    mutableState.value = LayaModelState(message = "Model check failed. Download Laya again.")
-                }
-            }
-        }
-    }
-
-    fun download() {
-        if (downloadJob?.isActive == true || state.value.ready || state.value.checking) return
-        downloadJob = scope.launch {
-            try {
-                directory.mkdirs()
-                check(directory.usableSpace > MODEL_BYTES + 64_000_000) { "Free at least 500 MB for Laya." }
-                mutableState.value = LayaModelState(downloading = true, message = "Downloading Laya…")
-                val digest = MessageDigest.getInstance("SHA-256")
-                val request = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 20_000; readTimeout = 30_000; instanceFollowRedirects = true
-                }
-                connection = request
-                check(request.responseCode == 200) { "Model server returned ${request.responseCode}." }
-                var count = 0L
-                request.inputStream.use { input ->
-                    partial.outputStream().use { output ->
-                        val buffer = ByteArray(256 * 1024)
-                        while (true) {
-                            ensureActive()
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            count += n
-                            check(count <= MODEL_BYTES) { "Unexpected model size." }
-                            digest.update(buffer, 0, n); output.write(buffer, 0, n)
-                            mutableState.value = LayaModelState(downloading = true, downloadedBytes = count, message = "Downloading Laya…")
-                        }
-                        output.fd.sync()
-                    }
-                }
-                val downloadedHash = hex(digest.digest())
-                check(count == MODEL_BYTES && downloadedHash == MODEL_DOWNLOAD_SHA256) { "Model integrity check failed." }
-                LayaWeights.prepare(context, partial, downloadedHash) {
-                    mutableState.value = LayaModelState(downloading = true, downloadedBytes = count,
-                        message = "Preparing Laya for this device…")
-                }
-                ensureActive()
-                check(partial.renameTo(model)) { "Could not save Laya model." }
-                mutableState.value = LayaModelState(ready = true, message = "Laya ready. Scoring runs offline.")
+                    false
+                } else false
+                if (!existingValid) installBundledModel()
+                mutableState.value = LayaModelState(ready = true, checking = false,
+                    message = "DJ Energy ready • Offline")
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 partial.delete()
-                mutableState.value = LayaModelState(message = if (e is CancellationException) "Download cancelled." else (e.message ?: "Download failed. Try again."))
-            } finally {
-                connection?.disconnect(); connection = null
+                mutableState.value = LayaModelState(checking = false,
+                    message = e.message ?: "DJ Energy preparation failed.")
             }
         }
     }
 
-    fun cancelDownload() { downloadJob?.cancel(); connection?.disconnect() }
+    private suspend fun installBundledModel() {
+        check(directory.usableSpace > MODEL_BYTES + 32_000_000) { "DJ Energy needs 460 MB of free storage." }
+        val digest = MessageDigest.getInstance("SHA-256")
+        var count = 0L
+        context.assets.open("laya/model.onnx").use { input ->
+            partial.outputStream().use { output ->
+                val buffer = ByteArray(256 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    count += n
+                    check(count <= MODEL_BYTES) { "Invalid bundled DJ Energy model." }
+                    digest.update(buffer, 0, n)
+                    output.write(buffer, 0, n)
+                }
+                output.fd.sync()
+            }
+        }
+        check(count == MODEL_BYTES && hex(digest.digest()) == MODEL_SHA256) { "Bundled DJ Energy model failed its integrity check." }
+        check(partial.renameTo(model)) { "Cannot prepare DJ Energy model." }
+    }
 
     internal suspend fun score(key: String): Float? = scoreInternal(key, publish = true, force = false)
 
     internal suspend fun clearScoreCache() { lock.withLock { cache.clear() } }
 
     /** Warm the real session before a musical candidate's inference deadline. */
-    internal suspend fun warmup() { scoreInternal("0.0.1.0.0", publish = false, force = true) }
+    internal suspend fun warmup(): Boolean = scoreInternal("0.0.1.0.0", publish = false, force = true) != null
 
     private suspend fun scoreInternal(key: String, publish: Boolean, force: Boolean): Float? = withContext(Dispatchers.IO) {
         releaseJob?.cancel()
@@ -121,7 +96,7 @@ class LayaModel private constructor(private val context: Context) {
             if (!state.value.ready) return@withLock null
             if (!force) cache[key]?.let { probability ->
                 if (publish) mutableState.value = state.value.copy(lastProbability = probability,
-                    message = "Laya ready. Scoring runs offline.")
+                    message = "DJ Energy ready • Offline")
                 return@withLock probability
             }
             try {
@@ -158,7 +133,7 @@ class LayaModel private constructor(private val context: Context) {
                         if (cache.size >= 64) cache.remove(cache.keys.first())
                         cache[key] = probability
                         if (publish) mutableState.value = state.value.copy(lastProbability = probability,
-                            message = "Laya ready. Scoring runs offline.")
+                            message = "DJ Energy ready • Offline")
                         probability
                     }
                 } finally { inputs.values.forEach { it.close() } }
@@ -182,7 +157,6 @@ class LayaModel private constructor(private val context: Context) {
         const val MODEL_BYTES = 424_348_081L
         const val MODEL_DOWNLOAD_SHA256 = "d337ce1b1cbca907a4063223517af6db7e89f5c9e8d6a2f6a289babc256f4469"
         const val MODEL_SHA256 = "1e8906f3ce8551f0c9e153c740505b6c99946d47db6fb69b9c87f16da7ec55d1"
-        const val MODEL_URL = "https://huggingface.co/tozp/laya-onnx/resolve/0d1f7ebf46a3ea04ec4424df602f96ddefb66766/model_int8.onnx"
         @Volatile private var instance: LayaModel? = null
         fun get(context: Context): LayaModel = instance ?: synchronized(this) {
             instance ?: LayaModel(context.applicationContext).also { instance = it }

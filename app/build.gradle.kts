@@ -61,8 +61,8 @@ android {
         minSdk = (project.findProperty("minSdk") as? String)?.toIntOrNull() ?: 29
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 31
-        versionName = "4.6.2"
+        versionCode = 32
+        versionName = "4.7.0"
 
         // Native secrets (addon client lock) live strictly in native .so via
         // SecretsBridge_generated.h (tools/generate_native_secrets.py).
@@ -175,6 +175,8 @@ android {
         abortOnError = false
         ignoreWarnings = true
     }
+
+    androidResources { noCompress += "onnx" }
 
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -327,4 +329,18 @@ val generateNativeSecrets by tasks.registering(Exec::class) {
 }
 tasks.matching { it.name.startsWith("preBuild") || it.name.startsWith("configureCMake") }.configureEach {
     dependsOn(generateNativeSecrets)
+}
+
+// Every distributable includes the model. Fail instead of shipping a DJ switch
+// whose inference asset is absent. CI verifies the pinned SHA-256 before Gradle.
+val verifyBundledLaya by tasks.registering {
+    doLast {
+        val model = file("src/main/assets/laya/model.onnx")
+        check(model.isFile && model.length() == 424_348_081L) {
+            "Bundle Laya first: python3 tools/download_laya_model.py app/src/main/assets/laya/model.onnx"
+        }
+    }
+}
+tasks.configureEach {
+    if (name.startsWith("merge") && name.endsWith("Assets")) dependsOn(verifyBundledLaya)
 }

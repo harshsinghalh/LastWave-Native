@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -130,22 +129,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             val themeState by themeViewModel.uiState.collectAsStateWithLifecycle()
 
             LastWaveTheme(themeState = themeState) {
-                val currentConfig = androidx.compose.ui.platform.LocalViewConfiguration.current
-                androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.ui.platform.LocalViewConfiguration provides object : androidx.compose.ui.platform.ViewConfiguration by currentConfig {
-                        override val touchSlop: Float
-                            get() = currentConfig.touchSlop * 1.5f
-                        override val minimumTouchTargetSize: androidx.compose.ui.unit.DpSize
-                            get() = androidx.compose.ui.unit.DpSize(48.dp, 48.dp)
-                    }
-                ) {
-                    val navController = rememberNavController()
-                    val backStackEntry by navController.currentBackStackEntryAsState()
-                    val hasBottomNavigation = backStackEntry?.destination?.route == Screen.MainShell.route
+                val navController = rememberNavController()
+                val backStackEntry by navController.currentBackStackEntryAsState()
+                val hasBottomNavigation = backStackEntry?.destination?.route == Screen.MainShell.route
 
-                    PlayerHost(hasBottomNavigation = hasBottomNavigation) {
-                        LastWaveNavHost(navController)
-                    }
+                PlayerHost(hasBottomNavigation = hasBottomNavigation) {
+                    LastWaveNavHost(navController)
                 }
             }
         }
@@ -171,6 +160,18 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onResume() {
         super.onResume()
         requestHighestSupportedRefreshRate()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            runCatching {
+                val hasAccess = androidx.core.app.NotificationManagerCompat
+                    .getEnabledListenerPackages(this)
+                    .contains(packageName)
+                if (hasAccess) {
+                    android.service.notification.NotificationListenerService.requestRebind(
+                        android.content.ComponentName(this, com.lastwave.app.service.MediaScrobbleListenerService::class.java),
+                    )
+                }
+            }
+        }
     }
 
     /**

@@ -12,7 +12,6 @@ import org.junit.Test
 
 class DjEnergyPreferencesDeviceTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
-
     @Before fun reset() { context.getSharedPreferences("lastwave_dj_cue", 0).edit().clear().commit() }
 
     private fun withSettings(block: suspend (SettingsPreferences) -> Unit) = runBlocking {
@@ -24,32 +23,34 @@ class DjEnergyPreferencesDeviceTest {
         finally { scope.cancel() }
     }
 
-    @Test fun enabledLayaMigratesOnceAndTurningEnergyOffStaysOff() = withSettings { settings ->
-        val original = DjCueProfile(enabled = true, mode = DjCueMode.LAYA, cueMs = 120_000,
-            before = .4f, after = .6f, rampMs = 3_000)
-        DjCuePreferences.save(context, original)
+    @Test fun oldTimedSettingsBecomeAutomaticAndTurningEnergyOffStaysOff() = withSettings { settings ->
+        val raw = context.getSharedPreferences("lastwave_dj_cue", 0)
+        raw.edit().putBoolean("enabled", true).putInt("mode", 0).putLong("cue", 600_000)
+            .putLong("ramp", 30_000).putFloat("after", .2f).commit()
         settings.migrateDjEnergyProgram()
         assertTrue(settings.settings.first { it.djEnergyEnabled }.djEnergyEnabled)
-        assertEquals(original, DjCuePreferences.read(context))
+        assertEquals(DjEnergyProfile(enabled = true), DjEnergyPreferences.read(context))
         settings.setDjEnergyEnabled(false)
         settings.settings.first { !it.djEnergyEnabled }
         settings.migrateDjEnergyProgram()
         assertFalse(settings.settings.first().djEnergyEnabled)
+        assertFalse(raw.contains("mode"))
+        assertFalse(raw.contains("cue"))
     }
 
-    @Test fun freshInstallKeepsEnergyOffAndUsesRequestedPreset() = withSettings { settings ->
+    @Test fun freshInstallNeedsOnlyOneSwitchAndUsesRequestedPreset() = withSettings { settings ->
         settings.migrateDjEnergyProgram()
         assertFalse(settings.settings.first().djEnergyEnabled)
-        val profile = DjCuePreferences.read(context)
-        assertEquals(DjCueMode.HIGHLIGHTS, profile.mode)
-        assertEquals(165_000L, profile.cueMs)
-        assertEquals(1_500L, profile.rampMs)
-        assertEquals(.7f, profile.before, 0f)
-        assertEquals(.8f, profile.after, 0f)
+        settings.setDjEnergyEnabled(true)
+        assertTrue(settings.settings.first { it.djEnergyEnabled }.djEnergyEnabled)
+        assertEquals(DjEnergyProfile(enabled = true), DjEnergyPreferences.read(context))
+        assertEquals(1_500L, DjEnergyPreferences.read(context).rampMs)
+        assertEquals(.7f, DjEnergyPreferences.read(context).before, 0f)
+        assertEquals(.8f, DjEnergyPreferences.read(context).after, 0f)
     }
 
     @Test fun migrationPreservesBitPerfectPriority() = withSettings { settings ->
-        DjCuePreferences.save(context, DjCueProfile(enabled = true, mode = DjCueMode.LAYA))
+        DjEnergyPreferences.setEnabled(context, true)
         settings.setBitPerfectEnabled(true)
         settings.settings.first { it.isBitPerfectEnabled }
         settings.migrateDjEnergyProgram()

@@ -21,12 +21,12 @@ internal class DjPlaybackController(context: Context, scope: CoroutineScope) {
     private var active: NativeAudioEngine? = null
 
     fun update(primary: NativeAudioEngine, secondary: NativeAudioEngine?, secondaryActive: Boolean,
-        profile: DjCueProfile, enabled: Boolean, playing: Boolean, positionMs: Long,
+        profile: DjEnergyProfile, enabled: Boolean, playing: Boolean, positionMs: Long,
         blockedReason: String? = null) {
         val engine = if (secondaryActive) secondary ?: primary else primary
         if (active !== engine) {
             active?.let {
-                it.setDjTimedMode(false, profile.cueMs)
+                it.setDjTimedMode(false, 0)
                 it.setDjHighlights(false, 0, 0, 0f, 0f, 0f)
                 it.setDjLayaMode(false)
                 it.setDjLayaDecision(-1, -1, false)
@@ -38,13 +38,14 @@ internal class DjPlaybackController(context: Context, scope: CoroutineScope) {
         val allowed = enabled && blockedReason == null
         engine.setDjEnergyEnabled(allowed)
         engine.setDjCue(1f, 0f, 0f, 0f)
-        engine.setDjHighlights(allowed && profile.mode != DjCueMode.TIMED,
+        engine.setDjHighlights(allowed,
             profile.focus.ordinal, profile.spacing.ordinal, profile.energyDb, profile.vocalsDb,
             profile.beatsDb, profile.before, profile.after, profile.rampMs)
-        engine.setDjTimedMode(allowed && profile.mode == DjCueMode.TIMED, profile.cueMs)
-        val layaEnabled = allowed && profile.mode == DjCueMode.LAYA
-        engine.setDjLayaMode(layaEnabled)
+        // Legacy timed processing is always disabled, including upgraded installs.
+        engine.setDjTimedMode(false, 0)
+        val layaEnabled = allowed
         if (layaEnabled || laya.isInitialized()) laya.value.update(layaEnabled && playing, profile, engine)
+        engine.setDjLayaMode(layaEnabled && laya.value.requiresApproval)
         val runtime = engine.djRuntime()
         val features = engine.djFeatures()
         val processed = runtime.size == 9 && runtime[0] > 0f
@@ -54,11 +55,10 @@ internal class DjPlaybackController(context: Context, scope: CoroutineScope) {
             blockedReason != null -> "DJ Energy suspended: $blockedReason"
             !playing -> "Play a song to hear DJ Energy."
             !engine.isAvailable -> "Audio processing unavailable on this device."
-            !processed -> "Waiting for decoded audio. If the output was Bit-Perfect, restart this track."
+            !processed -> "Starting DJ Energy…"
             runtime[6] == 1f -> "Test boost playing through the current audio output."
-            effectActive -> "DJ boost active."
-            profile.mode == DjCueMode.TIMED -> "Timed cue: ${profile.cueMs / 60_000}:${(profile.cueMs / 1000 % 60).toString().padStart(2, '0')}"
-            profile.mode == DjCueMode.LAYA -> laya.value.status
+            effectActive -> "DJ boost active • ${(runtime[1] * 100).roundToInt()}%"
+            layaEnabled -> laya.value.status
             features.getOrElse(7) { 0f } < 10f -> "Listening to the first 10 seconds…"
             else -> "Listening for a strong rise or sustained high-energy section."
         }
@@ -68,7 +68,7 @@ internal class DjPlaybackController(context: Context, scope: CoroutineScope) {
             allowed && playing && engine.isAvailable && processed && runtime[6] != 1f)
     }
 
-    fun preview(profile: DjCueProfile) {
+    fun preview(profile: DjEnergyProfile) {
         if (state.value.canPreview) active?.previewDjEnergy(profile)
     }
 }

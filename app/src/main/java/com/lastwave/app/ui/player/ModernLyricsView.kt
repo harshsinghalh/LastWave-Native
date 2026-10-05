@@ -2,17 +2,11 @@ package com.lastwave.app.ui.player
 
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.FormatSize
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -21,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,7 +37,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.SyncDisabled
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -53,10 +45,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.material3.Slider
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -116,16 +104,10 @@ fun ModernLyricsPanel(
     onToggleFullscreen: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
     onRetry: () -> Unit = {},
-    onOpenLyricsOffset: (() -> Unit)? = null,
-    lyricsFontScale: Float = 1.0f,
-    onLyricsFontScaleChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
     /** Manual sync correction (ms, + = lyrics earlier). Applies to lyric
      *  focus/highlight only — the seekbar below keeps true position. */
     lyricsOffsetMs: Long = 0L,
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
 ) {
     val track = state.current ?: return
 
@@ -246,12 +228,12 @@ fun ModernLyricsPanel(
                         // with exactly this style, so its fit verdict matches
                         // what the canvas will draw.
                         val karaokeNormalStyle = LocalTextStyle.current.copy(
-                            fontSize = ((if (isAppleMusic) 28f else if (isWordSynced) 32f else 30f) * lyricsFontScale).sp,
+                            fontSize = if (isAppleMusic) 28.sp else if (isWordSynced) 32.sp else 30.sp,
                             fontWeight = FontWeight.Bold,
                             textMotion = TextMotion.Animated,
                         )
                         val karaokeAccompanimentStyle = LocalTextStyle.current.copy(
-                            fontSize = ((if (isAppleMusic) 22f else if (isWordSynced) 24f else 22f) * lyricsFontScale).sp,
+                            fontSize = if (isAppleMusic) 22.sp else if (isWordSynced) 24.sp else 22.sp,
                             fontWeight = FontWeight.Bold,
                             textMotion = TextMotion.Animated,
                         )
@@ -311,7 +293,6 @@ fun ModernLyricsPanel(
                     } else if (!targetState.plainLyrics.isNullOrBlank()) {
                         ModernPlainLyricsView(
                             plainLyrics = targetState.plainLyrics,
-                            lyricsFontScale = lyricsFontScale,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
@@ -336,13 +317,6 @@ fun ModernLyricsPanel(
             wavySeekbarEnabled = wavySeekbarEnabled,
             onToggleFullscreen = onToggleFullscreen,
             isFullscreen = isFullscreen,
-            lyricsOffsetMs = lyricsOffsetMs,
-            onOpenLyricsOffset = onOpenLyricsOffset,
-            lyricsFontScale = lyricsFontScale,
-            onLyricsFontScaleChange = onLyricsFontScaleChange,
-            primaryColor = primaryColor,
-            secondaryColor = secondaryColor,
-            tertiaryColor = tertiaryColor,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
@@ -453,31 +427,7 @@ private fun LyricLine.toISyncedLine(isOverallRtl: Boolean = false): ISyncedLine 
     val isLineRtl = isRtl || (isOverallRtl && (text.isBlank() || text == "♪"))
 
     return if (hasSyllables) {
-        val leadSyllables = syllables.filter { !it.isBackground }
-        if (leadSyllables.isEmpty()) {
-            // Backing-vocal-only row ("(ooh)" ad-libs): a standalone dim
-            // accompaniment row, never a bright lead row. The library
-            // styles top-level accompaniment rows distinctly.
-            val needsSpacing = text.contains(' ') || text.contains('\u00A0')
-            val contents = renderedSyllableContents(syllables, needsSpacing)
-            val bgKaraoke = syllables.mapIndexed { index, syl ->
-                val sStart = syl.timeMs.toInt()
-                val sEnd = ((syl.timeMs + syl.durationMs).toInt()).coerceAtLeast(sStart + 50)
-                KaraokeSyllable(
-                    content = contents.getOrElse(index) { syl.text },
-                    start = sStart,
-                    end = sEnd,
-                )
-            }
-            return KaraokeLine.AccompanimentKaraokeLine(
-                syllables = bgKaraoke,
-                translation = null,
-                alignment = if (isLineRtl) KaraokeAlignment.Start else KaraokeAlignment.End,
-                start = lineStart,
-                end = lineEnd.coerceAtLeast(lineStart + 100),
-                phonetic = null,
-            )
-        }
+        val leadSyllables = syllables.filter { !it.isBackground }.ifEmpty { syllables }
         val bgSyllables = if (leadSyllables.size < syllables.size) syllables.filter { it.isBackground } else emptyList()
         val needsSpacing = text.contains(' ') || text.contains('\u00A0')
 
@@ -565,7 +515,6 @@ private fun List<LyricLine>.toSyncedLyrics(title: String, artist: String, isOver
 @Composable
 private fun ModernPlainLyricsView(
     plainLyrics: String,
-    lyricsFontScale: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val isRtl = remember(plainLyrics) { isRtlText(plainLyrics) }
@@ -598,8 +547,8 @@ private fun ModernPlainLyricsView(
             Text(
                 text = plainLyrics,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = (28f * lyricsFontScale).sp,
-lineHeight = (46f * lyricsFontScale).sp,
+                    fontSize = 28.sp,
+                    lineHeight = 46.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.1.sp,
                 ),
@@ -672,172 +621,22 @@ private fun ModernLyricsControls(
     wavySeekbarEnabled: Boolean = true,
     onToggleFullscreen: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
-    lyricsOffsetMs: Long = 0L,
-    onOpenLyricsOffset: (() -> Unit)? = null,
-    lyricsFontScale: Float = 1f,
-    onLyricsFontScaleChange: (Float) -> Unit = {},
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
     modifier: Modifier = Modifier,
 ) {
-    var showFontSlider by rememberSaveable { mutableStateOf(false) }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        AnimatedVisibility(
-            visible = showFontSlider,
-            enter = fadeIn(tween(150)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(150)) + shrinkVertically(tween(200)),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.35f),
+        if (onToggleFullscreen != null) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(bottom = 2.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Lyrics size: ${(lyricsFontScale * 100).roundToInt()}%",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.90f),
-                        )
-                        if (lyricsFontScale != 1.0f) {
-                            TextButton(
-                                onClick = { onLyricsFontScaleChange(1.0f) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.height(26.dp),
-                            ) {
-                                Text(
-                                    "Reset",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = "A",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.70f),
-                        )
-                        Slider(
-                            value = lyricsFontScale,
-                            onValueChange = onLyricsFontScaleChange,
-                            valueRange = 0.7f..1.5f,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = "A",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.95f),
-                        )
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onOpenLyricsOffset != null) {
-                val offsetInteraction = remember { MutableInteractionSource() }
-                val isOffsetPressed by offsetInteraction.collectIsPressedAsState()
-                val offsetScale by animateFloatAsState(
-                    targetValue = if (isOffsetPressed) 0.82f else 1.0f,
-                    animationSpec = ExpressiveMotion.spatialSpring(),
-                    label = "lyricsOffsetScale",
-                )
-                IconButton(
-                    onClick = onOpenLyricsOffset,
-                    interactionSource = offsetInteraction,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .graphicsLayer {
-                            scaleX = offsetScale
-                            scaleY = offsetScale
-                        }
-                        .clip(CircleShape)
-                        .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = offsetInteraction)
-                        .background(
-                            liquidGlassContainerColor(
-                                if (lyricsOffsetMs != 0L) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                else Color.White.copy(alpha = 0.14f)
-                            ),
-                        ),
-                ) {
-                    Icon(
-                        Icons.Filled.Timer,
-                        contentDescription = "Lyrics sync offset",
-                        modifier = Modifier.size(22.dp),
-                        tint = if (lyricsOffsetMs != 0L) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.90f),
-                    )
-                }
-            } else {
-                Spacer(Modifier.size(44.dp))
-            }
-
-            // Lyrics Font Scale toggle button
-            val fontInteraction = remember { MutableInteractionSource() }
-            val isFontPressed by fontInteraction.collectIsPressedAsState()
-            val fontScaleAnim by animateFloatAsState(
-                targetValue = if (isFontPressed) 0.82f else 1.0f,
-                animationSpec = ExpressiveMotion.spatialSpring(),
-                label = "fontScaleAnim",
-            )
-            val isCustomFont = lyricsFontScale != 1.0f
-            IconButton(
-                onClick = { showFontSlider = !showFontSlider },
-                interactionSource = fontInteraction,
-                modifier = Modifier
-                    .size(44.dp)
-                    .graphicsLayer {
-                        scaleX = fontScaleAnim
-                        scaleY = fontScaleAnim
-                    }
-                    .clip(CircleShape)
-                    .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = fontInteraction)
-                    .background(
-                        liquidGlassContainerColor(
-                            if (showFontSlider || isCustomFont) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                            else Color.White.copy(alpha = 0.14f)
-                        ),
-                    ),
-            ) {
-                Icon(
-                    Icons.Filled.FormatSize,
-                    contentDescription = "Adjust lyrics text size",
-                    modifier = Modifier.size(22.dp),
-                    tint = if (showFontSlider || isCustomFont) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.90f),
-                )
-            }
-
-            if (onToggleFullscreen != null) {
                 val playerInteraction = remember { MutableInteractionSource() }
                 val isPlayerPressed by playerInteraction.collectIsPressedAsState()
                 val playerScale by animateFloatAsState(
@@ -897,9 +696,6 @@ private fun ModernLyricsControls(
                 trackKey = state.current?.let { it.videoId ?: "${it.artist}|${it.title}" },
                 showTimeLabels = false,
                 modifier = Modifier.fillMaxWidth(),
-                primaryColor = primaryColor,
-                secondaryColor = secondaryColor,
-                tertiaryColor = tertiaryColor,
             )
         } else {
             PlayerProgressSlider(
@@ -915,8 +711,6 @@ private fun ModernLyricsControls(
                 enabled = totalDurationMs > 0,
                 modifier = Modifier.fillMaxWidth(),
                 interactionSource = seekInteraction,
-                primaryColor = primaryColor,
-                tertiaryColor = tertiaryColor,
             )
         }
 

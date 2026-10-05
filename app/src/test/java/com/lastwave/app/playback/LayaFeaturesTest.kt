@@ -15,9 +15,4 @@ class LayaFeaturesTest {
             assertNull(LayaFeatures.key(floatArrayOf(value, 0f, 0f, 0f), DjHighlightFocus.ENERGY))
         }
     }
-    @Test fun layaModeDoesNotReduceTheWholeTrack() {
-        val p = DjCueProfile(enabled = true, mode = DjCueMode.LAYA)
-        assertArrayEquals(floatArrayOf(1f, 0f, 0f, 0f), p.mixAt(200_000, true), 0f)
-        assertEquals(.50f, p.layaThreshold, 0f)
-    }
 }

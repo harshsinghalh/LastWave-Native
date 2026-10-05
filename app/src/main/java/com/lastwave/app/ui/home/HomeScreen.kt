@@ -1,7 +1,5 @@
 package com.lastwave.app.ui.home
 
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.animation.core.LinearEasing
@@ -166,7 +164,6 @@ fun HomeScreen(
     onOpenDiscover: () -> Unit,
     onOpenGenres: () -> Unit,
     onOpenFriends: () -> Unit,
-    onOpenDownloads: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     artistAlbumNavigator: com.lastwave.app.ui.navigation.ArtistAlbumNavigator = hiltViewModel<ArtistAlbumNavBridgeHome>().navigator,
 ) {
@@ -189,10 +186,10 @@ fun HomeScreen(
                     title = "Statistics",
                     modifier = Modifier.adaptiveContentWidth(maxWidth = 860.dp),
                     actions = {
-                        HeaderActionIcon(Icons.Filled.Download, "Downloads", onOpenDownloads)
+                        HeaderActionIcon(Icons.Filled.Explore, "Discover", onOpenDiscover)
                         HeaderActionIcon(Icons.Filled.Search, "Search", onOpenSearch)
                         IconButton(onClick = onOpenSettings) {
-                            ProfileAvatar(avatarUrl = uiState.stats?.avatarUrl, modifier = Modifier.size(38.dp))
+                            ProfileAvatar(avatarUrl = uiState.stats?.avatarUrl, modifier = Modifier.size(30.dp))
                         }
                     },
                 )
@@ -531,18 +528,12 @@ private fun formatTimer(totalSeconds: Long): String {
 }
 
 @Composable
-fun ProfileAvatar(avatarUrl: String?, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
-            .padding(2.dp),
-        contentAlignment = Alignment.Center
+private fun ProfileAvatar(avatarUrl: String?, modifier: Modifier = Modifier) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier,
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.fillMaxSize(),
-        ) {
         if (!avatarUrl.isNullOrBlank()) {
             ArtworkImage(
                 name = "profile",
@@ -562,8 +553,6 @@ fun ProfileAvatar(avatarUrl: String?, modifier: Modifier = Modifier) {
         }
     }
 }
-}
-
 
 @Composable
 private fun LocalStatsBanner(

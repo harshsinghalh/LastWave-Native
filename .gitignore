@@ -78,3 +78,7 @@ app/src/main/cpp/SecretsBridge_generated.h
 lastwave-addon-service/
 *.zip
 credentials_backup*
+
+# Pinned Laya weights are verified and bundled by CI, never committed as Git blobs.
+app/src/main/assets/laya/model.onnx
+!tools/verify_original_ui.py

@@ -112,7 +112,7 @@ class DjCueNativeDeviceTest {
                 withTimeout(90_000) { while (!model.state.value.ready) delay(100) }
                 requireNotNull(model.score(requireNotNull(LayaFeatures.key(candidate, DjHighlightFocus.ENERGY))))
             }
-            val accepted = probability >= DjCueProfile().layaThreshold
+            val accepted = probability >= DjEnergyProfile().layaThreshold
             assertTrue("Real Laya must approve this measured energy rise at the default threshold", accepted)
             engine.setDjLayaDecision(candidate[4].toInt(), candidate[5].toInt(), accepted)
             process()

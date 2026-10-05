@@ -1,4 +1,4 @@
-name: Laya DJ Android verification
+name: Automatic DJ Energy Android verification
 on:
   push:
     branches: [feature/android-laya-dj-4.6.0]
@@ -46,32 +46,195 @@ jobs:
             mkdir -p "$DIR"
             keytool -genkeypair -keystore "$DIR/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
           done
-      - name: Download pinned Laya test model
-        run: python3 tools/download_laya_model.py /tmp/laya-model.onnx --keep-source /tmp/laya-source.onnx
+      - name: Verify original 4.2.2 interface
+        run: |
+          git fetch --depth=1 --no-tags https://github.com/Clash-Projects/LastWave-Native.git refs/tags/4.2.2:refs/tags/lastwave-original-4.2.2
+          python3 tools/verify_original_ui.py
+      - name: Bundle pinned Laya model
+        run: python3 tools/download_laya_model.py app/src/main/assets/laya/model.onnx
       - name: Unit tests and Android packages
         run: ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
       - name: Validate release APK signature
         run: |
+          python3 - <<'PYAPK'
+          import hashlib, zipfile
+          with zipfile.ZipFile('app/build/outputs/apk/release/app-release.apk') as apk:
+              with apk.open('assets/laya/model.onnx') as stream:
+                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == '1e8906f3ce8551f0c9e153c740505b6c99946d47db6fb69b9c87f16da7ec55d1'
+              assert apk.getinfo('assets/laya/model.onnx').compress_type == zipfile.ZIP_STORED
+          print('Real Laya is present in the release APK and verified.')
+          PYAPK
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           APKSIGNER=$(find "$SDK_ROOT/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n1)
           test -n "$APKSIGNER"
           mkdir -p final_apk
-          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk
-          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk > final_apk/signature-verification.txt
+          cp app/build/outputs/apk/release/app-release.apk final_apk/LastWave-DJ-v4.7.0-Offline-Energy.apk
+          "$APKSIGNER" verify --verbose --print-certs final_apk/LastWave-DJ-v4.7.0-Offline-Energy.apk > final_apk/signature-verification.txt
           cp "$(dirname "$APKSIGNER")/lib/apksigner.jar" final_apk/apksigner.jar
           (cd final_apk && sha256sum *.apk > SHA256SUMS.txt)
+          test "$(stat -c%s final_apk/LastWave-DJ-v4.7.0-Offline-Energy.apk)" -lt 524288000
           mkdir -p apk_parts
-          split -b 25M -d final_apk/LastWave-DJ-v4.6.2-Laya-Energy.apk apk_parts/apk.part.
-      - name: Upload APK part 1
+          split -b 25M -d final_apk/LastWave-DJ-v4.7.0-Offline-Energy.apk apk_parts/apk.part.
+      - name: Upload APK part 00
+        if: ${{ hashFiles('apk_parts/apk.part.00') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: LastWave-DJ-APK-part-00
           path: apk_parts/apk.part.00
-      - name: Upload APK part 2
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 01
+        if: ${{ hashFiles('apk_parts/apk.part.01') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: LastWave-DJ-APK-part-01
           path: apk_parts/apk.part.01
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 02
+        if: ${{ hashFiles('apk_parts/apk.part.02') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-02
+          path: apk_parts/apk.part.02
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 03
+        if: ${{ hashFiles('apk_parts/apk.part.03') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-03
+          path: apk_parts/apk.part.03
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 04
+        if: ${{ hashFiles('apk_parts/apk.part.04') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-04
+          path: apk_parts/apk.part.04
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 05
+        if: ${{ hashFiles('apk_parts/apk.part.05') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-05
+          path: apk_parts/apk.part.05
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 06
+        if: ${{ hashFiles('apk_parts/apk.part.06') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-06
+          path: apk_parts/apk.part.06
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 07
+        if: ${{ hashFiles('apk_parts/apk.part.07') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-07
+          path: apk_parts/apk.part.07
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 08
+        if: ${{ hashFiles('apk_parts/apk.part.08') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-08
+          path: apk_parts/apk.part.08
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 09
+        if: ${{ hashFiles('apk_parts/apk.part.09') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-09
+          path: apk_parts/apk.part.09
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 10
+        if: ${{ hashFiles('apk_parts/apk.part.10') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-10
+          path: apk_parts/apk.part.10
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 11
+        if: ${{ hashFiles('apk_parts/apk.part.11') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-11
+          path: apk_parts/apk.part.11
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 12
+        if: ${{ hashFiles('apk_parts/apk.part.12') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-12
+          path: apk_parts/apk.part.12
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 13
+        if: ${{ hashFiles('apk_parts/apk.part.13') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-13
+          path: apk_parts/apk.part.13
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 14
+        if: ${{ hashFiles('apk_parts/apk.part.14') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-14
+          path: apk_parts/apk.part.14
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 15
+        if: ${{ hashFiles('apk_parts/apk.part.15') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-15
+          path: apk_parts/apk.part.15
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 16
+        if: ${{ hashFiles('apk_parts/apk.part.16') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-16
+          path: apk_parts/apk.part.16
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 17
+        if: ${{ hashFiles('apk_parts/apk.part.17') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-17
+          path: apk_parts/apk.part.17
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 18
+        if: ${{ hashFiles('apk_parts/apk.part.18') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-18
+          path: apk_parts/apk.part.18
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload APK part 19
+        if: ${{ hashFiles('apk_parts/apk.part.19') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LastWave-DJ-APK-part-19
+          path: apk_parts/apk.part.19
+          compression-level: 0
+          if-no-files-found: error
       - name: Upload APK verification tools
         uses: actions/upload-artifact@v4
         with:
@@ -83,7 +246,7 @@ jobs:
       - name: Upload compiled APK
         uses: actions/upload-artifact@v4
         with:
-          name: LastWave-DJ-v4.6.2-Laya-Energy-APK
+          name: LastWave-DJ-v4.7.0-Offline-Energy-APK
           path: final_apk/
           if-no-files-found: error
       - name: Enable emulator KVM

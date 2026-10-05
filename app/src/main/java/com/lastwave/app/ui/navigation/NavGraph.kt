@@ -277,9 +277,6 @@ fun LastWaveNavHost(
                 onOpenNewReleases = {
                     navController.navigate(Screen.NewReleases.route)
                 },
-                onOpenDownloads = {
-                    navController.navigate(Screen.Downloads.route)
-                },
             )
         }
 
@@ -306,7 +303,7 @@ fun LastWaveNavHost(
         // enough, even after direct fixes, that it kept regressing. A
         // normal NavHost destination gets full-screen sizing for free —
         // every other pushed screen here (Settings, Search, Discover,
-        // Genres) already renders correctly edge-to-edge —
+        // Genres, ScrobblerApps) already renders correctly edge-to-edge —
         // so Friends now works exactly like those instead of being a
         // special case. It shares Home's own HomeViewModel (scoped to
         // MainShell's back stack entry) rather than getting a fresh one,
@@ -395,6 +392,7 @@ fun LastWaveNavHost(
                             popUpTo(Screen.MainShell.route) { inclusive = true }
                         }
                     },
+                    onOpenChooseApps = { navController.navigate(Screen.ScrobblerApps.route) },
                     onOpenDownloads = { navController.navigate(Screen.Downloads.route) },
                     onOpenModules = { navController.navigate(Screen.ProviderModules.route) },
                     onOpenHomeSections = { navController.navigate(Screen.HomeSections.route) },
@@ -461,6 +459,11 @@ fun LastWaveNavHost(
             }
         }
 
+        composable(Screen.ScrobblerApps.route) {
+            PredictiveBackScreen(onBack = { navController.popBackStack() }) {
+                com.lastwave.app.ui.settings.ScrobblerAppsScreen(onBack = { navController.popBackStack() })
+            }
+        }
 
         composable(Screen.Search.route) {
             PredictiveBackScreen(onBack = { navController.popBackStack() }) {

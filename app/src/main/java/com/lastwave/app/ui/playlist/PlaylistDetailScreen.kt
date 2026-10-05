@@ -16,10 +16,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
@@ -66,8 +64,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.NearMe
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
@@ -76,7 +72,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -217,11 +212,9 @@ fun PlaylistDetailScreen(
     var currentSort by remember { mutableStateOf(PlaylistTrackSort.CUSTOM) }
     var sortAscending by remember { mutableStateOf(true) }
     var isReorderLocked by remember { mutableStateOf(true) }
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
 
-    val displayTracks = remember(playlist.tracks, currentSort, sortAscending, searchQuery) {
-        val sorted = when (currentSort) {
+    val displayTracks = remember(playlist.tracks, currentSort, sortAscending) {
+        when (currentSort) {
             PlaylistTrackSort.CUSTOM -> if (sortAscending) playlist.tracks else playlist.tracks.reversed()
             PlaylistTrackSort.DATE_ADDED -> if (sortAscending) playlist.tracks else playlist.tracks.reversed()
             PlaylistTrackSort.NAME -> if (sortAscending) {
@@ -239,12 +232,6 @@ fun PlaylistDetailScreen(
             } else {
                 playlist.tracks.sortedByDescending { it.playcount ?: it.listeners ?: 0L }
             }
-        }
-        if (searchQuery.isNotBlank()) {
-            val q = searchQuery.lowercase()
-            sorted.filter { it.name.lowercase().contains(q) || it.artist.lowercase().contains(q) }
-        } else {
-            sorted
         }
     }
 
@@ -483,17 +470,11 @@ fun PlaylistDetailScreen(
                                 fontWeight = FontWeight.Bold,
                             )
                         }
-                        // Locate current song
+                        // Download all songs not yet saved in Music/LastWave
                         FilledTonalIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val playingTrack = playbackState.current
-                                if (playingTrack != null && isThisPlaylistPlaying) {
-                                    val index = displayTracks.indexOfFirst { it.name.equals(playingTrack.title, ignoreCase = true) && it.artist.equals(playingTrack.artist, ignoreCase = true) }
-                                    if (index >= 0) {
-                                        dragScope.launch { listState.animateScrollToItem(index + 1) } // +1 for the hero section
-                                    }
-                                }
+                                viewModel.downloadPlaylist(playlistId)
                             },
                             shape = CircleShape,
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -501,7 +482,7 @@ fun PlaylistDetailScreen(
                             ),
                             modifier = Modifier.size(50.dp),
                         ) {
-                            Icon(Icons.Rounded.MyLocation, contentDescription = "Locate playing song", modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.Download, contentDescription = "Download all songs", modifier = Modifier.size(22.dp))
                         }
                     }
 
@@ -629,37 +610,6 @@ fun PlaylistDetailScreen(
                                 )
                             }
                         }
-                    }
-
-                    AnimatedVisibility(
-                        visible = isSearchActive,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                    ) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search in playlist") },
-                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                                    }
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            ),
-                        )
                     }
 
                     Spacer(Modifier.height(6.dp))
@@ -922,8 +872,6 @@ fun PlaylistDetailScreen(
                                 )
                             }
                             Spacer(Modifier.width(10.dp))
-                            // Removed LocationOn icon
-                            Spacer(Modifier.width(6.dp))
                             Text(
                                 text = playlist.title,
                                 style = MaterialTheme.typography.titleMedium,
@@ -935,6 +883,7 @@ fun PlaylistDetailScreen(
                     }
                 }
 
+                // Scrolled Quick Play Mini Button
                 AnimatedVisibility(
                     visible = showScrolledHeader && playlist.tracks.isNotEmpty(),
                     enter = fadeIn() + scaleIn(),
@@ -943,45 +892,22 @@ fun PlaylistDetailScreen(
                     FilledTonalIconButton(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            val playingTrack = playbackState.current
-                            if (playingTrack != null && isThisPlaylistPlaying) {
-                                val index = displayTracks.indexOfFirst { it.name.equals(playingTrack.title, ignoreCase = true) && it.artist.equals(playingTrack.artist, ignoreCase = true) }
-                                if (index >= 0) {
-                                    dragScope.launch { listState.animateScrollToItem(index + 1) }
-                                }
-                            }
+                            musicPlayer.playQueue(
+                                displayTracks.map(GeneratedTrack::toPlayableTrack),
+                                startIndex = 0,
+                                sourceLabel = playlist.title,
+                            )
                         },
-                        shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         ),
                         modifier = Modifier.size(38.dp),
                     ) {
-                        Icon(Icons.Rounded.MyLocation, contentDescription = "Locate playing song", modifier = Modifier.size(16.dp))
-                    }
-                }
-
-                Spacer(Modifier.width(6.dp))
-
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut(),
-                ) {
-                    FilledTonalIconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            isSearchActive = !isSearchActive
-                            if (!isSearchActive) searchQuery = ""
-                        },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = if (isSearchActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
-                        ),
-                        modifier = Modifier.size(38.dp),
-                    ) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search in playlist", modifier = Modifier.size(16.dp))
+                        Icon(
+                            if (isThisPlaylistPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = "Play",
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
 
@@ -1383,15 +1309,13 @@ private fun NativeTrackRow(
         ) {
             // Track index or playing animation
             Box(
-                modifier = Modifier.width(36.dp),
+                modifier = Modifier.width(24.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
                     text = "$index",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1,
-                    overflow = TextOverflow.Visible,
                 )
             }
             Spacer(Modifier.width(6.dp))

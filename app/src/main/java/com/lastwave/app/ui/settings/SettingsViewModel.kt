@@ -25,7 +25,6 @@ import com.lastwave.app.playback.NativeAudioEngine
 import com.lastwave.app.util.FileExportHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +32,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -109,7 +107,6 @@ class SettingsViewModel @Inject constructor(
     val authState: StateFlow<com.lastwave.app.data.model.AuthState> = authRepository.authState
     val updateInfo = appUpdateManager.updateInfo
     val djEnergyStatus get() = musicPlayer.get().djEnergyStatus
-    fun previewDjEnergy(profile: com.lastwave.app.playback.DjCueProfile) = musicPlayer.get().previewDjEnergy(profile)
 
     fun checkForUpdates() = appUpdateManager.checkForUpdate(isSilent = false)
     fun openUpdate(context: android.content.Context) = appUpdateManager.openUpdate(context)
@@ -161,12 +158,6 @@ class SettingsViewModel @Inject constructor(
         .withSettingsFallback("session", SessionData())
         .stateIn(viewModelScope, SettingsSharing, SessionData())
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
-    private val _searchResults = MutableStateFlow<List<MatchResult>>(emptyList())
-    val searchResults: StateFlow<List<MatchResult>> = _searchResults.asStateFlow()
-
     init {
         viewModelScope.launch(Dispatchers.IO) {
             session.collect { sess ->
@@ -178,22 +169,6 @@ class SettingsViewModel @Inject constructor(
                     _avatarUrl.value = null
                 }
             }
-        }
-
-        @OptIn(FlowPreview::class)
-        viewModelScope.launch {
-            _searchQuery
-                .debounce(150)
-                .collect { query ->
-                    if (query.isBlank()) {
-                        _searchResults.value = emptyList()
-                    } else {
-                        val results = withContext(Dispatchers.Default) {
-                            FuzzyMatcher.search(query, SettingsSearchIndex.allEntries)
-                        }
-                        _searchResults.value = results
-                    }
-                }
         }
     }
 
@@ -457,15 +432,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setDjEnergyEnabled(enabled: Boolean) {
-        launchSettingsAction("update DJ Energy mode") {
-            applyNativeAudio { it.setDjEnergyEnabled(enabled) }
-            settingsPreferences.setDjEnergyEnabled(enabled)
+        launchSettingsAction("update DJ Energy") {
             if (enabled) {
                 settingsPreferences.setSystemEffectsMode(false)
                 settingsPreferences.setBitPerfectEnabled(false)
                 applyNativeAudio { it.setBitPerfect(false) }
                 com.lastwave.app.playback.usb.UsbExclusivePrefs.setEnabled(context, false)
             }
+            settingsPreferences.setDjEnergyEnabled(enabled)
+            applyNativeAudio { it.setDjEnergyEnabled(enabled) }
         }
     }
 
@@ -493,10 +468,10 @@ class SettingsViewModel @Inject constructor(
         if (enabled) {
             applyNativeAudio { it.setBitPerfect(true) }
             settingsPreferences.setBitPerfectEnabled(true)
-            settingsPreferences.setStudioMasterClarity(false)
-            applyNativeAudio { it.setStudioMasterClarity(false) }
             settingsPreferences.setDjEnergyEnabled(false)
             applyNativeAudio { it.setDjEnergyEnabled(false) }
+            settingsPreferences.setStudioMasterClarity(false)
+            applyNativeAudio { it.setStudioMasterClarity(false) }
             _uiState.update { it.copy(toastMessage = "USB exclusive on — Bit-Perfect will use usbdevfs when a DAC is granted") }
         }
     }
@@ -531,9 +506,6 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsProvider(provider: com.lastwave.app.data.local.LyricsProvider) = launchSettingsAction("update lyrics provider") { settingsPreferences.setLyricsProvider(provider) }
     fun setLyricsOffsetMs(offsetMs: Long) = launchSettingsAction("update lyrics sync offset") {
         settingsPreferences.setLyricsOffsetMs(offsetMs.coerceIn(-3000L, 3000L))
-    }
-    fun setLyricsFontScale(scale: Float) = launchSettingsAction("update lyrics font scale") {
-        settingsPreferences.setLyricsFontScale(scale)
     }
     fun setCrossfadeEnabled(enabled: Boolean) = launchSettingsAction("update crossfade") { settingsPreferences.setCrossfadeEnabled(enabled) }
     fun setCrossfadeSeconds(seconds: Int) = launchSettingsAction("update crossfade duration") {
@@ -805,6 +777,11 @@ class SettingsViewModel @Inject constructor(
         }.getOrNull() ?: "unknown"
         sb.appendLine("app=${context.packageName} version=$versionName ($versionCode)")
         sb.appendLine("device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} sdk=${android.os.Build.VERSION.SDK_INT}")
+        val hasNotificationAccess = runCatching {
+            androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context)
+                .contains(context.packageName)
+        }.getOrDefault(false)
+        sb.appendLine("notificationListenerAccess=$hasNotificationAccess")
         val snapshot = runCatching { com.lastwave.app.widget.NowPlayingWidgetSnapshot.read(context) }.getOrNull()
         if (snapshot == null) {
             sb.appendLine("widgetSnapshot=<unreadable>")
@@ -1026,13 +1003,5 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    fun onSearchQueryChange(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun clearSearch() {
-        _searchQuery.value = ""
     }
 }

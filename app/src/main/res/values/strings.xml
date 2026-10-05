@@ -3,8 +3,6 @@
     <string name="app_name">LastWave DJ</string>
     <string name="widget_name">LastWave Player</string>
     <string name="widget_description">Artwork, track details and playback controls for every media app</string>
-    <string name="widget_obsidian_name">LastWave Obsidian Glass</string>
-    <string name="widget_obsidian_description">Frosted obsidian glass player with translucent depth and crystal rim</string>
 
     <!-- Bottom navigation -->
     <string name="nav_feed">Feed</string>
@@ -83,8 +81,8 @@
     <string name="settings_studio_clarity_off">Original unshaped output</string>
     <string name="settings_canvas_enabled">Animated Album Canvas</string>
     <string name="settings_canvas_enabled_sub">Stream motion artwork loops from Apple Music, Tidal and community</string>
-    <string name="settings_canvas_full_bleed">Full Screen Artwork</string>
-    <string name="settings_canvas_full_bleed_sub">Full screen edge-to-edge artwork for static and animated tracks</string>
+    <string name="settings_canvas_full_bleed">Edge-to-Edge Canvas Background</string>
+    <string name="settings_canvas_full_bleed_sub">Display vertical motion art behind player controls</string>
     <string name="settings_canvas_cellular">Canvas Over Cellular</string>
     <string name="settings_canvas_cellular_sub">Download motion artwork over mobile data (cached after first loop)</string>
 
@@ -318,11 +316,4 @@
     <string name="dialog_disconnect_yt_text">Playlists already mirrored to your account stay there, but LastWave stops syncing and forgets the connection.</string>
     <string name="dialog_logout_title">Log out from Last.fm?</string>
     <string name="dialog_logout_text">Your playlists and cached data will be kept.</string>
-
-    <!-- Settings Search -->
-    <string name="settings_search_hint">Search settings…</string>
-    <string name="settings_search_no_results">No settings found for “%1$s”</string>
-    <string name="settings_search_no_results_sub">Try checking for typos or searching with different keywords</string>
-    <string name="settings_search_clear">Clear search</string>
-    <string name="settings_search_title">Search settings</string>
 </resources>

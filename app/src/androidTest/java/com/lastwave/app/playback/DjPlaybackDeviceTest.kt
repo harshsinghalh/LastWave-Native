@@ -66,23 +66,23 @@ class DjPlaybackDeviceTest {
 
     @Test fun controllerFollowsCrossfadeOwnersAndPreviewChangesCurrentPcm() = runBlocking {
         Rig().use { r ->
-            val timed = DjCueProfile(enabled = true, mode = DjCueMode.TIMED, energyDb = 0f, vocalsDb = 0f, beatsDb = 0f)
-            withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, true, timed, true, true, 0) }
-            assertEquals(.7, ratio(r.pcm(r.secondary, .5, .1f)), .001)
+            val automatic = DjEnergyProfile(enabled = true, energyDb = 0f, vocalsDb = 0f, beatsDb = 0f)
+            withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, true, automatic, true, true, 0) }
+            assertUnchanged(r.pcm(r.secondary, .5, .1f))
             assertUnchanged(r.pcm(r.primary, .5, .1f))
             assertEquals(0f, r.primary.djRuntime()[7], 0f)
-            withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, timed, true, true, 0) }
-            assertEquals(.7, ratio(r.pcm(r.primary, .5, .1f)), .001)
+            withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, automatic, true, true, 0) }
+            assertUnchanged(r.pcm(r.primary, .5, .1f))
             r.pcm(r.secondary, .1, .1f) // Consume the short de-click release, still processed by the existing DC filter.
             assertUnchanged(r.pcm(r.secondary, .5, .1f))
             assertEquals(0f, r.secondary.djRuntime()[7], 0f)
-            val automatic = timed.copy(mode = DjCueMode.HIGHLIGHTS, before = .4f)
+            val preview = automatic.copy(before = .4f)
             withContext(Dispatchers.Main) { r.controller.update(r.primary, r.secondary, false, automatic, true, true, 0) }
             r.pcm(r.primary, .2, .1f)
             withContext(Dispatchers.Main) {
                 r.controller.update(r.primary, r.secondary, false, automatic, true, true, 0)
                 assertTrue(r.controller.state.value.canPreview)
-                r.controller.preview(automatic)
+                r.controller.preview(preview)
             }
             assertEquals(.4, ratio(r.pcm(r.primary, .5, .1f)), .001)
             assertUnchanged(r.pcm(r.secondary, .5, .1f))
@@ -103,7 +103,7 @@ class DjPlaybackDeviceTest {
             // Earlier JNI tests may have scored the same rise. This streaming
             // check must wait for fresh inference while PCM keeps advancing.
             model.clearScoreCache()
-            val profile = DjCueProfile(enabled = true, mode = DjCueMode.LAYA)
+            val profile = DjEnergyProfile(enabled = true)
             var heardChange = false
             var accepted = false
             withTimeout(60_000) {
@@ -125,21 +125,28 @@ class DjPlaybackDeviceTest {
         }
     }
 
-    @Test fun exoPlayerRestoresDjProcessingMidTrackAndSeeksTimedCue() = runBlocking {
+    @Test fun exoPlayerRestoresDjProcessingMidTrackAndSelectsAnAutomaticHighlight() = runBlocking {
         Rig().use { r ->
             val wave = File(r.context.cacheDir, "dj-real-player-${System.nanoTime()}.wav")
-            val frames = 48_000 * 6
+            val frames = 48_000 * 32
             val data = ByteBuffer.allocate(44 + frames * 4).order(ByteOrder.LITTLE_ENDIAN)
             data.put("RIFF".toByteArray()); data.putInt(36 + frames * 4); data.put("WAVEfmt ".toByteArray())
             data.putInt(16); data.putShort(1); data.putShort(2); data.putInt(48_000); data.putInt(192_000)
             data.putShort(4); data.putShort(16); data.put("data".toByteArray()); data.putInt(frames * 4)
-            repeat(frames) { n -> val x = (3_000 * sin(n * 440.0 * 2 * PI / 48_000)).roundToInt().toShort(); data.putShort(x); data.putShort(x) }
+            repeat(frames) { n ->
+                val amp = if (n >= 48_000 * 12) .16 else .03
+                val x = (amp * 32_000 * (sin(n * 90.0 * 2 * PI / 48_000) + sin(n * 900.0 * 2 * PI / 48_000))).roundToInt().toShort()
+                data.putShort(x); data.putShort(x)
+            }
             wave.writeBytes(data.array())
             lateinit var player: ExoPlayer
             lateinit var sink: NativeProcessingAudioSink
             var playerCreated = false
             var ticker: Job? = null
-            val profile = DjCueProfile(enabled = true, cueMs = 2_000, energyDb = 0f, vocalsDb = 0f, beatsDb = 0f)
+            val profile = DjEnergyProfile(enabled = true)
+            val model = LayaModel.get(r.context)
+            withTimeout(90_000) { while (!model.state.value.ready) delay(100) }
+            model.warmup()
             try {
                 withContext(Dispatchers.Main) {
                     val renderers = object : DefaultRenderersFactory(r.context) {
@@ -167,18 +174,20 @@ class DjPlaybackDeviceTest {
                     }
                 }
                 var sawLow = false
-                withTimeout(15_000) {
+                var sawHigh = false
+                withTimeout(45_000) {
                     while (true) {
                         val runtime = r.primary.djRuntime()
                         if (runtime[0] > 0 && runtime[1] < .72f) sawLow = true
-                        if (sawLow && runtime[1] >= .799f) break
+                        if (sawLow && runtime[5] > 0f && runtime[1] >= .799f) { sawHigh = true; break }
                         delay(20)
                     }
                 }
-                assertTrue("Actual Media3 playback must render the low level before the timed rise", sawLow)
+                assertTrue("Actual Media3 playback must render the low level before the automatic rise", sawLow)
                 withContext(Dispatchers.Main) { player.seekTo(100) }
-                withTimeout(5_000) { while (r.primary.djRuntime()[1] > .72f) delay(20) }
-                assertTrue("Seeking backwards must restore the real decoder's low-volume mix", r.primary.djRuntime()[1] <= .72f)
+                withTimeout(5_000) { while (r.primary.djRuntime()[1] < .99f) delay(20) }
+                assertTrue("The automatic event must reach 80% in actual player output", sawHigh)
+                assertTrue("Seeking backwards must cancel the highlight and restore normal audio", r.primary.djRuntime()[1] >= .99f)
             } finally {
                 ticker?.cancel()
                 withContext(Dispatchers.Main) { if (playerCreated) player.release() }

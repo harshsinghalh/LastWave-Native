@@ -8,14 +8,16 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Requires the actual pinned 424 MB model; CI provisions it before instrumentation. */
+/** Uses the real model in the installed APK, with airplane mode on and no preseeded files. */
 class LayaModelDeviceTest {
     @Test fun actualAndroidInferenceSelectsPeaksAndCaches() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        assertEquals(LayaModel.MODEL_BYTES, File(context.filesDir, "laya/model.onnx").length())
         val model = LayaModel.get(context)
         withTimeout(90_000) { while (!model.state.value.ready) delay(100) }
+        assertEquals(LayaModel.MODEL_BYTES, File(context.filesDir, "laya/model.onnx").length())
+        assertEquals(LayaModel.MODEL_BYTES, context.assets.openFd("laya/model.onnx").use { it.length })
+        assertEquals(1, android.provider.Settings.Global.getInt(context.contentResolver, "airplane_mode_on", 0))
         val fixture = JSONObject(instrumentation.context.assets.open("laya_reference.json").bufferedReader().use { it.readText() })
         assertEquals(LayaModel.MODEL_SHA256, fixture.getString("model_sha256"))
         assertEquals("basic", fixture.getString("optimization_level"))
@@ -47,7 +49,7 @@ class LayaModelDeviceTest {
             assertEquals("Independent Android probability for $key",
                 reference.getDouble("probability").toFloat(), probabilities[index], .025f)
         }
-        val threshold = DjCueProfile().layaThreshold
+        val threshold = DjEnergyProfile().layaThreshold
         assertTrue("Quiet section must be rejected", probabilities[0] < threshold)
         assertTrue("Distinct energy lift must pass the default threshold", probabilities[1] > threshold)
         assertTrue("Steady passage must rank below a rise", probabilities[2] < probabilities[1])

@@ -2,23 +2,15 @@ package com.lastwave.app.ui.player
 
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material3.Slider
-import androidx.compose.runtime.saveable.rememberSaveable
-import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.clickable
@@ -57,7 +49,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.SyncDisabled
-import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -131,16 +122,10 @@ fun LyricsPanel(
     onRetry: () -> Unit,
     onToggleFullscreen: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
-    onOpenLyricsOffset: (() -> Unit)? = null,
-    lyricsFontScale: Float = 1.0f,
-    onLyricsFontScaleChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
     /** Manual sync correction (ms, + = lyrics earlier). Applies to lyric
      *  focus/highlight only — the seekbar below keeps true position. */
     lyricsOffsetMs: Long = 0L,
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
 ) {
     val track = state.current ?: return
     val liquidGlass = LocalLiquidGlass.current
@@ -243,7 +228,6 @@ fun LyricsPanel(
                                 lines = targetState.lines,
                                 currentPositionMs = smoothedPositionMs + lyricsOffsetMs,
                                 lyricsOffsetMs = lyricsOffsetMs,
-                                lyricsFontScale = lyricsFontScale,
                                 isPlaying = state.isPlaying,
                                 onSeek = player::seekTo,
                                 animationStyle = lyricsAnimation,
@@ -253,7 +237,6 @@ fun LyricsPanel(
                         } else if (!targetState.plainLyrics.isNullOrBlank()) {
                             PlainLyricsView(
                                 plainLyrics = targetState.plainLyrics,
-                                lyricsFontScale = lyricsFontScale,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else {
@@ -279,13 +262,6 @@ fun LyricsPanel(
             wavySeekbarEnabled = wavySeekbarEnabled,
             onToggleFullscreen = onToggleFullscreen,
             isFullscreen = isFullscreen,
-            lyricsOffsetMs = lyricsOffsetMs,
-            onOpenLyricsOffset = onOpenLyricsOffset,
-            lyricsFontScale = lyricsFontScale,
-            onLyricsFontScaleChange = onLyricsFontScaleChange,
-            primaryColor = primaryColor,
-            secondaryColor = secondaryColor,
-            tertiaryColor = tertiaryColor,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
@@ -304,7 +280,6 @@ private fun SyncedLyricsList(
     liquidGlass: Boolean,
     modifier: Modifier = Modifier,
     lyricsOffsetMs: Long = 0L,
-    lyricsFontScale: Float = 1.0f,
 ) {
     val listState = rememberLazyListState()
     var userScrolledTime by remember { mutableLongStateOf(0L) }
@@ -383,26 +358,18 @@ private fun SyncedLyricsList(
             start = 16.dp,
             end = 16.dp,
         ),
-        // Small base gap; each row appends its own trailing gap below so
-        // a lead row followed by backing vocals groups tight instead of
-        // sitting at the same constant distance as full phrases.
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(
+            when (animationStyle) {
+                LyricsAnimation.APPLE_ZOOM -> 30.dp
+                LyricsAnimation.CARD_POP -> 24.dp
+                else -> 26.dp
+            },
+        ),
     ) {
-        val fullRowGap = when (animationStyle) {
-            LyricsAnimation.APPLE_ZOOM -> 30.dp
-            LyricsAnimation.CARD_POP -> 24.dp
-            else -> 26.dp
-        }
         itemsIndexed(lines, key = { index, line -> "$index:${line.timeMs}" }) { index, line ->
             val isActive = index == activeIndex
             val isPast = activeIndex >= 0 && index < activeIndex
             val distance = kotlin.math.abs(index - activeIndex)
-            // Backing-vocal rows (every syllable flagged background) render
-            // dim and slightly smaller, grouped tight under their lead row.
-            val isBgRow = line.syllables.isNotEmpty() && line.syllables.all { it.isBackground }
-            val tightAfter = lines.getOrNull(index + 1)?.let { next ->
-                next.syllables.isNotEmpty() && next.syllables.all { it.isBackground }
-            } == true
             val isLineRtl = remember(line, isOverallRtl) {
                 line.isRtl || (isOverallRtl && (line.text.isBlank() || line.text == "♪"))
             }
@@ -603,7 +570,7 @@ private fun SyncedLyricsList(
                         .graphicsLayer {
                             scaleX = scale * pulseScale
                             scaleY = scale * pulseScale
-                            this.alpha = alpha * if (isBgRow) (if (isActive) 0.85f else 0.55f) else 1f
+                            this.alpha = alpha
                             this.translationX = translationX * density
                             this.translationY = translationY * density
                             rotationZ = rotation
@@ -625,17 +592,14 @@ private fun SyncedLyricsList(
                     // Compact type: lineHeight leaves room for the focus zoom
                     // (up to 1.18x) so scaled rows neither overlap neighbours
                     // nor clip at the list edges — without the old oversized
-                    // leading that stretched the gaps between rows. Backing
-                    // rows stay smaller and never take the lead weight.
+                    // leading that stretched the gaps between rows.
                     val fontStyle = MaterialTheme.typography.titleLarge.copy(
-                        fontSize = ((if (isBgRow) 21f else 28f) * lyricsFontScale).sp,
-                        fontWeight = if (isBgRow) {
-                            FontWeight.Medium
-                        } else if (isActive) {
+                        fontSize = 28.sp,
+                        fontWeight = if (isActive) {
                             if (animationStyle == LyricsAnimation.APPLE_ZOOM) FontWeight.Black else FontWeight.ExtraBold
                         } else FontWeight.SemiBold,
                         letterSpacing = (-0.2).sp,
-                        lineHeight = ((if (isBgRow) 30f else 40f) * lyricsFontScale).sp,
+                        lineHeight = 40.sp,
                     )
 
                     WordByWordLyricLine(
@@ -649,12 +613,8 @@ private fun SyncedLyricsList(
                         animationStyle = animationStyle,
                         fontStyle = fontStyle,
                         isRtl = isLineRtl,
-                        modifier = Modifier.padding(start = if (isBgRow) 14.dp else 0.dp),
                     )
                 }
-            }
-            if (!tightAfter) {
-                Spacer(modifier = Modifier.height(fullRowGap - 4.dp))
             }
         }
     }
@@ -874,7 +834,6 @@ private fun WordByWordLyricLine(
 private fun PlainLyricsView(
     plainLyrics: String,
     modifier: Modifier = Modifier,
-    lyricsFontScale: Float = 1.0f,
 ) {
     val isRtl = remember(plainLyrics) { isRtlText(plainLyrics) }
     val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -906,8 +865,8 @@ private fun PlainLyricsView(
             Text(
                 text = plainLyrics,
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = (22f * lyricsFontScale).sp,
-                    lineHeight = (36f * lyricsFontScale).sp,
+                    fontSize = 22.sp,
+                    lineHeight = 36.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.1.sp,
                 ),
@@ -982,17 +941,8 @@ private fun LyricsPlaybackControls(
     wavySeekbarEnabled: Boolean = true,
     onToggleFullscreen: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
-    lyricsOffsetMs: Long = 0L,
-    onOpenLyricsOffset: (() -> Unit)? = null,
-    lyricsFontScale: Float = 1.0f,
-    onLyricsFontScaleChange: (Float) -> Unit = {},
-    primaryColor: Color = MaterialTheme.colorScheme.primary,
-    secondaryColor: Color = MaterialTheme.colorScheme.secondary,
-    tertiaryColor: Color = MaterialTheme.colorScheme.tertiary,
     modifier: Modifier = Modifier,
 ) {
-    var showFontSlider by rememberSaveable { mutableStateOf(false) }
-
     // This Column performs layout only. It intentionally draws no container.
     Column(
         modifier = modifier
@@ -1000,185 +950,42 @@ private fun LyricsPlaybackControls(
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        AnimatedVisibility(
-            visible = showFontSlider,
-            enter = fadeIn(tween(150)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(150)) + shrinkVertically(tween(200)),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.Black.copy(alpha = 0.35f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Lyrics size: ${(lyricsFontScale * 100).roundToInt()}%",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.90f),
-                        )
-                        if (lyricsFontScale != 1.0f) {
-                            TextButton(
-                                onClick = { onLyricsFontScaleChange(1.0f) },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                modifier = Modifier.height(26.dp),
-                            ) {
-                                Text(
-                                    "Reset",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = "A",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.70f),
-                        )
-                        Slider(
-                            value = lyricsFontScale,
-                            onValueChange = onLyricsFontScaleChange,
-                            valueRange = 0.7f..1.5f,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = "A",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.95f),
-                        )
-                    }
-                }
-            }
-        }
-
-        if (onToggleFullscreen != null || onOpenLyricsOffset != null) {
+        if (onToggleFullscreen != null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (onOpenLyricsOffset != null) {
-                    val offsetInteraction = remember { MutableInteractionSource() }
-                    val isOffsetPressed by offsetInteraction.collectIsPressedAsState()
-                    val offsetScale by animateFloatAsState(
-                        targetValue = if (isOffsetPressed) 0.82f else 1.0f,
-                        animationSpec = ExpressiveMotion.spatialSpring(),
-                        label = "lyricsOffsetScale",
-                    )
-                    IconButton(
-                        onClick = onOpenLyricsOffset,
-                        interactionSource = offsetInteraction,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .graphicsLayer {
-                                scaleX = offsetScale
-                                scaleY = offsetScale
-                            }
-                            .clip(CircleShape)
-                            .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = offsetInteraction)
-                            .background(
-                                liquidGlassContainerColor(
-                                    if (lyricsOffsetMs != 0L) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                    else Color.White.copy(alpha = 0.14f)
-                                ),
-                            ),
-                    ) {
-                        Icon(
-                            Icons.Filled.Timer,
-                            contentDescription = "Lyrics sync offset",
-                            modifier = Modifier.size(22.dp),
-                            tint = if (lyricsOffsetMs != 0L) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.90f),
-                        )
-                    }
-                } else {
-                    Spacer(Modifier.size(44.dp))
-                }
-
-                // Lyrics Font Scale toggle button
-                val fontInteraction = remember { MutableInteractionSource() }
-                val isFontPressed by fontInteraction.collectIsPressedAsState()
-                val fontScaleAnim by animateFloatAsState(
-                    targetValue = if (isFontPressed) 0.82f else 1.0f,
+                val playerInteraction = remember { MutableInteractionSource() }
+                val isPlayerPressed by playerInteraction.collectIsPressedAsState()
+                val playerScale by animateFloatAsState(
+                    targetValue = if (isPlayerPressed) 0.82f else 1.0f,
                     animationSpec = ExpressiveMotion.spatialSpring(),
-                    label = "fontScaleAnim",
+                    label = "playerTabScale",
                 )
-                val isCustomFont = lyricsFontScale != 1.0f
                 IconButton(
-                    onClick = { showFontSlider = !showFontSlider },
-                    interactionSource = fontInteraction,
+                    onClick = onToggleFullscreen,
+                    interactionSource = playerInteraction,
                     modifier = Modifier
                         .size(44.dp)
                         .graphicsLayer {
-                            scaleX = fontScaleAnim
-                            scaleY = fontScaleAnim
+                            scaleX = playerScale
+                            scaleY = playerScale
                         }
                         .clip(CircleShape)
-                        .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = fontInteraction)
+                        .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = playerInteraction)
                         .background(
-                            liquidGlassContainerColor(
-                                if (showFontSlider || isCustomFont) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                else Color.White.copy(alpha = 0.14f)
-                            ),
+                            liquidGlassContainerColor(Color.White.copy(alpha = 0.14f)),
                         ),
                 ) {
                     Icon(
-                        Icons.Filled.FormatSize,
-                        contentDescription = "Adjust lyrics text size",
-                        modifier = Modifier.size(22.dp),
-                        tint = if (showFontSlider || isCustomFont) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.90f),
+                        if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                        contentDescription = if (isFullscreen) "Exit fullscreen lyrics" else "Fullscreen lyrics",
+                        modifier = Modifier.size(24.dp),
+                        tint = Color.White.copy(alpha = 0.90f),
                     )
-                }
-
-                if (onToggleFullscreen != null) {
-                    val playerInteraction = remember { MutableInteractionSource() }
-                    val isPlayerPressed by playerInteraction.collectIsPressedAsState()
-                    val playerScale by animateFloatAsState(
-                        targetValue = if (isPlayerPressed) 0.82f else 1.0f,
-                        animationSpec = ExpressiveMotion.spatialSpring(),
-                        label = "playerTabScale",
-                    )
-                    IconButton(
-                        onClick = onToggleFullscreen,
-                        interactionSource = playerInteraction,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .graphicsLayer {
-                                scaleX = playerScale
-                                scaleY = playerScale
-                            }
-                            .clip(CircleShape)
-                            .liquidGlassChrome(CircleShape, LocalLiquidGlass.current, LiquidGlassPreset.FloatingControls, interactionSource = playerInteraction)
-                            .background(
-                                liquidGlassContainerColor(Color.White.copy(alpha = 0.14f)),
-                            ),
-                    ) {
-                        Icon(
-                            if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                            contentDescription = if (isFullscreen) "Exit fullscreen lyrics" else "Fullscreen lyrics",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White.copy(alpha = 0.90f),
-                        )
-                    }
                 }
             }
         }
@@ -1210,9 +1017,6 @@ private fun LyricsPlaybackControls(
                 trackKey = state.current?.let { it.videoId ?: "${it.artist}|${it.title}" },
                 showTimeLabels = false,
                 modifier = Modifier.fillMaxWidth(),
-                primaryColor = primaryColor,
-                secondaryColor = secondaryColor,
-                tertiaryColor = tertiaryColor,
             )
         } else {
             PlayerProgressSlider(
@@ -1228,8 +1032,6 @@ private fun LyricsPlaybackControls(
                 enabled = totalDurationMs > 0,
                 modifier = Modifier.fillMaxWidth(),
                 interactionSource = seekInteraction,
-                primaryColor = primaryColor,
-                tertiaryColor = tertiaryColor,
             )
         }
 

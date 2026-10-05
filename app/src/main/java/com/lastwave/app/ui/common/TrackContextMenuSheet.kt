@@ -1,9 +1,5 @@
 package com.lastwave.app.ui.common
 
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.core.Spring
@@ -186,12 +182,13 @@ class DownloadMenuViewModel @Inject constructor(
  *  Download Quality tiers in SettingsScreen (28/27/7/6/5/4/-1). */
 fun downloadLabelForQuality(quality: Int): String = when (quality) {
     28 -> "Download (Dolby Atmos)"
-    27, 7 -> "Download (Hi-Res)"
+    27 -> "Download (Max Quality)"
+    7 -> "Download (Hi-Res)"
     6 -> "Download (CD Lossless)"
     5 -> "Download (Standard)"
     4 -> "Download (Data Saver)"
     -1 -> "Download (YouTube)"
-    else -> "Download (Hi-Res)"
+    else -> "Download (Max Quality)"
 }
 
 @HiltViewModel
@@ -349,20 +346,26 @@ fun TrackContextMenuSheet(
     }
 
     if (showTimerDialog) {
-        var isExpanded by remember { mutableStateOf(false) }
         var customMinutes by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
         val customDuration = customMinutes.toIntOrNull()?.takeIf { it > 0 }
-        var showCustomDialog by remember { mutableStateOf(false) }
-
-        if (showCustomDialog) {
-            AlertDialog(
-                onDismissRequest = { showCustomDialog = false },
-                title = { Text("Custom sleep timer") },
-                text = {
+        AlertDialog(
+            onDismissRequest = { showTimerDialog = false },
+            title = { Text("Sleep timer") },
+            text = {
+                Column {
+                    listOf(0, 15, 30, 60).forEach { minutes ->
+                        TextButton(
+                            onClick = {
+                                musicPlayer.setSleepTimerMinutes(minutes)
+                                showTimerDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (minutes == 0) "Off" else "$minutes minutes") }
+                    }
                     OutlinedTextField(
                         value = customMinutes,
                         onValueChange = { customMinutes = it },
-                        label = { Text("Minutes") },
+                        label = { Text("Custom time (minutes)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         isError = customMinutes.isNotEmpty() && customDuration == null,
@@ -373,63 +376,32 @@ fun TrackContextMenuSheet(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                },
-                confirmButton = {
-                    TextButton(
-                        enabled = customDuration != null,
-                        onClick = {
-                            customDuration?.let(musicPlayer::setSleepTimerMinutes)
-                            showCustomDialog = false
-                            showTimerDialog = false
-                        },
-                    ) { Text("Set timer") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showCustomDialog = false }) { Text("Cancel") }
                 }
-            )
-        }
-
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showTimerDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Sleep timer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        androidx.compose.material3.IconButton(
-                            onClick = { showCustomDialog = true },
-                            modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                        ) {
-                            Icon(Icons.Filled.Add, "Custom Timer")
-                        }
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    listOf(0, 15, 30, 60).forEach { minutes ->
-                        TextButton(
-                            onClick = {
-                                musicPlayer.setSleepTimerMinutes(minutes)
-                                showTimerDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (minutes == 0) "Off" else "$minutes minutes") }
-                    }
-                }
-            }
-        }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = customDuration != null,
+                    onClick = {
+                        customDuration?.let(musicPlayer::setSleepTimerMinutes)
+                        showTimerDialog = false
+                    },
+                ) { Text("Set timer") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimerDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        modifier = Modifier.liquidGlassChrome(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), true),
+        modifier = if (LocalLiquidGlass.current) Modifier.liquidGlassChrome(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), true) else Modifier,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         // The background behind is smoothly blurred by EdgeToEdgeDialogWindow.
         // A translucent/transparent container lets the soft blur shine through
         // while the individual action cards float with clean contrast on top.
-        containerColor = Color.Transparent,
+        containerColor = if (LocalLiquidGlass.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.65f),
         scrimColor = Color.Black.copy(alpha = 0.32f),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         dragHandle = {

@@ -138,7 +138,7 @@ class NativeAudioEngine @Inject constructor(
     internal fun setDjMediaTimeUs(positionUs: Long) {
         withHandle(Unit) { nativeSetDjMediaTimeUs(it, positionUs) }
     }
-    fun previewDjEnergy(profile: DjCueProfile) {
+    fun previewDjEnergy(profile: DjEnergyProfile) {
         withHandle(Unit) { nativePreviewDjEnergy(it, profile.before, profile.after, profile.rampMs / 1000f,
             profile.energyDb, profile.vocalsDb, profile.beatsDb) }
     }
